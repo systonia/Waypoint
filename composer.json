@@ -1,0 +1,44 @@
+{
+  "name": "systonia/waypoint",
+  "description": "A lightweight PHP framework for building APIs and progressively enhanced UIs, with attribute-based routing and partial HTML views over AJAX.",
+  "keywords": [
+    "php",
+    "framework",
+    "api",
+    "routing",
+    "attributes",
+    "middleware",
+    "cors",
+    "htmx",
+    "partial-views",
+    "progressive-enhancement",
+    "ajax",
+    "stateless"
+  ],
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Lento Leisenfeld",
+      "email": "lento@leisenfeld.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Waypoint\\": "src/Waypoint/"
+    }
+  },
+  "require": {
+    "php": ">=8.4",
+    "psr/container": "^2.0",
+    "psr/log": "^3.0"
+  },
+  "require-dev": {
+    "monolog/monolog": "^3.9"
+  },
+  "suggest": {
+    "monolog/monolog": "Powerful logging with handlers, channels, and JSON output."
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

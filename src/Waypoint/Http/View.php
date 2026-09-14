@@ -1,0 +1,317 @@
+<?php
+
+namespace Waypoint\Http;
+
+use Waypoint\Waypoint;
+use Waypoint\Environment;
+use Waypoint\Attributes\Inject;
+use Waypoint\Options\RendererOptions;
+use RuntimeException;
+
+class View
+{
+    /**
+     * Available as $this->env inside a view/layout template, e.g.
+     * `<?= $this->env->get('APP_ENV') ?>`. Wired up by
+     * Router::injectViewProperties() right before render() -- View is
+     * never container-managed itself (a controller just `new`s one up
+     * directly), so this is populated per-render rather than at
+     * construction time.
+     *
+     * @var Environment
+     */
+    #[Inject]
+    protected Environment $env;
+
+    /**
+     * Undocumented variable
+     *
+     * @var [type]
+     */
+    protected $view;
+
+    /**
+     * Undocumented variable
+     *
+     * @var [type]
+     */
+    protected $model;
+
+    /**
+     * Undocumented variable
+     *
+     * @var [type]
+     */
+    protected $partial;
+
+    /**
+     * Undocumented variable
+     *
+     * @var [type]
+     */
+    protected $layout;
+
+    /**
+     * Undocumented variable
+     *
+     * @var array
+     */
+    protected $sections = [];
+
+    /**
+     * Undocumented variable
+     *
+     * @var [type]
+     */
+    protected $currentSection = null;
+
+    /**
+     * Undocumented variable
+     *
+     * @var integer
+     */
+    protected $sectionBufferLevel = 0;
+
+    /**
+     * Undocumented function
+     *
+     * @param [type] $view
+     * @param [type] $model
+     * @param boolean $partial
+     * @param [type] $layout
+     */
+    public function __construct($view, $model = null, $partial = false, $layout = null)
+    {
+        $this->view = $view;
+        $this->model = $model;
+        $this->partial = $partial;
+
+        if ($layout !== null) {
+            $this->layout = $layout;
+        }
+    }
+
+    /**
+     * {css: ?string, js: ?string} cache-busted filenames -- set by
+     * Router::renderResult() from the same lookup that drives the
+     * X-Waypoint-View-Css/Js response headers, before render() runs.
+     *
+     * @var array{css: ?string, js: ?string}
+     */
+    protected array $assets = ['css' => null, 'js' => null];
+
+    /**
+     * The resolved layout template's own basename (no .php), e.g.
+     * "_Layout" or "AltLayout" -- whatever it actually is, set by render()
+     * right before including it. Null until then (or for a partial render,
+     * which never includes a layout at all).
+     *
+     * @var string|null
+     */
+    protected ?string $layoutName = null;
+
+    /**
+     * {css: ?string, js: ?string} cache-busted filenames for the layout
+     * template itself (ViewAssets::compile() discovers a sibling .css/.js
+     * for *any* '*.php' file in the views directory, layouts included --
+     * this is the layout's own entry, looked up by $layoutName exactly
+     * like $assets is the current view's). Set by render() right before
+     * including the layout, so the layout template can call
+     * layoutAssetTags()/layoutScopeAttribute() on itself.
+     *
+     * @var array{css: ?string, js: ?string}
+     */
+    protected array $layoutAssets = ['css' => null, 'js' => null];
+
+    /** The view name passed to the constructor, e.g. "ProductDetail" -- Router uses this to look up the view's cache-busted CSS/JS filenames, if any. */
+    public function getViewName(): string
+    {
+        return $this->view;
+    }
+
+    /**
+     * Called by Router::renderResult() before render() -- lets the layout
+     * emit this view's own <link>/<script> tags itself (via assetTags())
+     * for a full, non-partial page load, where there's no client-side JS
+     * running yet to read the equivalent response headers a partial-swap
+     * navigation relies on instead.
+     */
+    public function setAssets(array $assets): void
+    {
+        $this->assets = $assets;
+    }
+
+    /**
+     * <link>/<script> tags for this view's own CSS/JS, if any. Call from
+     * the layout, e.g. `<?= $this->assetTags() ?>` alongside the rest of
+     * <head>.
+     */
+    public function assetTags(): string
+    {
+        return $this->renderAssetTags($this->assets);
+    }
+
+    /**
+     * <link>/<script> tags for the layout template's own CSS/JS, if any --
+     * the same mechanism as assetTags(), just for whichever file is
+     * actually resolved as the layout (see $layoutName), no matter its
+     * name. Call from inside the layout template itself, alongside
+     * assetTags(): `<?= $this->assetTags() ?><?= $this->layoutAssetTags() ?>`.
+     * Always empty for a partial render, since no layout is included then.
+     */
+    public function layoutAssetTags(): string
+    {
+        return $this->renderAssetTags($this->layoutAssets);
+    }
+
+    /** Shared by assetTags()/layoutAssetTags() -- builds <link>/<script> tags for one {css, js} pair. */
+    private function renderAssetTags(array $assets): string
+    {
+        $tags = '';
+        if ($assets['css'] !== null) {
+            // data-wp-asset must match what waypoint.js's own client-side
+            // injection marks its <link>/<script> tags with (see
+            // assets.ts's injectOnce()) -- otherwise a tag this method
+            // rendered on a hard page load is invisible to the client's
+            // dedup check, and navigating away and back injects a second,
+            // duplicate tag for the exact same asset.
+            $filename = htmlspecialchars($assets['css'], ENT_QUOTES);
+            $href = htmlspecialchars('/assets/' . $assets['css'], ENT_QUOTES);
+            $tags .= "<link rel=\"stylesheet\" href=\"$href\" data-wp-asset=\"$filename\">\n";
+        }
+        if ($assets['js'] !== null) {
+            $filename = htmlspecialchars($assets['js'], ENT_QUOTES);
+            $src = htmlspecialchars('/assets/' . $assets['js'], ENT_QUOTES);
+            $tags .= "<script src=\"$src\" data-wp-asset=\"$filename\"></script>\n";
+        }
+        return $tags;
+    }
+
+    /**
+     * `data-view="..."` for the layout to place on whichever element wraps
+     * `$content`, e.g. `<main <?= $this->scopeAttribute() ?>>` -- exactly
+     * what ViewAssets::scopeCss()'s `[data-view="..."]` selectors actually
+     * match against. Empty string when this view has no CSS/JS at all, so
+     * it's always safe to echo directly into an attribute position.
+     */
+    public function scopeAttribute(): string
+    {
+        if ($this->assets['css'] === null && $this->assets['js'] === null) {
+            return '';
+        }
+        return 'data-view="' . htmlspecialchars($this->view, ENT_QUOTES) . '"';
+    }
+
+    /**
+     * `data-view="<layout-basename>"` for the layout template to place on
+     * whichever element its OWN CSS should be scoped to, e.g.
+     * `<body <?= $this->layoutScopeAttribute() ?>>` -- same
+     * `[data-view="..."]` convention scopeAttribute() uses for the
+     * current view, just keyed by the layout's own basename ($layoutName)
+     * instead, since ViewAssets::scopeCss() has no separate concept of
+     * "layout" -- every '*.php' file's CSS is scoped by its own basename
+     * the same way. Empty string when the layout has no CSS/JS of its own.
+     */
+    public function layoutScopeAttribute(): string
+    {
+        if ($this->layoutAssets['css'] === null && $this->layoutAssets['js'] === null) {
+            return '';
+        }
+        return 'data-view="' . htmlspecialchars($this->layoutName, ENT_QUOTES) . '"';
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @param [type] $name
+     * @return void
+     */
+    public function startSection($name): void
+    {
+        if ($this->currentSection !== null) {
+            throw new RuntimeException("A section is already started: '{$this->currentSection}'");
+        }
+        $this->currentSection = $name;
+        $this->sectionBufferLevel = ob_get_level();
+        ob_start();
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @return void
+     */
+    public function endSection(): void
+    {
+        if ($this->currentSection === null) {
+            throw new RuntimeException("No section is currently started.");
+        }
+        $content = ob_get_clean();
+        $this->sections[$this->currentSection] = $content;
+        $this->currentSection = null;
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @param [type] $name
+     * @param boolean $required
+     * @return bool|string
+     */
+    public function section($name, $required = false): bool|string
+    {
+        if (isset($this->sections[$name])) {
+            return $this->sections[$name];
+        }
+        if ($required) {
+            throw new RuntimeException("Section '{$name}' is required but not defined.");
+        }
+        return '';
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @return bool|string
+     */
+    public function render()
+    {
+        $model = $this->model;
+        $viewFile = Waypoint::getConfig(RendererOptions::class)->directory . "/{$this->view}.php";
+        if (!file_exists($viewFile)) {
+            throw new RuntimeException("View '{$viewFile}' not found.");
+        }
+
+        // Render view (inside $this context)
+        ob_start();
+        include $viewFile;
+        $content = ob_get_clean();
+
+        if ($this->layout !== null) {
+            $layoutFile = Waypoint::getConfig(RendererOptions::class)->directory . '/' . $this->layout;
+        } else {
+            $layoutFile = Waypoint::getConfig(RendererOptions::class)->directory . '/' . Waypoint::getConfig(RendererOptions::class)->layout;
+        }
+
+        if (!$this->partial && file_exists($layoutFile)) {
+            $this->layoutName = basename($layoutFile, '.php');
+
+            // Router::getViewAssets() is only reachable once attach() has
+            // run -- View::render() is also used directly (e.g. in unit
+            // tests) with no App/Router involved at all, so this degrades
+            // to "no layout assets" rather than throwing when there isn't
+            // one, the same tolerant contract getViewAssets() itself has
+            // for a name it's never seen.
+            $app = Waypoint::getInstance();
+            if ($app !== null && $app->hasRouter()) {
+                $this->layoutAssets = $app->getRouter()->getViewAssets($this->layoutName);
+            }
+
+            ob_start();
+            include $layoutFile;
+            return ob_get_clean();
+        } else {
+            return $content;
+        }
+    }
+}
