@@ -2,11 +2,15 @@
 
 namespace Waypoint;
 
+use DateTimeImmutable;
+use DateTimeZone;
+use Deprecated;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
 use ReflectionProperty;
 
+use Waypoint\Enums\Message;
 use Waypoint\Http\Request;
 use Waypoint\Http\Response;
 use Waypoint\Attributes\{
@@ -21,7 +25,9 @@ use Waypoint\Attributes\{
     Middleware,
     NoGzip,
     SimpleXmlFormatter,
-    Task
+    Sunset,
+    Task,
+    Version
 };
 
 /**
@@ -143,9 +149,22 @@ final class RouteCompiler
                 continue;
             }
 
+            $httpMethod = strtoupper($routeAttr->getHttpMethod());
+
             $methodPath = $routeAttr->getPath() ?: '';
             $combined = rtrim($prefixPath, '/') . '/' . ltrim($methodPath, '/');
-            $path = '/' . trim($combined, '/');
+            $unversionedPath = '/' . trim($combined, '/');
+
+            // #[Version] on the method overrides the class's, exactly like
+            // #[Sunset] below -- see resolveOverridable(). No attribute at
+            // either level (the common case today) means no prefix at all,
+            // and $unversionedPath IS the final path.
+            $effectiveVersion = $this->resolveOverridable($rc, $method, Version::class, 'value');
+            $path = $effectiveVersion !== null ? '/' . $effectiveVersion . $unversionedPath : $unversionedPath;
+
+            if ($effectiveVersion === null) {
+                $this->logUnversionedRoute($httpMethod, $path);
+            }
 
             $dynamic = strpos($path, '{') !== false;
             $regex = $dynamic
@@ -158,8 +177,25 @@ final class RouteCompiler
             $middlewares = [...$classMiddlewares, ...$methodMiddlewares];
             $methodHasNoGzip = $method->getAttributes(NoGzip::class) !== [];
 
+            // PHP's own native #[\Deprecated] (8.4+), not a Waypoint
+            // attribute -- there's nothing to "override" the way
+            // #[Version]/#[Sunset] have a class-vs-method precedence,
+            // since presence alone is the whole signal. The $rc check is
+            // effectively always false in practice: PHP itself refuses to
+            // let #[\Deprecated] target a class at all (a fatal compile
+            // error, not just unenforced) -- kept here anyway in case a
+            // future PHP version lifts that restriction, since checking
+            // costs nothing and getAttributes() never throws for an
+            // attribute that simply isn't present.
+            $isDeprecated = $method->getAttributes(Deprecated::class) !== [] || $rc->getAttributes(Deprecated::class) !== [];
+
+            $sunsetDate = $this->resolveOverridable($rc, $method, Sunset::class, 'date');
+            $sunsetHeader = $sunsetDate !== null
+                ? $this->formatSunsetHeader($sunsetDate, $httpMethod, $path)
+                : null;
+
             $plan = [
-                'httpMethod' => strtoupper($routeAttr->getHttpMethod()),
+                'httpMethod' => $httpMethod,
                 'path' => $path,
                 'regex' => $regex,
                 'controller' => $controller,
@@ -169,15 +205,82 @@ final class RouteCompiler
                 'formatter' => $formatter,
                 'middlewares' => $middlewares,
                 'gzip' => !($classHasNoGzip || $methodHasNoGzip),
+                'version' => $effectiveVersion,
+                'unversionedPath' => $unversionedPath,
+                'deprecated' => $isDeprecated,
+                'sunsetHeader' => $sunsetHeader,
                 'throws' => [],
             ];
 
             if ($dynamic) {
-                $dynamicRoutes[$plan['httpMethod']][] = $plan;
+                $dynamicRoutes[$httpMethod][] = $plan;
             } else {
-                $staticRoutes[$plan['httpMethod']][$path] = $plan;
+                $staticRoutes[$httpMethod][$path] = $plan;
             }
         }
+    }
+
+    /**
+     * "Method wins over class, else null" resolution shared by #[Version]
+     * (property 'value') and #[Sunset] (property 'date') -- both are
+     * single-string-payload attributes usable at either level with the
+     * exact same override rule, just under a different attribute/property
+     * name.
+     */
+    private function resolveOverridable(ReflectionClass $rc, ReflectionMethod $method, string $attributeClass, string $property): ?string
+    {
+        $methodAttr = $method->getAttributes($attributeClass)[0] ?? null;
+        if ($methodAttr) {
+            return $methodAttr->newInstance()->{$property};
+        }
+        $classAttr = $rc->getAttributes($attributeClass)[0] ?? null;
+        return $classAttr ? $classAttr->newInstance()->{$property} : null;
+    }
+
+    /**
+     * RFC 8594's Sunset header is an HTTP-date (e.g. "Sat, 31 Dec 2022
+     * 00:00:00 GMT"), not a bare 'YYYY-MM-DD' -- computed once here, at
+     * compile time, since it never depends on anything about a live
+     * request. Returns null (skipping the header entirely, after logging a
+     * warning) for a malformed date -- a typo in #[Sunset] shouldn't take
+     * the whole route down.
+     */
+    private function formatSunsetHeader(string $date, string $httpMethod, string $path): ?string
+    {
+        $dt = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone('UTC'));
+        if ($dt === false) {
+            $this->logInvalidSunsetDate($httpMethod, $path, $date);
+            return null;
+        }
+        return $dt->format('D, d M Y H:i:s \G\M\T');
+    }
+
+    /**
+     * Logged once per unversioned HTTP route, only during a real compile --
+     * never when a cached routes.php is loaded instead (Router's
+     * constructor only ever calls RouteCompiler::compile() on a cache
+     * miss), so this never fires per-request. Silently skipped when
+     * there's no live App to resolve LoggerOptions through
+     * (Waypoint::getInstance() === null, e.g. a Router built directly in a
+     * test) -- "usable without an App" is a design goal Router itself
+     * already guarantees elsewhere, and Logger has no way to work without
+     * one.
+     */
+    private function logUnversionedRoute(string $httpMethod, string $path): void
+    {
+        if (Waypoint::getInstance() === null) {
+            return;
+        }
+        (new Logger())->warning(Message::RouteUnversioned->interpolate(method: $httpMethod, path: $path));
+    }
+
+    /** Same "no App, no logging" guard as logUnversionedRoute() -- see there. */
+    private function logInvalidSunsetDate(string $httpMethod, string $path, string $date): void
+    {
+        if (Waypoint::getInstance() === null) {
+            return;
+        }
+        (new Logger())->warning(Message::RouteInvalidSunsetDate->interpolate(method: $httpMethod, path: $path, date: $date));
     }
 
     /**

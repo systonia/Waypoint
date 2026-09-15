@@ -4,7 +4,7 @@ namespace Waypoint\OpenAPI;
 
 use Waypoint\Waypoint;
 use RuntimeException;
-use Waypoint\Attributes\{Get, FileFormatter, Inject, Controller, Ignore};
+use Waypoint\Attributes\{Get, FileFormatter, Inject, Controller, Ignore, Param};
 use Waypoint\OpenAPI\OpenAPIGenerator;
 use Waypoint\Router;
 use Waypoint\Exceptions\NotFoundException;
@@ -44,6 +44,27 @@ class OpenAPIController
     public function spec(): array
     {
         return (new OpenAPIGenerator(Waypoint::getRouter()))->generate();
+    }
+
+    /**
+     * GET /openapi/spec.v1.json, spec.v2.json, ... -- one per distinct
+     * #[Version] actually used by an attached route. A dynamic route
+     * rather than one static #[Get] per version: the set of versions that
+     * exist is only known once controllers are attached/compiled, not at
+     * class-definition time when attributes are declared. 404s (rather
+     * than an empty spec) for a version nothing was ever compiled with.
+     */
+    #[Get('spec.{version}.json')]
+    #[FileFormatter(filename: 'spec.json', mimetype: 'application/json', download: false)]
+    public function versionedSpec(#[Param] string $version): array
+    {
+        $generator = new OpenAPIGenerator(Waypoint::getRouter());
+
+        if (!$generator->hasVersion($version)) {
+            throw new NotFoundException("OpenAPI spec for version '$version' not found.");
+        }
+
+        return $generator->generate($version);
     }
 
     private function renderBundledFile(string $filename): string

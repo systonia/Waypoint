@@ -38,7 +38,16 @@ class OpenAPIGenerator
         }
     }
 
-    public function generate(): array
+    /**
+     * @param string|null $version Omitted (or null): the combined
+     *  "current" spec -- every unversioned route, plus, for each
+     *  #[Version]-bearing route that has more than one version sharing the
+     *  same underlying path (see selectEligibleRoutes()), only its
+     *  highest/newest version. Given an exact version string (e.g. 'v1'):
+     *  only that version's own routes, for spec.vX.json. See
+     *  OpenAPIController.
+     */
+    public function generate(?string $version = null): array
     {
         // 'info' is required by the OpenAPI spec; OpenAPIOptions already
         // builds it (plus servers/tags/security/externalDocs) from whatever
@@ -58,7 +67,7 @@ class OpenAPIGenerator
         return array_filter([
             'openapi' => '3.1.0',
             'info' => $options['info'],
-            'paths' => $this->buildPaths(),
+            'paths' => $this->buildPaths($version),
             'components' => $this->components,
             'servers' => $options['servers'] ?? null,
             'security' => $options['security'] ?? null,
@@ -67,11 +76,22 @@ class OpenAPIGenerator
         ], fn($value) => $value !== null);
     }
 
-    protected function buildPaths(): array
+    /** True if at least one compiled route carries the given #[Version] -- OpenAPIController uses this to 404 a spec.vX.json for a version that doesn't exist rather than silently returning an empty spec. */
+    public function hasVersion(string $version): bool
+    {
+        foreach ($this->router->getRoutes() as $route) {
+            if (($route->version ?? null) === $version) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected function buildPaths(?string $version = null): array
     {
         $paths = [];
 
-        foreach ($this->router->getRoutes() as $route) {
+        foreach ($this->selectEligibleRoutes($this->router->getRoutes(), $version) as $route) {
             $handlerSpec = $this->getHandlerSpec($route);
             if (!$handlerSpec) {
                 continue;
@@ -113,6 +133,68 @@ class OpenAPIGenerator
             });
         }
         return $paths;
+    }
+
+    /**
+     * @param object[] $routes Router::getRoutes()' output.
+     * @param string|null $version See generate()'s own $version doc --
+     *  exact-match filter when given, "latest version per group" dedup
+     *  when null.
+     * @return object[]
+     */
+    protected function selectEligibleRoutes(array $routes, ?string $version): array
+    {
+        if ($version !== null) {
+            return array_values(array_filter(
+                $routes,
+                fn($route) => ($route->version ?? null) === $version
+            ));
+        }
+
+        $unversioned = [];
+        $latestByGroup = []; // "$method $unversionedPath" => the route object currently winning that group
+
+        foreach ($routes as $route) {
+            $routeVersion = $route->version ?? null;
+            if ($routeVersion === null) {
+                $unversioned[] = $route;
+                continue;
+            }
+
+            // Groups two routes as "the same route, different versions"
+            // purely by (HTTP method, pre-version-prefix path) -- their
+            // actual rawPath differs (that's the whole point of URI
+            // versioning), so rawPath itself can never be the group key.
+            $key = $route->method . ' ' . ($route->unversionedPath ?? $route->rawPath);
+            $incumbent = $latestByGroup[$key] ?? null;
+            if ($incumbent === null || $this->compareVersions($routeVersion, $incumbent->version) > 0) {
+                $latestByGroup[$key] = $route;
+            }
+        }
+
+        return array_merge($unversioned, array_values($latestByGroup));
+    }
+
+    /** <=> for two version strings, comparing them semantically (v1 < v2 < v10) rather than lexicographically ('10' < '2' as plain strings). */
+    protected function compareVersions(string $a, string $b): int
+    {
+        $partsA = $this->versionSortKey($a);
+        $partsB = $this->versionSortKey($b);
+
+        foreach (range(0, max(count($partsA), count($partsB)) - 1) as $i) {
+            $cmp = ($partsA[$i] ?? 0) <=> ($partsB[$i] ?? 0);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+        }
+        return 0;
+    }
+
+    /** Every run of digits in $version, as ints -- 'v2' -> [2], 'v10' -> [10], 'v1.2' -> [1, 2]. */
+    protected function versionSortKey(string $version): array
+    {
+        preg_match_all('/\d+/', $version, $matches);
+        return array_map('intval', $matches[0]) ?: [0];
     }
 
     protected function getHandlerSpec($route): ?array
@@ -193,7 +275,7 @@ class OpenAPIGenerator
         );
         $tags = array_values(array_unique($tags));
 
-        $deprecated = $this->isDeprecated($methodAttrs);
+        $deprecated = $this->isDeprecated($classAttrs, $methodAttrs);
 
         $operation = array_filter([
             'summary' => $summary,
@@ -514,9 +596,10 @@ class OpenAPIGenerator
         return "$controllerClass->$methodName";
     }
 
-    protected function isDeprecated(array $methodAttrs): bool
+    /** True if PHP's native #[\Deprecated] (8.4+) is present at either level -- RouteCompiler applies the same "either level counts" rule for the Deprecation response header (Router::dispatch()). */
+    protected function isDeprecated(array $classAttrs, array $methodAttrs): bool
     {
-        foreach ($methodAttrs as $attr) {
+        foreach ([...$classAttrs, ...$methodAttrs] as $attr) {
             if (($attr['name'] ?? null) === Deprecated::class) {
                 return true;
             }

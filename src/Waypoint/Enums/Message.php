@@ -45,5 +45,10 @@ enum Message: string
     case GeneratorClassDoesNotExist = 'OpenAPIGenerator: generateModelSchema - class "{fqcn}" does not exist.';
     case GeneratorPropertyDoesNotExist2 = 'OpenAPIGenerator: Parameter type "{type}" does not exist in method {method}.';
     #endregion
+
+    #region Route Versioning
+    case RouteUnversioned = 'RouteCompiler: {method} {path} has no #[Version] attribute -- served without a version prefix.';
+    case RouteInvalidSunsetDate = 'RouteCompiler: {method} {path} has an invalid #[Sunset] date "{date}" (expected YYYY-MM-DD) -- no Sunset header will be sent for it.';
+    #endregion
 }
 // phpcs:enable Generic.Files.LineLength

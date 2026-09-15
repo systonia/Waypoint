@@ -190,6 +190,17 @@ class Router
             $res->disableGzip();
         }
 
+        // Both computed once at compile time (RouteCompiler) from native
+        // #[\Deprecated] and #[Sunset] -- ?? false/empty() default to "not
+        // set" the same defensive way as 'gzip' above, for a route
+        // compiled/cached before either existed.
+        if ($route['deprecated'] ?? false) {
+            $res->withHeader('Deprecation', 'true');
+        }
+        if (!empty($route['sunsetHeader'])) {
+            $res->withHeader('Sunset', $route['sunsetHeader']);
+        }
+
         $controller = $this->resolveController($route['controller']);
         $this->injectControllerProperties($controller, $route['propInject'], $req, $res);
 
@@ -519,6 +530,17 @@ class Router
         return $this->viewAssetsByName[$name] ?? ['css' => null, 'js' => null];
     }
 
+    /**
+     * 'version'/'unversionedPath' default to null/$path for a route
+     * compiled/cached before #[Version] existed -- same defensive fallback
+     * as 'gzip' elsewhere, and exactly what an always-unversioned route
+     * looks like anyway (version null, unversionedPath === its own path).
+     * OpenAPIGenerator is the one real consumer of both: grouping/deduping
+     * routes across versions for the combined spec.json (see
+     * OpenAPIGenerator::selectEligibleRoutes()) needs the *same* version
+     * resolution RouteCompiler already did once at compile time, rather
+     * than a second, potentially-diverging derivation from raw attributes.
+     */
     public function getRoutes(): array
     {
         $routes = [];
@@ -528,6 +550,8 @@ class Router
                     'method' => $method,
                     'rawPath' => $path,
                     'handlerSpec' => [$plan['controller'], $plan['method']],
+                    'version' => $plan['version'] ?? null,
+                    'unversionedPath' => $plan['unversionedPath'] ?? $path,
                 ];
             }
         }
@@ -537,6 +561,8 @@ class Router
                     'method' => $method,
                     'rawPath' => $plan['path'],
                     'handlerSpec' => [$plan['controller'], $plan['method']],
+                    'version' => $plan['version'] ?? null,
+                    'unversionedPath' => $plan['unversionedPath'] ?? $plan['path'],
                 ];
             }
         }
