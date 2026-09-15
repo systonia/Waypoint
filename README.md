@@ -4,7 +4,7 @@
 [![PSR-4 Compatible](https://github.com/Systonia/Waypoint/actions/workflows/psr-4.yaml/badge.svg)](https://www.php-fig.org/psr/psr-4/)
 ![PHPStan](https://github.com/systonia/Waypoint/actions/workflows/phpstan.yaml/badge.svg)
 ![PHPStan Level](https://img.shields.io/badge/PHPStan-level%206-brightgreen)
-![PHP Version](https://img.shields.io/badge/PHP-8.4-blue)
+![PHP Version](https://img.shields.io/badge/PHP-8.5-blue)
 ![License](https://img.shields.io/github/license/Systonia/Waypoint)
 
 # Waypoint
