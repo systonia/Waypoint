@@ -26,7 +26,7 @@ class Logger
      * @param mixed $level Untyped to match Psr\Log\LoggerInterface::log()
      *  exactly -- PSR-3 itself never constrains it beyond "mixed".
      * @param string|\Stringable $message
-     * @param array $context
+     * @param mixed[] $context
      * @return void
      */
     public function log($level, string|\Stringable $message, array $context = []): void
@@ -42,7 +42,7 @@ class Logger
      * Undocumented function
      *
      * @param string|\Stringable $message
-     * @param array $context
+     * @param mixed[] $context
      * @return void
      */
     public function emergency(string|\Stringable $message, array $context = []): void
@@ -54,7 +54,7 @@ class Logger
      * Undocumented function
      *
      * @param string|\Stringable $message
-     * @param array $context
+     * @param mixed[] $context
      * @return void
      */
     public function alert(string|\Stringable $message, array $context = []): void
@@ -66,7 +66,7 @@ class Logger
      * Undocumented function
      *
      * @param string|\Stringable $message
-     * @param array $context
+     * @param mixed[] $context
      * @return void
      */
     public function critical(string|\Stringable $message, array $context = []): void
@@ -78,7 +78,7 @@ class Logger
      * Undocumented function
      *
      * @param string|\Stringable $message
-     * @param array $context
+     * @param mixed[] $context
      * @return void
      */
     public function error(string|\Stringable $message, array $context = []): void
@@ -90,7 +90,7 @@ class Logger
      * Undocumented function
      *
      * @param string|\Stringable $message
-     * @param array $context
+     * @param mixed[] $context
      * @return void
      */
     public function warning(string|\Stringable $message, array $context = []): void
@@ -102,7 +102,7 @@ class Logger
      * Undocumented function
      *
      * @param string|\Stringable $message
-     * @param array $context
+     * @param mixed[] $context
      * @return void
      */
     public function notice(string|\Stringable $message, array $context = []): void
@@ -114,7 +114,7 @@ class Logger
      * Undocumented function
      *
      * @param string|\Stringable $message
-     * @param array $context
+     * @param mixed[] $context
      * @return void
      */
     public function info(string|\Stringable $message, array $context = []): void
@@ -126,7 +126,7 @@ class Logger
      * Undocumented function
      *
      * @param string|\Stringable $message
-     * @param array $context
+     * @param mixed[] $context
      * @return void
      */
     public function debug(string|\Stringable $message, array $context = []): void

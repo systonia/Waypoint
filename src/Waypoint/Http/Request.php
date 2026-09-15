@@ -22,23 +22,17 @@ class Request
     public string $path;
 
     /**
-     * Undocumented variable
-     *
-     * @var array
+     * @var array<string, string>
      */
     public array $headers = [];
 
     /**
-     * Undocumented variable
-     *
-     * @var array
+     * @var array<string, mixed>
      */
     public array $query = [];
 
     /**
-     * Undocumented variable
-     *
-     * @var array
+     * @var array<string, mixed>
      */
     public array $body = [];
 

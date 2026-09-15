@@ -43,8 +43,8 @@ use Waypoint\Attributes\{
 final class RouteCompiler
 {
     /**
-     * @param array $classes
-     * @return array{staticRoutes: array, dynamicRoutes: array, tasks: array}
+     * @param class-string[] $classes
+     * @return array{staticRoutes: array<string, array<string, array<string, mixed>>>, dynamicRoutes: array<string, array<int, array<string, mixed>>>, tasks: array<string, array<string, mixed>>}
      */
     public function compile(array $classes): array
     {
@@ -121,6 +121,10 @@ final class RouteCompiler
     /**
      * Compile HTTP routes from a Controller class.
      * Populates $staticRoutes and $dynamicRoutes by reference.
+     *
+     * @param ReflectionClass<object> $rc
+     * @param array<string, array<string, array<string, mixed>>> $staticRoutes
+     * @param array<string, array<int, array<string, mixed>>> $dynamicRoutes
      */
     private function compileController(
         ReflectionClass $rc,
@@ -226,6 +230,8 @@ final class RouteCompiler
      * single-string-payload attributes usable at either level with the
      * exact same override rule, just under a different attribute/property
      * name.
+     *
+     * @param ReflectionClass<object> $rc
      */
     private function resolveOverridable(ReflectionClass $rc, ReflectionMethod $method, string $attributeClass, string $property): ?string
     {
@@ -288,6 +294,9 @@ final class RouteCompiler
      * Populates $tasks by reference, keyed by full task name (prefix:name).
      *
      * All tasks behave like "static" entries (no HTTP method, direct lookup by name).
+     *
+     * @param ReflectionClass<object> $rc
+     * @param array<string, array<string, mixed>> $tasks
      */
     private function compileManager(
         ReflectionClass $rc,
@@ -343,7 +352,11 @@ final class RouteCompiler
         }
     }
 
-    /** Collect #[Inject] property metadata once per class. */
+    /**
+     * Collect #[Inject] property metadata once per class.
+     * @param ReflectionClass<object> $rc
+     * @return array<int, array{name: string, type: string|null}>
+     */
     private function collectPropertyInjections(ReflectionClass $rc): array
     {
         $propInject = [];
@@ -365,6 +378,9 @@ final class RouteCompiler
      * method) in declaration order. A bare class name defaults to calling its
      * 'handle' method. Each Middleware class is container-resolved at dispatch
      * time so it can itself use #[Inject].
+     *
+     * @param \ReflectionAttribute<object>[] $attributes
+     * @return array<int, array{class: string, method: string, propInject: array<int, array{name: string, type: string|null}>}>
      */
     private function collectMiddlewares(array $attributes): array
     {
@@ -389,6 +405,7 @@ final class RouteCompiler
     /**
      * Build argument injection plan for a method.
      * Mirrors the original logic (Request/Response/Body/Query/Route/Scalar/Unknown).
+     * @return array<int, array<string, mixed>>
      */
     private function buildArgPlan(ReflectionMethod $method): array
     {
@@ -432,7 +449,10 @@ final class RouteCompiler
         return $argPlan;
     }
 
-    /** Extract both route attribute (must have getPath + getHttpMethod) and optional formatter. */
+    /**
+     * Extract both route attribute (must have getPath + getHttpMethod) and optional formatter.
+     * @return array{0: object|null, 1: object|null}
+     */
     private function extractRouteAndFormatter(ReflectionMethod $method): array
     {
         $routeAttr = null;
@@ -455,7 +475,10 @@ final class RouteCompiler
         return [$routeAttr, $formatter];
     }
 
-    /** Extract only a formatter (for tasks; optional). */
+    /**
+     * Extract only a formatter (for tasks; optional).
+     * @return array{type: string, options: array<string, mixed>|null}
+     */
     private function extractFormatterOnly(ReflectionMethod $method): array
     {
         $formatterAttr = null;
@@ -472,7 +495,10 @@ final class RouteCompiler
         return self::normalizeFormatter($formatterAttr);
     }
 
-    /** Normalize formatter into a plan-friendly array. */
+    /**
+     * Normalize formatter into a plan-friendly array.
+     * @return array{type: string, options: array<string, mixed>|null}
+     */
     private function normalizeFormatter(?object $formatterAttr): array
     {
         return $formatterAttr
@@ -509,10 +535,8 @@ final class RouteCompiler
     }
 
     /**
-     * Undocumented function
-     *
-     * @param array $controllers
-     * @return array
+     * @param class-string[] $controllers
+     * @return array<class-string, mixed>
      */
     public static function exportAllAttributes(array $controllers): array
     {

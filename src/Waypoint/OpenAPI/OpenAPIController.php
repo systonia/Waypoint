@@ -37,7 +37,7 @@ class OpenAPIController
     }
 
     /**
-     * @return array
+     * @return array<string, mixed>
      */
     #[Get('spec.json')]
     #[FileFormatter(filename: 'spec.json', mimetype: 'application/json', download: false)]
@@ -53,6 +53,8 @@ class OpenAPIController
      * exist is only known once controllers are attached/compiled, not at
      * class-definition time when attributes are declared. 404s (rather
      * than an empty spec) for a version nothing was ever compiled with.
+     *
+     * @return array<string, mixed>
      */
     #[Get('spec.{version}.json')]
     #[FileFormatter(filename: 'spec.json', mimetype: 'application/json', download: false)]

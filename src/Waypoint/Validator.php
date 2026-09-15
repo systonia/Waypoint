@@ -14,7 +14,7 @@ class Validator
     /**
      * Validates all properties of a DTO with validation attributes.
      * @param object $dto
-     * @return array Errors: field => message
+     * @return array<string, string> Errors: field => message
      */
     #[\NoDiscard('Ignoring the returned errors means validation never actually gets enforced.')]
     public function validate(object $dto): array

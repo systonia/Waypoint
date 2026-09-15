@@ -8,7 +8,7 @@ enum Message: string
     /**
      * Undocumented function
      *
-     * @param array $vars
+     * @param array<string, mixed> $vars
      * @return string
      */
     public function format(array $vars = []): string

@@ -24,7 +24,7 @@ class EnvironmentOptions
     /**
      * All env keys/values managed by this class.
      *
-     * @var array
+     * @var array<string, mixed>
      */
     private array $data = [];
 
@@ -146,6 +146,8 @@ class EnvironmentOptions
      * getenv() always returns array (never false; that's only possible
      * for the single-argument "look up one var" form), so there's nothing
      * to fall back from.
+     *
+     * @return array<string, string>
      */
     private function readSystemEnv(): array
     {

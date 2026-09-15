@@ -14,6 +14,7 @@ use Waypoint\Attributes\{FileFormatter, SimpleXmlFormatter};
  */
 final class ResultRenderer
 {
+    /** @param array{type?: string, options?: array<string, mixed>} $formatter */
     public function render(mixed $result, Response $res, array $formatter): void
     {
         $type = $formatter['type'] ?? 'json';
@@ -37,7 +38,8 @@ final class ResultRenderer
             ->send();
     }
 
-    private function renderFileResult($result, Response $res, array $options): void
+    /** @param array{mimetype?: string, filename?: string, download?: bool} $options */
+    private function renderFileResult(mixed $result, Response $res, array $options): void
     {
         $mimetype = $options['mimetype'] ?? 'application/octet-stream';
         $res->withHeader('Content-Type', $mimetype);
@@ -54,7 +56,7 @@ final class ResultRenderer
         }
     }
 
-    private function renderXmlResult($result, Response $res): void
+    private function renderXmlResult(mixed $result, Response $res): void
     {
         $res->withHeader('Content-Type', 'application/xml');
         $xml = simplexml_load_string('<root/>');

@@ -14,6 +14,7 @@ use Waypoint\Exceptions\{ContainerException, NotFoundException};
  */
 class Container implements ContainerInterface
 {
+    /** @var array<class-string, object> */
     private array $services = [];
 
     public function set(object $service): void
@@ -65,6 +66,7 @@ class Container implements ContainerInterface
         return !$constructor || $constructor->getNumberOfRequiredParameters() === 0;
     }
 
+    /** @return array<class-string, object> */
     public function all(): array
     {
         return $this->services;

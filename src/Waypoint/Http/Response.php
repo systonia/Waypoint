@@ -27,9 +27,7 @@ class Response
     private bool $gzipDisabled = false;
 
     /**
-     * Undocumented variable
-     *
-     * @var array
+     * @var array<string, string>
      */
     private array $headers = [];
 

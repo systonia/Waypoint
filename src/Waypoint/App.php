@@ -19,6 +19,8 @@ use Waypoint\Exceptions\{ForbiddenException, UnauthorizedException, NotFoundExce
 class App
 {
     private Router $router;
+
+    /** @var callable[] */
     private array $middlewares = [];
     private Container $container;
 
@@ -31,6 +33,7 @@ class App
         $this->registerDefaultExceptionHandlers();
     }
 
+    /** @param class-string[] $controllers */
     public function attach(array $controllers): void
     {
         $fileSystemOptions = $this->container->get(FileSystemOptions::class);
@@ -338,6 +341,8 @@ class App
      * gap this closes; #[Inject] on a controller or #[Middleware] class
      * already worked, since Router applies this same wiring itself, per
      * request, via injectControllerProperties().
+     *
+     * @param class-string[] $classes
      */
     private function initDependencyInjection(array $classes): void
     {
@@ -389,6 +394,10 @@ class App
         }
     }
 
+    /**
+     * @param class-string[] $controllers
+     * @return class-string[]
+     */
     private function discoverAllClasses(array $controllers): array
     {
         $all = $controllers;

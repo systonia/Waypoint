@@ -93,6 +93,8 @@ final class FileSystem
      * App::attach() (for 'services') and Router (for the route plans
      * themselves) reuse this one read instead of each `require`-ing the
      * same file independently.
+     *
+     * @return array<string, mixed>|null
      */
     public function loadCachedRouteData(): ?array
     {
@@ -118,7 +120,7 @@ final class FileSystem
     }
 
     /**
-     * @param array $controllers
+     * @param class-string[] $controllers
      * @param array<string, int> $extraMeta Additional {path => mtime}
      *  entries to require an exact match on too, alongside the controllers'
      *  own -- e.g. ViewAssets::discoverMeta()'s view .css/.js mtimes, so
@@ -182,8 +184,8 @@ final class FileSystem
 
     /**
      * @param Router $router
-     * @param array $controllers
-     * @param array $serviceClasses
+     * @param class-string[] $controllers
+     * @param class-string[] $serviceClasses
      * @param array<string, int> $extraMeta See isAvailable()'s $extraMeta --
      *  the same view-asset mtimes that decided a rebuild was needed here
      *  get persisted here too, so the next request's isAvailable() call has
@@ -289,9 +291,7 @@ final class FileSystem
     }
 
     /**
-     * Undocumented function
-     *
-     * @param array $controllers
+     * @param class-string[] $controllers
      * @return void
      */
     public function storeAttributes(array $controllers): void
@@ -308,9 +308,7 @@ final class FileSystem
     }
 
     /**
-     * Undocumented function
-     *
-     * @return array
+     * @return array<class-string, mixed> See RouteCompiler::exportAllAttributes() for the shape.
      */
     public function loadAttributes(): array
     {

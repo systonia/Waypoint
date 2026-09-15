@@ -13,14 +13,12 @@ class Tags
     /**
      * Undocumented function
      *
-     * @param array $tags
+     * @param string[] $tags
      * @param string|null $name
      */
     public function __construct(
         /**
-         * Undocumented variable
-         *
-         * @var array
+         * @var string[]
          */
         public array $tags = [],
 

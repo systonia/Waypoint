@@ -20,8 +20,14 @@ class OpenAPIGenerator
 {
     private Router $router;
     private Logger $logger;
+
+    /** @var array<class-string, mixed> See RouteCompiler::exportAllAttributes() for the shape. */
     private array $attributeCache;
+
+    /** @var array<string, bool> Schema name => already generated, guarding against infinite recursion on a self-/mutually-referencing model. */
     private array $processedModels = [];
+
+    /** @var array<string, mixed> */
     private array $components = [
         'schemas' => [],
         'securitySchemes' => [],
@@ -46,6 +52,8 @@ class OpenAPIGenerator
      *  highest/newest version. Given an exact version string (e.g. 'v1'):
      *  only that version's own routes, for spec.vX.json. See
      *  OpenAPIController.
+     *
+     * @return array<string, mixed>
      */
     public function generate(?string $version = null): array
     {
@@ -87,6 +95,7 @@ class OpenAPIGenerator
         return false;
     }
 
+    /** @return array<string, mixed> */
     protected function buildPaths(?string $version = null): array
     {
         $paths = [];
@@ -136,8 +145,8 @@ class OpenAPIGenerator
     }
 
     /**
-     * @param array $routes Router::getRoutes()' output -- in practice
-     *  always a list of plain objects, but typed as the same bare `array`
+     * @param array<int, mixed> $routes Router::getRoutes()' output -- in
+     *  practice always a list of plain objects, but typed as loosely as
      *  Router::getRoutes() itself declares (not narrowed to object[]),
      *  since buildPaths()/getHandlerSpec() deliberately also tolerate an
      *  array-shaped route (see their own doc); property access below is
@@ -146,7 +155,7 @@ class OpenAPIGenerator
      * @param string|null $version See generate()'s own $version doc --
      *  exact-match filter when given, "latest version per group" dedup
      *  when null.
-     * @return array
+     * @return array<int, mixed>
      */
     protected function selectEligibleRoutes(array $routes, ?string $version): array
     {
@@ -196,14 +205,18 @@ class OpenAPIGenerator
         return 0;
     }
 
-    /** Every run of digits in $version, as ints -- 'v2' -> [2], 'v10' -> [10], 'v1.2' -> [1, 2]. */
+    /**
+     * Every run of digits in $version, as ints -- 'v2' -> [2], 'v10' -> [10], 'v1.2' -> [1, 2].
+     * @return int[]
+     */
     protected function versionSortKey(string $version): array
     {
         preg_match_all('/\d+/', $version, $matches);
         return array_map('intval', $matches[0]) ?: [0];
     }
 
-    protected function getHandlerSpec($route): ?array
+    /** @return array{0: class-string, 1: string}|null */
+    protected function getHandlerSpec(mixed $route): ?array
     {
         // Handles both object and array representations
         if (is_object($route) && is_array($route->handlerSpec)) {
@@ -218,6 +231,10 @@ class OpenAPIGenerator
         return null;
     }
 
+    /**
+     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $classAttrs
+     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $methodAttrs
+     */
     protected function isIgnored(array $classAttrs, array $methodAttrs): bool
     {
         foreach (array_merge($classAttrs, $methodAttrs) as $attr) {
@@ -228,6 +245,11 @@ class OpenAPIGenerator
         return false;
     }
 
+    /**
+     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $methodAttrs
+     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $classAttrs
+     * @return array<string, mixed>
+     */
     protected function buildOperation(string $controllerClass, string $methodName, array $methodAttrs, array $classAttrs): array
     {
         // Parameters and requestBody
@@ -306,6 +328,8 @@ class OpenAPIGenerator
      * attribute cache -- each parameter's real PHP type (captured by
      * Router::exportAllAttributes()) drives the OpenAPI schema type, rather
      * than every parameter being documented as a plain string.
+     *
+     * @return array{0: array<int, array<string, mixed>>, 1: array<string, mixed>|null, 2: array<string, class-string>} [parameters, requestBody, schemas]
      */
     protected function extractParameters(string $controllerClass, string $methodName): array
     {
@@ -412,7 +436,10 @@ class OpenAPIGenerator
         return $type !== null && in_array($type, ['string', 'int', 'integer', 'float', 'bool', 'boolean'], true);
     }
 
-    /** Maps a PHP type name to an OpenAPI schema for a parameter. */
+    /**
+     * Maps a PHP type name to an OpenAPI schema for a parameter.
+     * @return array<string, mixed>|stdClass
+     */
     protected function schemaForType(?string $type): array|stdClass
     {
         if ($type === null) {
@@ -441,6 +468,11 @@ class OpenAPIGenerator
         return (new ReflectionClass($fqcn))->getShortName();
     }
 
+    /**
+     * @return array<int, mixed> Keyed by HTTP status code -- '200' as a
+     *  literal array key is auto-coerced to the int 200 by PHP itself, not
+     *  a string.
+     */
     protected function getResponseSchemas(string $controllerClass, string $methodName): array
     {
         $responses = [];
@@ -453,6 +485,7 @@ class OpenAPIGenerator
         return $responses;
     }
 
+    /** @return array<string, mixed> */
     protected function generateModelSchema(string $fqcn): array
     {
         if (!$fqcn || !class_exists($fqcn)) {
@@ -501,7 +534,10 @@ class OpenAPIGenerator
         return $schema;
     }
 
-    /** Builds the (pre-annotation) schema for one model property, given its resolved type name. */
+    /**
+     * Builds the (pre-annotation) schema for one model property, given its resolved type name.
+     * @return array<string, mixed>
+     */
     private function schemaForProperty(?string $typeName, string $propertyName, string $ownerFqcn): array
     {
         if ($typeName === null) {
@@ -535,7 +571,10 @@ class OpenAPIGenerator
         return ['$ref' => "#/components/schemas/$short"];
     }
 
-    /** Merges an optional #[Property(...)] attribute's description/format/example/deprecated into a property's schema. */
+    /**
+     * Merges an optional #[Property(...)] attribute's description/format/example/deprecated into a property's schema.
+     * @param array<string, mixed> $schema
+     */
     private function applyPropertyAnnotation(\ReflectionProperty $prop, array &$schema): void
     {
         $attrs = $prop->getAttributes(Property::class);
@@ -569,6 +608,10 @@ class OpenAPIGenerator
         };
     }
 
+    /**
+     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $attrs
+     * @return string[]
+     */
     protected function extractTags(array $attrs): array
     {
         foreach ($attrs as $attr) {
@@ -586,6 +629,7 @@ class OpenAPIGenerator
         return [];
     }
 
+    /** @param array<int, array{name?: string, args?: array<int|string, mixed>}> $methodAttrs */
     protected function extractSummary(array $methodAttrs, string $controllerClass, string $methodName): string
     {
         foreach ($methodAttrs as $attr) {
@@ -602,7 +646,11 @@ class OpenAPIGenerator
         return "$controllerClass->$methodName";
     }
 
-    /** True if PHP's native #[\Deprecated] (8.4+) is present at either level -- RouteCompiler applies the same "either level counts" rule for the Deprecation response header (Router::dispatch()). */
+    /**
+     * True if PHP's native #[\Deprecated] (8.4+) is present at either level -- RouteCompiler applies the same "either level counts" rule for the Deprecation response header (Router::dispatch()).
+     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $classAttrs
+     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $methodAttrs
+     */
     protected function isDeprecated(array $classAttrs, array $methodAttrs): bool
     {
         foreach ([...$classAttrs, ...$methodAttrs] as $attr) {

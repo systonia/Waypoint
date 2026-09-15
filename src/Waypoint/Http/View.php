@@ -52,9 +52,7 @@ class View
     protected ?string $layout = null;
 
     /**
-     * Undocumented variable
-     *
-     * @var array
+     * @var array<string, string>
      */
     protected $sections = [];
 
@@ -160,6 +158,8 @@ class View
      * for a full, non-partial page load, where there's no client-side JS
      * running yet to read the equivalent response headers a partial-swap
      * navigation relies on instead.
+     *
+     * @param array{css: ?string, js: ?string} $assets
      */
     public function setAssets(array $assets): void
     {
@@ -220,7 +220,10 @@ class View
         return "<script src=\"$src\"></script>\n";
     }
 
-    /** Shared by assetTags()/layoutAssetTags() -- builds <link>/<script> tags for one {css, js} pair. */
+    /**
+     * Shared by assetTags()/layoutAssetTags() -- builds <link>/<script> tags for one {css, js} pair.
+     * @param array{css: ?string, js: ?string} $assets
+     */
     private function renderAssetTags(array $assets): string
     {
         $tags = '';

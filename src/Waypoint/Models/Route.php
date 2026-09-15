@@ -29,23 +29,21 @@ class Route
     public string $regex;
 
     /**
-     * Undocumented variable
-     *
-     * @var array
+     * @var string[]
      */
     public array $paramNames;
 
     /**
      * [controllerClass, methodName], verbatim.
      *
-     * @var array
+     * @var array{0: class-string, 1: string}
      */
     public array $handlerSpec;
 
     /**
      * @param string $method
      * @param string $path
-     * @param array $handlerSpec
+     * @param array{0: class-string, 1: string} $handlerSpec
      */
     public function __construct(string $method, string $path, array $handlerSpec)
     {

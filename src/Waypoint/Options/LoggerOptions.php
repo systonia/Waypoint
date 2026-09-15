@@ -24,9 +24,7 @@ use Psr\Log\LogLevel;
 class LoggerOptions
 {
     /**
-     * Each entry: ['logger'=>LoggerInterface, 'levels'=>array (assoc), 'name'=>string|null]
-     *
-     * @var array
+     * @var array<int, array{logger: LoggerInterface, levels: array<string, bool>, name: string|null}>
      */
     private array $loggers = [];
 
@@ -45,7 +43,7 @@ class LoggerOptions
     public ?string $name = null;
 
     /**
-     * @param array $levels
+     * @param string[] $levels
      * @param string|null $name
      */
     public function __construct(array $levels = [], ?string $name = null)
@@ -58,12 +56,12 @@ class LoggerOptions
      * Add one or more loggers (LoggerInterface), with flexible options:
      * - options can be LoggerOptions, string (level), array (levels), or assoc array.
      *
-     * @param LoggerInterface|array $logger A single logger, or a plain
-     *  array of them -- native `array` rather than `LoggerInterface[]`,
-     *  since nothing actually constrains an array's element types; any
-     *  element that isn't really a LoggerInterface is silently skipped
-     *  below (the instanceof check), not assumed away.
-     * @param LoggerOptions|string|array|null $options
+     * @param LoggerInterface|array<int, mixed> $logger A single logger, or
+     *  a plain array of them -- element type left as `mixed`, since
+     *  nothing actually constrains an array's element types; any element
+     *  that isn't really a LoggerInterface is silently skipped below (the
+     *  instanceof check), not assumed away.
+     * @param LoggerOptions|string|array<int|string, mixed>|null $options
      * @return self
      */
     public function add(LoggerInterface|array $logger, $options = null): self
@@ -141,7 +139,7 @@ class LoggerOptions
      * Return all registered loggers. If none, a NullLogger accepting every
      * level, so Logger::log() always has something to dispatch to.
      *
-     * @return array
+     * @return array<int, array{logger: LoggerInterface, levels: array<string, bool>, name: string|null}>
      */
     public function getLoggers(): array
     {

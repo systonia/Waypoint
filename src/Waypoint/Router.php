@@ -20,13 +20,31 @@ use Waypoint\Attributes\Inject;
 
 class Router
 {
+    /** @var array<string, array<string, array<string, mixed>>> httpMethod => path => plan */
     public array $staticRoutes = [];
+    /** @var array<string, array<int, array<string, mixed>>> httpMethod => list of plans */
     public array $dynamicRoutes = [];
+    /**
+     * fullName => plan. Value kept as `mixed`, not `array<string, mixed>`
+     * like the plan shape elsewhere: $tasks is public, and
+     * RouterInternalsTest deliberately assigns a non-array entry directly
+     * to prove executeTask() tolerates a corrupted one gracefully -- a
+     * stricter type here would make that already-tested tolerance
+     * unreachable by PHPStan's own reasoning.
+     *
+     * @var array<string, mixed>
+     */
     public array $tasks = [];
 
-    /** {filename => mime} -- GET {assetsPath}/{filename} resolves through this, a strict map hit or a 404; the actual bytes are read from FileSystem::getAssetsDirectory() on demand, never held here. */
+    /**
+     * {filename => mime} -- GET {assetsPath}/{filename} resolves through this, a strict map hit or a 404; the actual bytes are read from FileSystem::getAssetsDirectory() on demand, never held here.
+     * @var array<string, string>
+     */
     private array $viewAssetFiles = [];
-    /** {viewName => {css: ?filename, js: ?filename}} -- looked up by name when rendering a View, to emit its asset headers. */
+    /**
+     * {viewName => {css: ?filename, js: ?filename}} -- looked up by name when rendering a View, to emit its asset headers.
+     * @var array<string, array{css: ?string, js: ?string}>
+     */
     private array $viewAssetsByName = [];
 
     private ?Container $container = null;
@@ -39,6 +57,7 @@ class Router
 
     // -- Route Management --
 
+    /** @param array<string, mixed> $plan */
     public function addCompiledRoute(array $plan, RouteType $type = RouteType::Unset): void
     {
         // Task plans carry no 'httpMethod' key, so it's only read inside the
@@ -51,6 +70,15 @@ class Router
         };
     }
 
+    /**
+     * @return array{
+     *     staticRoutes: array<string, array<string, array<string, mixed>>>,
+     *     dynamicRoutes: array<string, array<int, array<string, mixed>>>,
+     *     tasks: array<string, mixed>,
+     *     viewAssetFiles: array<string, string>,
+     *     viewAssetsByName: array<string, array{css: ?string, js: ?string}>
+     * }
+     */
     public function exportPlans(): array
     {
         return [
@@ -62,6 +90,7 @@ class Router
         ];
     }
 
+    /** @param array<string, mixed> $data */
     public function importPlans(array $data): void
     {
         $this->staticRoutes = $data['staticRoutes'] ?? [];
@@ -83,10 +112,10 @@ class Router
     // -- Public Entry Point: Boot --
 
     /**
-     * @param array $controllers
-     * @param array $serviceClasses
+     * @param class-string[] $controllers
+     * @param class-string[] $serviceClasses
      * @param Container|null $container
-     * @param array|null $preloadedCache Route data the caller already read
+     * @param array<string, mixed>|null $preloadedCache Route data the caller already read
      *  from the cache (e.g. App::attach(), which needs 'services' out of
      *  the same file anyway in trust mode) -- lets the Router use it
      *  directly instead of `require`-ing routes.php a second time.
@@ -217,6 +246,9 @@ class Router
      * so it runs first. Any exception thrown by a middleware or the handler
      * itself propagates to the caller (App::handle), which maps it to a
      * response via its exception handler registry.
+     *
+     * @param array<string, mixed> $route
+     * @param array<string, string> $params
      */
     private function buildRouteHandler(array $route, object $controller, array $params): callable
     {
@@ -287,6 +319,7 @@ class Router
         return true;
     }
 
+    /** @return array{0: array<string, mixed>|null, 1: array<string, string>} */
     private function matchRoute(string $httpMethod, string $path): array
     {
         $m = strtoupper($httpMethod);
@@ -319,11 +352,12 @@ class Router
             ->send();
     }
 
-    private function resolveController(string $class)
+    private function resolveController(string $class): object
     {
         return $this->container ? $this->container->get($class) : new $class();
     }
 
+    /** @param array<int, array{name: string, type: string|null}> $propInject */
     private function injectControllerProperties(object $controller, array $propInject, Request $req, Response $res): void
     {
         foreach ($propInject as $p) {
@@ -381,6 +415,11 @@ class Router
         }
     }
 
+    /**
+     * @param array<int, array<string, mixed>> $argPlan
+     * @param array<string, string> $params
+     * @return array<int, mixed>
+     */
     private function buildMethodArguments(array $argPlan, Request $req, Response $res, array $params): array
     {
         $args = [];
@@ -451,8 +490,10 @@ class Router
      * Router's own compiled CSS/JS asset lookups and #[Inject] wiring;
      * everything else (JSON/file/XML) is delegated to ResultRenderer, which
      * needs none of that.
+     *
+     * @param array{type?: string, options?: array<string, mixed>|null} $formatter
      */
-    private function renderResult($result, Response $res, array $formatter): void
+    private function renderResult(mixed $result, Response $res, array $formatter): void
     {
         if ($result instanceof View) {
             $this->renderView($result, $res);
@@ -542,6 +583,8 @@ class Router
      * OpenAPIGenerator::selectEligibleRoutes()) needs the *same* version
      * resolution RouteCompiler already did once at compile time, rather
      * than a second, potentially-diverging derivation from raw attributes.
+     *
+     * @return array<int, object>
      */
     public function getRoutes(): array
     {
@@ -571,6 +614,7 @@ class Router
         return $routes;
     }
 
+    /** @param array<int, object> $routes */
     public function findRoute(array $routes, string $method, string $path): ?object
     {
         foreach ($routes as $route) {
@@ -581,6 +625,7 @@ class Router
         return null;
     }
 
+    /** @param string[] $argv */
     public function executeTask(string $name, array $argv = [], int $argc = 0): mixed
     {
         // 1) Try exact key first (full name, e.g. "prefix:task" or plain "task")
@@ -625,7 +670,15 @@ class Router
         return $manager->{$method}($argv, $argc);
     }
 
-    /** Inject DI for tasks, but never Request/Response (no HTTP in tasks). */
+    /**
+     * Inject DI for tasks, but never Request/Response (no HTTP in tasks).
+     *
+     * @param array<int, array<string, mixed>> $propInject Looser than
+     *  injectControllerProperties()'s equivalent shape on purpose:
+     *  RouterInternalsTest deliberately exercises a hand-crafted task plan
+     *  with a null 'name' entry, to prove this stays a no-op instead of
+     *  crashing.
+     */
     private function injectTaskProperties(object $target, array $propInject): void
     {
         foreach ($propInject as $p) {

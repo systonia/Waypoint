@@ -12,7 +12,7 @@ class JWT
     /**
      * Undocumented function
      *
-     * @param array $payload
+     * @param array<string, mixed> $payload
      * @param integer|null $ttl
      * @return string
      */
@@ -34,7 +34,7 @@ class JWT
      * Undocumented function
      *
      * @param string $jwt
-     * @return array|null
+     * @return array<string, mixed>|null
      */
     #[\NoDiscard('Ignoring the result (payload, or null for an invalid/expired token) silently skips checking whether the token actually verified.')]
     public static function decode(string $jwt): ?array
@@ -60,8 +60,8 @@ class JWT
      * Parses the JWT from the given HTTP headers (according to configured header and token type).
      * Returns payload or null.
      *
-     * @param array $headers
-     * @return array|null
+     * @param array<string, string|string[]> $headers
+     * @return array<string, mixed>|null
      */
     #[\NoDiscard('Same reason as decode() -- ignoring the result silently skips checking whether the request was actually authenticated.')]
     public static function fromRequestHeaders(array $headers): ?array

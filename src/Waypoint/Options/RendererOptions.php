@@ -30,9 +30,7 @@ class RendererOptions
     }
 
     /**
-     * Undocumented function
-     *
-     * @param array $options
+     * @param array<string, mixed> $options
      */
     public function __construct(array $options = [])
     {
@@ -46,9 +44,7 @@ class RendererOptions
     }
 
     /**
-     * Undocumented function
-     *
-     * @return array
+     * @return array<string, string>
      */
     public function toArray(): array
     {
