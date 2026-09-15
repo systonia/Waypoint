@@ -26,7 +26,14 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ steps.phpversion.outputs.php }}
-          coverage: none
+          # xdebug, not none: the test suite's header-assertion helper
+          # (xdebug_get_headers(), used across most Integration tests)
+          # needs it just to observe what Response::send() sent --
+          # headers_list() alone is always empty under the CLI SAPI, so
+          # without Xdebug every such assertion silently sees nothing.
+          # This doesn't force a coverage report to be generated; it only
+          # makes the extension available.
+          coverage: xdebug
 
       - name: Install dependencies
         run: composer install --no-progress --no-interaction
