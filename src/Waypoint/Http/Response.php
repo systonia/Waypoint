@@ -85,6 +85,21 @@ class Response
     }
 
     /**
+     * Mirrors the triggering Request's id (Request::$id) back to the
+     * client as X-Request-ID, so it can correlate this response with the
+     * request it made -- the same id Logger::log() automatically attaches
+     * to every log line for the request's duration (see RequestContext).
+     * Called once, right after construction, by whatever created this
+     * Response from a Request (App::handleHttp() in production) -- plain
+     * withHeader() underneath, so it costs nothing to skip for a Response
+     * built without an originating Request (as most unit tests do).
+     */
+    public function withRequestId(string $id): self
+    {
+        return $this->withHeader('X-Request-ID', $id);
+    }
+
+    /**
      * Queues a "Set-Cookie" header. HttpOnly and SameSite=Lax by default --
      * the safe defaults for an auth/session cookie -- since a plain value
      * you actually want readable from JS or sent cross-site is the

@@ -217,15 +217,27 @@ class App
     public function handleHttp(): void
     {
         $req = Request::capture();
-        $res = new Response($this->container->get(CompressionOptions::class));
+        $res = (new Response($this->container->get(CompressionOptions::class)))->withRequestId($req->id);
 
-        $handler = array_reduce(
-            array: array_reverse(array: $this->middlewares),
-            callback: fn(callable $next, callable $mw): callable => fn(Request $req, Response $res): mixed => $mw($req, $res, $next),
-            initial: fn(Request $req, Response $res): Response => $this->handle(req: $req, res: $res)
-        );
+        // Makes $req->id available to Logger::log() for the rest of this
+        // request without threading it through every call site by hand
+        // (see RequestContext) -- cleared again in finally so it can never
+        // leak into a later request sharing this same App/container (e.g.
+        // a persistent-worker deployment; a classic per-request PHP
+        // process wouldn't need this, but it costs nothing here).
+        $this->container->get(RequestContext::class)->setRequestId($req->id);
 
-        $handler($req, $res);
+        try {
+            $handler = array_reduce(
+                array: array_reverse(array: $this->middlewares),
+                callback: fn(callable $next, callable $mw): callable => fn(Request $req, Response $res): mixed => $mw($req, $res, $next),
+                initial: fn(Request $req, Response $res): Response => $this->handle(req: $req, res: $res)
+            );
+
+            $handler($req, $res);
+        } finally {
+            $this->container->get(RequestContext::class)->setRequestId(null);
+        }
     }
 
     private function handle(Request $req, Response $res): Response

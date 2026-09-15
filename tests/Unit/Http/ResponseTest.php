@@ -130,6 +130,23 @@ final class ResponseTest extends TestCase
         $this->assertContains('x-custom', $this->sentHeaderNames());
     }
 
+    public function testWithRequestIdSendsItBackAsXRequestIdHeader(): void
+    {
+        $res = (new Response())->withRequestId('abc-123-correlation');
+
+        ob_start();
+        $res->send();
+        ob_end_clean();
+
+        $this->assertSame('abc-123-correlation', $this->sentHeaderValue('X-Request-ID'));
+    }
+
+    public function testWithRequestIdIsChainable(): void
+    {
+        $res = new Response();
+        $this->assertSame($res, $res->withRequestId('abc-123'));
+    }
+
     public function testWithCookieIsChainable(): void
     {
         $res = new Response();

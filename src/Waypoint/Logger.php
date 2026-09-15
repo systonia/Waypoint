@@ -40,11 +40,34 @@ class Logger
             return;
             // @codeCoverageIgnoreEnd
         }
+        $context = self::withRequestId($context);
         foreach (Waypoint::getConfig(LoggerOptions::class)->getLoggers() as $entry) {
             if (isset($entry['levels'][$level])) {
                 $entry['logger']->log($level, $message, $context);
             }
         }
+    }
+
+    /**
+     * Context processor: stamps the current request's id (RequestContext,
+     * set by App::handleHttp()) into 'request_id', unless the caller
+     * already passed that key explicitly -- an explicit value always
+     * wins, and outside of a request (a CLI task, or no request has run
+     * yet) there's no id to stamp at all.
+     *
+     * @param mixed[] $context
+     * @return mixed[]
+     */
+    private static function withRequestId(array $context): array
+    {
+        if (array_key_exists('request_id', $context)) {
+            return $context;
+        }
+        $requestId = Waypoint::getConfig(RequestContext::class)->getRequestId();
+        if ($requestId === null) {
+            return $context;
+        }
+        return ['request_id' => $requestId] + $context;
     }
 
     /**
