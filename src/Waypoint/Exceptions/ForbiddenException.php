@@ -14,8 +14,9 @@ class ForbiddenException extends Exception
     /**
      * Undocumented variable
      *
-     * @var [type]
+     * @var string
      */
+    #[\Override]
     protected $message = Message::Forbidden->value;
 
     /**
@@ -23,6 +24,7 @@ class ForbiddenException extends Exception
      *
      * @var integer
      */
+    #[\Override]
     protected $code = 403;
 
     /**

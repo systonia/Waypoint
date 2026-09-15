@@ -8,7 +8,7 @@ use Attribute;
  * Defines a route for HTTP POST method.
  */
 #[Attribute(Attribute::TARGET_METHOD)]
-class Post
+class Post implements RouteAttribute
 {
     /**
      * Undocumented variable

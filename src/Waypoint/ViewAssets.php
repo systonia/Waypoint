@@ -51,9 +51,20 @@ final class ViewAssets
         foreach (self::discoverViewNames($viewsDir) as $name) {
             foreach (self::EXTENSIONS as $ext) {
                 $path = "$viewsDir/$name.$ext";
-                if (is_file($path)) {
-                    $meta[$path] = filemtime($path);
+                if (!is_file($path)) {
+                    continue;
                 }
+                $mtime = filemtime($path);
+                // @codeCoverageIgnoreStart
+                // Only reachable via a race (deleted/permissions changed
+                // between is_file() above and filemtime()) that can't be
+                // reliably reproduced cross platform -- same guard as
+                // FileSystem::readViewAssetFile().
+                if ($mtime === false) {
+                    continue;
+                }
+                // @codeCoverageIgnoreEnd
+                $meta[$path] = $mtime;
             }
         }
         return $meta;
@@ -91,6 +102,16 @@ final class ViewAssets
                 }
 
                 $content = file_get_contents($path);
+                $mtime = filemtime($path);
+                // @codeCoverageIgnoreStart
+                // Only reachable via a race (deleted/permissions changed
+                // between is_file() above and file_get_contents()/
+                // filemtime()) that can't be reliably reproduced cross
+                // platform -- same guard as FileSystem::readViewAssetFile().
+                if ($content === false || $mtime === false) {
+                    continue;
+                }
+                // @codeCoverageIgnoreEnd
                 if ($ext === 'css') {
                     $content = self::scopeCss($content, $name);
                 }
@@ -101,7 +122,7 @@ final class ViewAssets
                     'content' => $content,
                     'mime' => $ext === 'css' ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8',
                 ];
-                $meta[$path] = filemtime($path);
+                $meta[$path] = $mtime;
             }
 
             if ($entry['css'] !== null || $entry['js'] !== null) {

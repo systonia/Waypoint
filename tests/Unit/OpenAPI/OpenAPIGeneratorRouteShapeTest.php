@@ -92,4 +92,25 @@ final class OpenAPIGeneratorRouteShapeTest extends TestCase
         $this->expectException(RuntimeException::class);
         $method->invoke($generator, 'Totally\\Fake\\ClassName');
     }
+
+    public function testCompareVersionsReturnsZeroForTwoEqualVersions(): void
+    {
+        // The only branch selectEligibleRoutes() itself never reaches: two
+        // *different* versions never dedup-tie in practice (each route's
+        // own version is unique per group by construction), so this is
+        // exercised directly instead.
+        $generator = $this->generatorWithRoutes([]);
+        $method = new ReflectionMethod($generator, 'compareVersions');
+
+        $this->assertSame(0, $method->invoke($generator, 'v1', 'v1'));
+    }
+
+    public function testCompareVersionsOrdersNumericallyNotLexicographically(): void
+    {
+        $generator = $this->generatorWithRoutes([]);
+        $method = new ReflectionMethod($generator, 'compareVersions');
+
+        $this->assertGreaterThan(0, $method->invoke($generator, 'v10', 'v2'));
+        $this->assertLessThan(0, $method->invoke($generator, 'v2', 'v10'));
+    }
 }

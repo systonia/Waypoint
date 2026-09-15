@@ -8,7 +8,7 @@ use Attribute;
  *
  */
 #[Attribute(Attribute::TARGET_METHOD)]
-class Put
+class Put implements RouteAttribute
 {
     /**
      * Undocumented variable

@@ -26,6 +26,7 @@
   "scripts": {
     "test": "vendor/bin/phpunit --testdox --display-deprecations --display-warnings",
     "e2e": "php vendor/bin/phpunit --testdox Tests/EndToEnd",
+    "stan": "phpstan analyse",
     "coverage:text": "XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-text",
     "coverage:html": "XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-html coverage/"
   },
@@ -40,13 +41,14 @@
     }
   },
   "require": {
-    "php": ">=8.4",
+    "php": ">=8.5",
     "psr/container": "^2.0",
     "psr/log": "^3.0"
   },
   "require-dev": {
     "monolog/monolog": "^3.9",
-    "phpunit/phpunit": "^13.3"
+    "phpunit/phpunit": "^13.3",
+    "phpstan/phpstan": "^2.2"
   },
   "suggest": {
     "monolog/monolog": "Powerful logging with handlers, channels, and JSON output."

@@ -2,7 +2,9 @@
 ![Build](https://github.com/Systonia/Waypoint/actions/workflows/build.yaml/badge.svg)
 [![PSR-3 Compatible](https://img.shields.io/badge/PSR--3-compatible-brightgreen.svg)](https://www.php-fig.org/psr/psr-3/)
 [![PSR-4 Compatible](https://github.com/Systonia/Waypoint/actions/workflows/psr-4.yaml/badge.svg)](https://www.php-fig.org/psr/psr-4/)
-![PHP Version](https://img.shields.io/badge/PHP-8.4-blue)
+![PHPStan](https://github.com/systonia/Waypoint/actions/workflows/phpstan.yaml/badge.svg)
+![PHPStan Level](https://img.shields.io/badge/PHPStan-level%2010-brightgreen)
+![PHP Version](https://img.shields.io/badge/PHP-8.5-blue)
 ![License](https://img.shields.io/github/license/Systonia/Waypoint)
 
 # Waypoint
@@ -731,6 +733,98 @@ framework we benchmarked Waypoint against (Symfony, Laravel, Slim), OPcache bein
 the single dominant cost, well beyond anything framework-specific. Trust-mode caching and OPcache are
 complementary: OPcache skips re-parsing/re-compiling PHP source on every request; trust mode skips
 Waypoint's own Reflection-based discovery on top of that.
+
+---
+
+## Options Reference
+
+Every `Waypoint\Options\*` class is a plain, container-resolved settings object, configured the same
+way regardless of which one it is:
+
+```php
+$app->configure(function (SomeOptions $opts) {
+    $opts->someSetting = 'value';
+});
+```
+
+An unconfigured Options class still resolves — every setting below already shows its default.
+
+### [CompressionOptions](#gzip-compression)
+
+| Setting | Default | Description |
+|---|---|---|
+| `enabled` | `true` | Master on/off switch for gzip response compression everywhere. |
+| `minBytes` | `1024` | A response body shorter than this (bytes, before compression) is always sent uncompressed. |
+
+### [CorsOptions](#cors)
+
+| Setting | Default | Description |
+|---|---|---|
+| `allowOrigin` | `null` | `Access-Control-Allow-Origin` value. Unset omits the header entirely — CORS is off by default. |
+| `allowMethods` | `null` | `Access-Control-Allow-Methods` value, e.g. `'GET, POST, OPTIONS'`. |
+| `allowHeaders` | `null` | `Access-Control-Allow-Headers` value, e.g. `'Content-Type, Authorization'`. |
+| `exposeHeaders` | `null` | `Access-Control-Expose-Headers` — response headers a cross-origin caller may read. |
+| `maxAge` | `null` | How long (seconds) a browser may cache a preflight `OPTIONS` response. |
+| `allowCredentials` | `false` | Sends `Access-Control-Allow-Credentials: true` when `true`; otherwise the header is omitted. |
+
+### [EnvironmentOptions](#environment-variables)
+
+| Setting | Default | Description |
+|---|---|---|
+| `localConfigFile` | `'config.local.json'` | Gitignored, per-developer override file, read last so it wins over everything else. `null` disables this layer. |
+
+Configuration mainly happens through `load(?string $dir = null)`, not a plain property — see
+[Environment Variables](#environment-variables) for the full `.env`/`config.json` layering it drives.
+
+### [FileSystemOptions](#routedi-compilation-caching--production-performance)
+
+| Setting | Default | Description |
+|---|---|---|
+| `cacheDirectory` | `null` (→ system temp dir) | Where the compiled route/DI/attribute cache and compiled view assets are written. See [Route/DI Compilation Caching](#routedi-compilation-caching--production-performance). |
+| `publicDirectory` | `null` (disabled) | A plain directory served as static files ahead of routing. See [Static Files](#static-files). |
+| `assetsPath` | `'/assets'` | URL path prefix compiled view/layout CSS/JS is served under, e.g. `GET {assetsPath}/{hash}.css`. See [Views](#views). |
+| `cacheValidate` | `true` | Re-verify the cache is fresh (reflect + compare mtimes) on every request; `false` is "trust mode". |
+
+### [JWTOptions](#jwt-authentication)
+
+| Setting | Default | Description |
+|---|---|---|
+| `secret` | *(required — uninitialized)* | Signing secret. Accessing it unconfigured throws immediately rather than signing with a guessable default. |
+| `alg` | `'HS256'` | Signing algorithm. |
+| `ttl` | `3600` | Token lifetime, in seconds. |
+| `tokenType` | `'Bearer'` | Expected prefix on the `Authorization` header value. |
+| `header` | `'Authorization'` | Request header the token is read from. |
+| `cookieName` | `null` (disabled) | Cookie name to additionally read the token from when the header didn't produce one — lets a signed-in session survive a plain page load, not just fetch()/XHR calls. |
+
+### [LoggerOptions](#logging)
+
+| Setting | Default | Description |
+|---|---|---|
+| `levels` | `[]` (→ all levels) | PSR-3 levels this logger accepts, e.g. `['error', 'critical']`. |
+| `name` | `null` | Optional channel/name for this logger. |
+
+Loggers are registered through `add($logger, $options)` / `addMono($channel, $handler, $levels)`, not
+plain properties — see [Logging](#logging).
+
+### [OpenAPIOptions](#openapi)
+
+| Setting | Default | Description |
+|---|---|---|
+| `title` | `'API Documentation'` | OpenAPI `info.title`. |
+| `version` | `'1.0.0'` | OpenAPI `info.version`. |
+| `description` | `'Generated API documentation'` | OpenAPI `info.description`. |
+| `servers` | `[]` | List of server URL entries. |
+| `tags` | `[]` | Top-level tag definitions. |
+| `securitySchemes` | `[]` | `components.securitySchemes` entries — pair with `#[Throws]`/route-level auth as needed. |
+| `security` | `[]` | Top-level `security` requirement entries. |
+| `externalDocs` | `null` | Optional `{description, url}` external documentation link. |
+
+### [RendererOptions](#views)
+
+| Setting | Default | Description |
+|---|---|---|
+| `directory` | `null` | Where view/layout `.php` templates (and their sibling `.css`/`.js`) live. |
+| `layout` | `'_Layout'` (no extension — matches nothing) | Default layout template; pass an explicit `.php` name, or every render falls back to bare view content. |
 
 ---
 

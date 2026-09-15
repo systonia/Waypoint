@@ -13,8 +13,10 @@ use Attribute;
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD | Attribute::IS_REPEATABLE)]
 class Middleware
 {
+    /** @var array{0: string, 1?: string} [class-string, methodName] -- methodName defaults to 'handle' where read (see RouteCompiler::collectMiddlewares()). */
     public array $callable;
 
+    /** @param string|array{0: string, 1?: string} $callable */
     public function __construct(string|array $callable)
     {
         $this->callable = is_array($callable) ? $callable : [$callable, 'handle'];

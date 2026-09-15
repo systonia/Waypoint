@@ -13,7 +13,7 @@ class Length {
      * Undocumented function
      *
      * @param integer $min
-     * @param [type] $max
+     * @param integer $max
      */
     public function __construct(
         /**

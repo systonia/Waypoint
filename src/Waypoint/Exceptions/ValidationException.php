@@ -12,13 +12,18 @@ use Waypoint\Enums\Message;
 class ValidationException extends Exception
 {
     /**
-     * @var array
+     * Field name => error message, except for a collection body
+     * (#[Body(of: ...)]), where a field's value is itself a nested
+     * array<string,string> of per-index errors -- see Router::
+     * buildMethodArguments()'s 'BodyCollection' case.
+     *
+     * @var array<string, mixed>
      */
     protected array $errors = [];
 
     /**
      * @param string|Message $message
-     * @param array $errors
+     * @param array<string, mixed> $errors
      * @param int $code
      * @param Throwable|null $previous
      */
@@ -37,6 +42,8 @@ class ValidationException extends Exception
 
     /**
      * Returns validation error details.
+     *
+     * @return array<string, mixed>
      */
     public function getErrors(): array
     {

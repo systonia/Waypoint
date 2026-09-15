@@ -6,6 +6,8 @@ use Throwable;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionNamedType;
+use ReflectionParameter;
+use ReflectionProperty;
 use InvalidArgumentException;
 
 use Waypoint\{Router};
@@ -17,6 +19,8 @@ use Waypoint\Exceptions\{ForbiddenException, UnauthorizedException, NotFoundExce
 class App
 {
     private Router $router;
+
+    /** @var callable[] */
     private array $middlewares = [];
     private Container $container;
 
@@ -29,6 +33,7 @@ class App
         $this->registerDefaultExceptionHandlers();
     }
 
+    /** @param class-string[] $controllers */
     public function attach(array $controllers): void
     {
         $fileSystemOptions = $this->container->get(FileSystemOptions::class);
@@ -44,8 +49,13 @@ class App
             ? $fileSystem->loadCachedRouteData()
             : null;
 
-        $allClasses = (is_array($cachedData['services'] ?? null) ? $cachedData['services'] : null)
-            ?? $this->discoverAllClasses($controllers);
+        $cachedServices = $cachedData['services'] ?? null;
+        $allClasses = is_array($cachedServices)
+            ? array_values(array_filter(
+                $cachedServices,
+                static fn(mixed $v): bool => is_string($v) && class_exists($v)
+            ))
+            : $this->discoverAllClasses($controllers);
 
         $this->initDependencyInjection($allClasses);
 
@@ -68,13 +78,17 @@ class App
      */
     public function useCors(): void
     {
-        $this->use(function (Request $req, Response $res, $next): mixed {
+        $this->use(function (Request $req, Response $res, callable $next): mixed {
             foreach ($this->container->get(CorsOptions::class)->toHeaders() as $header => $value) {
                 $res = $res->withHeader($header, $value);
             }
             if ($req->method === 'OPTIONS') {
-                $res->status(204)->send();
-                return $res;
+                // Not calling $next() already short-circuits the rest of
+                // the chain (no dispatch, no controller) -- $res just
+                // needs to carry the 204 status; App::handleHttp() sends
+                // it, once, after the whole pipe unwinds, same as every
+                // other response.
+                return $res->status(204);
             }
             return $next($req, $res);
         });
@@ -82,14 +96,14 @@ class App
 
     private function useWaypointAcceptHeader(): void
     {
-        $this->use(function (Request $req, Response $res, $next): mixed {
+        $this->use(function (Request $req, Response $res, callable $next): mixed {
             // A direct case-insensitive scan for the one header we care
             // about, instead of allocating a whole lowercased copy of
             // every header via array_change_key_case() on every request.
             $req->acceptPartial = false;
             foreach ($req->headers as $name => $value) {
                 if (strcasecmp($name, 'X-Waypoint-Accept') === 0) {
-                    $req->acceptPartial = strcasecmp((string) $value, 'partial') === 0;
+                    $req->acceptPartial = strcasecmp($value, 'partial') === 0;
                     break;
                 }
             }
@@ -99,10 +113,11 @@ class App
 
     public function useJwt(): void
     {
-        $this->use(function (Request $req, Response $res, $next) {
+        $this->use(function (Request $req, Response $res, callable $next) {
             // Ensure "Authorization" fallback is always applied
-            if (isset($_SERVER['AUTHORIZATION']) && !isset($req->headers['Authorization'])) {
-                $req->headers['Authorization'] = $_SERVER['AUTHORIZATION'];
+            $serverAuth = $_SERVER['AUTHORIZATION'] ?? null;
+            if (is_string($serverAuth) && !isset($req->headers['Authorization'])) {
+                $req->headers['Authorization'] = $serverAuth;
             }
 
             // Attempt to parse JWT
@@ -116,8 +131,9 @@ class App
             // load too.
             if ($payload === null) {
                 $cookieName = $this->container->get(JWTOptions::class)->cookieName;
-                if ($cookieName !== null && isset($_COOKIE[$cookieName])) {
-                    $payload = JWT::decode($_COOKIE[$cookieName]);
+                $cookieValue = $cookieName !== null ? ($_COOKIE[$cookieName] ?? null) : null;
+                if (is_string($cookieValue)) {
+                    $payload = JWT::decode($cookieValue);
                 }
             }
 
@@ -173,7 +189,21 @@ class App
         }
 
         try {
-            echo $this->router->executeTask(name: $argv[1], argv: $argv, argc: $argc);
+            $result = $this->router->executeTask(name: $argv[1], argv: $argv, argc: $argc);
+            // A task's return is `mixed` (see Router::executeTask()), but
+            // every real task in this codebase returns a string -- the
+            // other arms only exist so an oddly-written task can't fatal
+            // echo itself, not because any of them are exercised in
+            // practice.
+            echo match (true) {
+                is_string($result) => $result,
+                // @codeCoverageIgnoreStart
+                is_scalar($result) => (string) $result,
+                $result instanceof \Stringable => (string) $result,
+                $result === null => '',
+                default => json_encode($result) ?: '',
+                // @codeCoverageIgnoreEnd
+            };
         } catch (Throwable $e) {
             fwrite(STDERR, $e->getMessage() . "\n");
             return 1;
@@ -187,19 +217,48 @@ class App
      * Public (not gated behind php_sapi_name() like run() is) so it can be
      * driven directly -- e.g. from tests, or a host environment that reports
      * a 'cli'-like SAPI name but is still serving an HTTP request.
+     *
+     * The one and only place Response::send() is called for a real HTTP
+     * request -- every dispatch()/renderResult()/exception-handler code
+     * path below only ever builds $res (status/headers/body) and returns;
+     * none of them send it themselves anymore. That's what makes every
+     * $app->use() middleware's after() hook (and, nested one level in,
+     * every per-route #[Middleware(...)]'s after()) able to actually
+     * affect what the client receives: by the time $handler($req, $res)
+     * returns here, the *entire* chain -- app-level before()s, dispatch()
+     * (itself wrapping the per-route middleware chain and the controller),
+     * app-level after()s -- has already run, and $res reflects all of it.
+     * A middleware that never calls $next() (a veto, e.g.
+     * MiddlewareBase::before() returning false, or useCors()'s OPTIONS
+     * short-circuit above) still reaches this same single send() call --
+     * it just skips straight there without dispatch() ever running.
      */
     public function handleHttp(): void
     {
         $req = Request::capture();
-        $res = new Response($this->container->get(CompressionOptions::class));
+        $res = (new Response($this->container->get(CompressionOptions::class)))->withRequestId($req->id);
 
-        $handler = array_reduce(
-            array: array_reverse(array: $this->middlewares),
-            callback: fn(callable $next, callable $mw): callable => fn(Request $req, Response $res): mixed => $mw($req, $res, $next),
-            initial: fn(Request $req, Response $res): Response => $this->handle(req: $req, res: $res)
-        );
+        // Makes $req->id available to Logger::log() for the rest of this
+        // request without threading it through every call site by hand
+        // (see RequestContext) -- cleared again in finally so it can never
+        // leak into a later request sharing this same App/container (e.g.
+        // a persistent-worker deployment; a classic per-request PHP
+        // process wouldn't need this, but it costs nothing here).
+        $this->container->get(RequestContext::class)->setRequestId($req->id);
 
-        $handler($req, $res);
+        try {
+            $handler = array_reduce(
+                array: array_reverse(array: $this->middlewares),
+                callback: fn(callable $next, callable $mw): callable => fn(Request $req, Response $res): mixed => $mw($req, $res, $next),
+                initial: fn(Request $req, Response $res): Response => $this->handle(req: $req, res: $res)
+            );
+
+            $handler($req, $res);
+            $res->send();
+        } finally {
+            $this->container->get(RequestContext::class)->setRequestId(null);
+            $this->container->get(Csrf::class)->reset();
+        }
     }
 
     private function handle(Request $req, Response $res): Response
@@ -215,7 +274,10 @@ class App
     /**
      * Register (or override) the handler invoked when a route/middleware throws
      * an exception of the given class (or one of its parents/interfaces, if no
-     * exact match is registered). The handler is responsible for sending $res.
+     * exact match is registered). The handler is responsible for building $res
+     * (status/headers/body) -- not for sending it; App::handleHttp() sends it
+     * once, after the whole $app->use() pipe has unwound, same as every other
+     * response.
      *
      * @param class-string $exceptionClass
      * @param callable(Throwable, Request, Response): void $handler
@@ -229,29 +291,46 @@ class App
     {
         $this->useExceptionHandler(
             ValidationException::class,
-            function (ValidationException $e, Request $req, Response $res): void {
+            // Typed Throwable, not ValidationException, to actually satisfy
+            // useExceptionHandler()'s callable(Throwable, ...) contract --
+            // resolveExceptionHandler() only ever invokes a handler
+            // registered under ValidationException::class with a real
+            // ValidationException (looked up by the thrown exception's own
+            // class/parents), so this narrows back immediately.
+            function (Throwable $e, Request $req, Response $res): void {
+                // @codeCoverageIgnoreStart
+                // Unreachable in practice: resolveExceptionHandler() only
+                // ever selects this handler (registered under
+                // ValidationException::class) for an exception that IS a
+                // ValidationException -- either the exact class or one of
+                // class_parents($e). This exists solely to satisfy
+                // useExceptionHandler()'s callable(Throwable, ...) contract.
+                if (!$e instanceof ValidationException) {
+                    return;
+                }
+                // @codeCoverageIgnoreEnd
+                $body = json_encode(['error' => $e->getMessage(), 'details' => $e->getErrors()]);
                 $res->status($e->getCode() ?: 422)
                     ->withHeader('Content-Type', 'application/json')
-                    ->write(json_encode(['error' => $e->getMessage(), 'details' => $e->getErrors()]))
-                    ->send();
+                    ->write($body !== false ? $body : '{"error":"Validation failed"}');
             }
         );
 
         $this->useExceptionHandler(
             ForbiddenException::class,
-            fn(ForbiddenException $e, Request $req, Response $res) =>
+            fn(Throwable $e, Request $req, Response $res) =>
                 $this->sendErrorResponse($res, $e->getCode() ?: 403, $e->getMessage())
         );
 
         $this->useExceptionHandler(
             UnauthorizedException::class,
-            fn(UnauthorizedException $e, Request $req, Response $res) =>
+            fn(Throwable $e, Request $req, Response $res) =>
                 $this->sendErrorResponse($res, $e->getCode() ?: 401, $e->getMessage())
         );
 
         $this->useExceptionHandler(
             NotFoundException::class,
-            fn(NotFoundException $e, Request $req, Response $res) =>
+            fn(Throwable $e, Request $req, Response $res) =>
                 $this->sendErrorResponse($res, $e->getCode() ?: 404, $e->getMessage())
         );
 
@@ -267,10 +346,10 @@ class App
 
     private function sendErrorResponse(Response $res, int $status, string $message): void
     {
+        $body = json_encode(['error' => $message]);
         $res->status($status)
             ->withHeader('Content-Type', 'application/json')
-            ->write(json_encode(['error' => $message]))
-            ->send();
+            ->write($body !== false ? $body : '{"error":"Error"}');
     }
 
     /**
@@ -319,6 +398,8 @@ class App
      * gap this closes; #[Inject] on a controller or #[Middleware] class
      * already worked, since Router applies this same wiring itself, per
      * request, via injectControllerProperties().
+     *
+     * @param class-string[] $classes
      */
     private function initDependencyInjection(array $classes): void
     {
@@ -345,6 +426,7 @@ class App
         }
     }
 
+    /** @param class-string $cls */
     private function injectServiceProperties(string $cls, object $instance): void
     {
         // Same exclusion discoverAllClasses() already applies, and for the
@@ -362,14 +444,18 @@ class App
             if (!$prop->getAttributes(Inject::class)) {
                 continue;
             }
-            $type = $prop->getType()?->getName();
-            if (!$type || in_array($type, $notContainerManaged, true) || !$this->container->has($type)) {
+            $type = self::namedTypeOf($prop);
+            if (!$type || in_array($type, $notContainerManaged, true) || !class_exists($type) || !$this->container->has($type)) {
                 continue;
             }
             $prop->setValue($instance, $this->container->get($type));
         }
     }
 
+    /**
+     * @param class-string[] $controllers
+     * @return class-string[]
+     */
     private function discoverAllClasses(array $controllers): array
     {
         $all = $controllers;
@@ -394,8 +480,8 @@ class App
 
             foreach ($rc->getProperties() as $prop) {
                 foreach ($prop->getAttributes(Inject::class) as $attr) {
-                    $type = $prop->getType()?->getName();
-                    if ($type && !in_array($type, $notContainerManaged, true) && !in_array($type, $all, true)) {
+                    $type = self::namedTypeOf($prop);
+                    if ($type && class_exists($type) && !in_array($type, $notContainerManaged, true) && !in_array($type, $all, true)) {
                         $all[] = $type;
                         $queue[] = $type;
                     }
@@ -406,8 +492,8 @@ class App
             if ($constructor) {
                 foreach ($constructor->getParameters() as $param) {
                     foreach ($param->getAttributes(Inject::class) as $attr) {
-                        $type = $param->getType()?->getName();
-                        if ($type && !in_array($type, $notContainerManaged, true) && !in_array($type, $all, true)) {
+                        $type = self::namedTypeOf($param);
+                        if ($type && class_exists($type) && !in_array($type, $notContainerManaged, true) && !in_array($type, $all, true)) {
                             $all[] = $type;
                             $queue[] = $type;
                         }
@@ -419,7 +505,25 @@ class App
         return $all;
     }
 
-    public function get(string $class): mixed
+    /**
+     * The declared type's name, or null if untyped -- or if it's a union/
+     * intersection type, which (unlike a plain ReflectionNamedType) has no
+     * single name to give. #[Inject] is only ever meaningful on a plain
+     * single-class type anyway, so treating either case as "no type" is
+     * exactly the right fallback, not just a type-checker workaround.
+     */
+    private static function namedTypeOf(ReflectionProperty|ReflectionParameter $member): ?string
+    {
+        $type = $member->getType();
+        return $type instanceof ReflectionNamedType ? $type->getName() : null;
+    }
+
+    /**
+     * @template T of object
+     * @param class-string<T> $class
+     * @return T|null
+     */
+    public function get(string $class): ?object
     {
         try {
             return $this->container->get($class);
@@ -445,7 +549,7 @@ class App
 
     public function configure(callable $config): void
     {
-        $reflection = new ReflectionFunction($config);
+        $reflection = new ReflectionFunction(\Closure::fromCallable($config));
         $args = [];
 
         foreach ($reflection->getParameters() as $param) {
@@ -457,7 +561,20 @@ class App
                 );
             }
 
-            $args[] = $this->container->get($type->getName());
+            $typeName = $type->getName();
+            // @codeCoverageIgnoreStart
+            // Every real Options class configure() is ever called with
+            // exists -- this only guards the theoretical case of a typo'd
+            // class name PHP still allows as a type hint, and is what lets
+            // PHPStan treat $typeName as class-string below.
+            if (!class_exists($typeName)) {
+                throw new InvalidArgumentException(
+                    "Closure parameters must be type-hinted with a non-builtin Options class"
+                );
+            }
+            // @codeCoverageIgnoreEnd
+
+            $args[] = $this->container->get($typeName);
         }
 
         $config(...$args);

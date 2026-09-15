@@ -4,6 +4,7 @@ namespace Waypoint\Http;
 
 use Waypoint\Waypoint;
 use Waypoint\Environment;
+use Waypoint\Csrf;
 use Waypoint\Attributes\Inject;
 use Waypoint\Options\RendererOptions;
 use RuntimeException;
@@ -24,46 +25,59 @@ class View
     protected Environment $env;
 
     /**
-     * Undocumented variable
+     * Available as $this->csrf inside a view/layout template, e.g.
+     * `<?= $this->csrf->field() ?>` for a classic no-JS <form>, or
+     * `$this->csrf->token()` for the raw value (e.g. to hand to
+     * client-side JS via a data attribute for the AJAX path). Wired up by
+     * Router::injectViewProperties() the same way -- and already carrying
+     * this request's resolved token by the time it's injected, since
+     * Router::renderView() calls Csrf::issueFor() first (see there).
      *
-     * @var [type]
+     * @var Csrf
      */
-    protected $view;
+    #[Inject]
+    protected Csrf $csrf;
 
     /**
-     * Undocumented variable
+     * The view name passed to the constructor, e.g. "ProductDetail".
      *
-     * @var [type]
+     * @var string
      */
-    protected $model;
+    protected string $view;
 
     /**
-     * Undocumented variable
+     * Whatever was passed to the constructor as $model -- commonly an
+     * array, but never itself constrained by View.
      *
-     * @var [type]
+     * @var mixed
      */
-    protected $partial;
+    protected mixed $model;
 
     /**
-     * Undocumented variable
-     *
-     * @var [type]
+     * @var bool
      */
-    protected $layout;
+    protected bool $partial;
 
     /**
-     * Undocumented variable
+     * The resolved layout template's basename (e.g. "_Layout.php"), or
+     * null for no layout -- see the constructor's own $layout parameter.
      *
-     * @var array
+     * @var string|null
+     */
+    protected ?string $layout = null;
+
+    /**
+     * @var array<string, string>
      */
     protected $sections = [];
 
     /**
-     * Undocumented variable
+     * The name of the section currently being captured via
+     * startSection(), or null when none is open.
      *
-     * @var [type]
+     * @var string|null
      */
-    protected $currentSection = null;
+    protected ?string $currentSection = null;
 
     /**
      * Undocumented variable
@@ -73,14 +87,12 @@ class View
     protected $sectionBufferLevel = 0;
 
     /**
-     * Undocumented function
-     *
-     * @param [type] $view
-     * @param [type] $model
-     * @param boolean $partial
-     * @param [type] $layout
+     * @param string $view
+     * @param mixed $model
+     * @param bool $partial
+     * @param string|null $layout
      */
-    public function __construct($view, $model = null, $partial = false, $layout = null)
+    public function __construct(string $view, mixed $model = null, bool $partial = false, ?string $layout = null)
     {
         $this->view = $view;
         $this->model = $model;
@@ -161,6 +173,8 @@ class View
      * for a full, non-partial page load, where there's no client-side JS
      * running yet to read the equivalent response headers a partial-swap
      * navigation relies on instead.
+     *
+     * @param array{css: ?string, js: ?string} $assets
      */
     public function setAssets(array $assets): void
     {
@@ -221,7 +235,10 @@ class View
         return "<script src=\"$src\"></script>\n";
     }
 
-    /** Shared by assetTags()/layoutAssetTags() -- builds <link>/<script> tags for one {css, js} pair. */
+    /**
+     * Shared by assetTags()/layoutAssetTags() -- builds <link>/<script> tags for one {css, js} pair.
+     * @param array{css: ?string, js: ?string} $assets
+     */
     private function renderAssetTags(array $assets): string
     {
         $tags = '';
@@ -274,16 +291,14 @@ class View
         if ($this->layoutAssets['css'] === null && $this->layoutAssets['js'] === null) {
             return '';
         }
-        return 'data-view="' . htmlspecialchars($this->layoutName, ENT_QUOTES) . '"';
+        return 'data-view="' . htmlspecialchars($this->layoutName ?? '', ENT_QUOTES) . '"';
     }
 
     /**
-     * Undocumented function
-     *
-     * @param [type] $name
+     * @param string $name
      * @return void
      */
-    public function startSection($name): void
+    public function startSection(string $name): void
     {
         if ($this->currentSection !== null) {
             throw new RuntimeException("A section is already started: '{$this->currentSection}'");
@@ -303,19 +318,22 @@ class View
         if ($this->currentSection === null) {
             throw new RuntimeException("No section is currently started.");
         }
-        $content = ob_get_clean();
+        // @codeCoverageIgnoreStart
+        // ob_get_clean() is only typed to allow false for when there's no
+        // active output buffer to pop -- can't happen right after the
+        // ob_start() in startSection() above.
+        $content = ob_get_clean() ?: '';
+        // @codeCoverageIgnoreEnd
         $this->sections[$this->currentSection] = $content;
         $this->currentSection = null;
     }
 
     /**
-     * Undocumented function
-     *
-     * @param [type] $name
+     * @param string $name
      * @param boolean $required
      * @return bool|string
      */
-    public function section($name, $required = false): bool|string
+    public function section(string $name, bool $required = false): bool|string
     {
         if (isset($this->sections[$name])) {
             return $this->sections[$name];
@@ -326,12 +344,7 @@ class View
         return '';
     }
 
-    /**
-     * Undocumented function
-     *
-     * @return bool|string
-     */
-    public function render()
+    public function render(): string
     {
         $model = $this->model;
         $viewFile = Waypoint::getConfig(RendererOptions::class)->directory . "/{$this->view}.php";
@@ -342,7 +355,12 @@ class View
         // Render view (inside $this context)
         ob_start();
         include $viewFile;
-        $content = ob_get_clean();
+        // @codeCoverageIgnoreStart
+        // ob_get_clean() is only typed to allow false for when there's no
+        // active output buffer to pop -- can't happen right after the
+        // ob_start() immediately above.
+        $content = ob_get_clean() ?: '';
+        // @codeCoverageIgnoreEnd
 
         if ($this->layout !== null) {
             $layoutFile = Waypoint::getConfig(RendererOptions::class)->directory . '/' . $this->layout;
@@ -366,7 +384,9 @@ class View
 
             ob_start();
             include $layoutFile;
-            return ob_get_clean();
+            // @codeCoverageIgnoreStart
+            return ob_get_clean() ?: '';
+            // @codeCoverageIgnoreEnd
         } else {
             return $content;
         }

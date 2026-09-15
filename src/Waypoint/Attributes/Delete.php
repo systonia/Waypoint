@@ -8,7 +8,7 @@ use Attribute;
  *
  */
 #[Attribute(Attribute::TARGET_METHOD)]
-class Delete
+class Delete implements RouteAttribute
 {
     /**
      * Undocumented variable
