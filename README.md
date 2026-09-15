@@ -18,11 +18,12 @@ routing and partial HTML views over AJAX.
 - Simple, reachability-based dependency injection via `#[Inject]` (no separate "service" attribute)
 - Request validation attributes (`#[NotBlank]`, `#[Email]`, `#[Length]`, `#[Regex]`)
 - An explicit exception-handler registry, with sensible defaults out of the box
-- Middleware pipeline, including per-route middleware via `#[Middleware([Class::class, 'method'])]`
+- Middleware pipeline, including per-route middleware via `#[Middleware(Class::class)]`
 - Built-in CORS support
 - JWT authentication (`useJwt()`), with a required (never-defaulted) signing secret
 - An HTML-rendering MVC view layer, with layouts, sections, and automatic scoped CSS/JS per view
 - Static file serving from a configured public directory
+- Gzip response compression, size-thresholded, with an opt-out `#[NoGzip]` attribute per controller/route
 - PSR-3 compatible logging (plug in any PSR-3 logger, or use `LoggerOptions::addMono()` for Monolog)
 - CLI task runner (`#[Manager]`/`#[Task]`), for the same app to serve HTTP and run background jobs
 - A complete OpenAPI 3.1.0 generator, driven by a compiled attribute cache rather than live reflection
@@ -267,7 +268,7 @@ $app->use(function ($req, $res, $next) {
 
 `useCors()` and `useJwt()` (see below) are both just built-in middleware registered this way.
 
-Per-route middleware is declared with `#[Middleware([Class::class, 'method'])]` directly on a
+Per-route middleware is declared with `#[Middleware(Class::class)]` directly on a
 controller method (repeatable). The class is resolved through the container at dispatch time — so it
 can itself use `#[Inject]` — rather than being instantiated directly:
 
@@ -277,7 +278,7 @@ use Waypoint\Attributes\{Get, Middleware};
 class AdminController
 {
     #[Get('/dashboard')]
-    #[Middleware([RequireAdminMiddleware::class, 'handle'])]
+    #[Middleware(RequireAdminMiddleware::class)]
     public function dashboard(): array
     {
         return ['ok' => true];
@@ -423,6 +424,48 @@ instead of serving anything outside it. `.css`/`.js`/`.mjs`/`.json`/`.svg`/`.htm
 
 ---
 
+## Gzip Compression
+
+Every response funnels through `Response::send()`, which gzips the body when the client's
+`Accept-Encoding` header includes `gzip` and the body meets a configurable size threshold — compressing
+a tiny response is a net loss once gzip's own framing overhead is counted, so anything shorter than
+`CompressionOptions::$minBytes` (default `1024` bytes) is always sent uncompressed. On by default, no
+setup required:
+
+```php
+use Waypoint\Options\CompressionOptions;
+
+$app->configure(function (CompressionOptions $opts) {
+    $opts->minBytes = 2048; // default: 1024
+    $opts->enabled = false; // default: true — turns compression off everywhere
+});
+```
+
+A compressed response gets `Content-Encoding: gzip` and `Vary: Accept-Encoding`; `Content-Length` always
+reflects the actual (possibly compressed) bytes being sent. A response that already carries its own
+`Content-Encoding` is left alone rather than double-encoded.
+
+Opt individual routes out with `#[NoGzip]`, on the controller class (every route on it) or a single
+method (just that route):
+
+```php
+use Waypoint\Attributes\{Controller, Get, NoGzip};
+
+#[Controller('/downloads')]
+#[NoGzip] // every route below skips compression
+class DownloadsController
+{
+    #[Get('/report.csv')]
+    #[NoGzip] // equivalent here, since the whole class already opts out
+    public function report(): string
+    {
+        // ...
+    }
+}
+```
+
+---
+
 ## JWT Authentication
 
 Configure `JWTOptions` before calling `useJwt()`. **The signing secret has no default** — it's an
@@ -488,7 +531,6 @@ Mount `Waypoint\OpenAPI\OpenAPIController` in your `attach()` call to get:
 
 - `GET /openapi/spec.json` — the generated OpenAPI 3.1.0 document
 - `GET /openapi/swagger.html` — bundled Swagger UI
-- `GET /openapi/lentodoc.html` — bundled alternative docs UI
 
 The generator is driven entirely by a compiled attribute cache (see
 [Route/DI Compilation Caching](#routedi-compilation-caching--production-performance)) rather than live

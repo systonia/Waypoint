@@ -3,34 +3,19 @@
 namespace Waypoint;
 
 use ReflectionClass;
-use ReflectionMethod;
-use ReflectionNamedType;
 use ReflectionProperty;
 use RuntimeException;
 
 use Waypoint\Container;
 use Waypoint\Enums\RouteType;
-use Waypoint\Http\Request;
-use Waypoint\Http\Response;
-use Waypoint\Http\View;
+use Waypoint\Http\{PublicFileServer, Request, Response, ResultRenderer, View};
+use Waypoint\UI\WaypointController;
 use Waypoint\Validator;
 use Waypoint\Exceptions\ValidationException;
 use Waypoint\FileSystem;
 use Waypoint\Options\{FileSystemOptions, RendererOptions};
 use Waypoint\ViewAssets;
-use Waypoint\Attributes\{
-    Inject,
-    Body,
-    Param,
-    Query,
-    Controller,
-    FileFormatter,
-    JSONFormatter,
-    Manager,
-    Middleware,
-    SimpleXmlFormatter,
-    Task
-};
+use Waypoint\Attributes\Inject;
 
 class Router
 {
@@ -38,7 +23,7 @@ class Router
     public array $dynamicRoutes = [];
     public array $tasks = [];
 
-    /** {filename => mime} -- GET /assets/{filename} resolves through this, a strict map hit or a 404; the actual bytes are read from FileSystem::getAssetsDirectory() on demand, never held here. */
+    /** {filename => mime} -- GET {assetsPath}/{filename} resolves through this, a strict map hit or a 404; the actual bytes are read from FileSystem::getAssetsDirectory() on demand, never held here. */
     private array $viewAssetFiles = [];
     /** {viewName => {css: ?filename, js: ?filename}} -- looked up by name when rendering a View, to emit its asset headers. */
     private array $viewAssetsByName = [];
@@ -47,6 +32,9 @@ class Router
 
     private FileSystemOptions $fileSystemOptions;
     private FileSystem $fileSystem;
+    private RouteCompiler $routeCompiler;
+    private ResultRenderer $resultRenderer;
+    private PublicFileServer $publicFileServer;
 
     // -- Route Management --
 
@@ -120,6 +108,9 @@ class Router
 
         $this->fileSystemOptions = $fileSystemOptions ?? $this->container?->get(FileSystemOptions::class) ?? new FileSystemOptions();
         $this->fileSystem = new FileSystem($this->fileSystemOptions);
+        $this->routeCompiler = new RouteCompiler();
+        $this->resultRenderer = new ResultRenderer();
+        $this->publicFileServer = new PublicFileServer($this->fileSystemOptions);
 
         if ($preloadedCache !== null) {
             $this->importPlans($preloadedCache);
@@ -142,7 +133,7 @@ class Router
         $viewAssetMeta = $viewsDir !== null ? ViewAssets::discoverMeta($viewsDir) : [];
 
         if (!$this->fileSystem->isAvailable($controllers, $viewAssetMeta)) {
-            $plans = $this->compileRoutePlans($controllers);
+            $plans = $this->routeCompiler->compile($controllers);
             foreach ($plans['staticRoutes'] as $method => $routes) {
                 foreach ($routes as $plan) {
                     $this->addCompiledRoute($plan, RouteType::Static);
@@ -176,7 +167,7 @@ class Router
     {
         $path = $this->normalizePath($uri);
 
-        if ($this->tryServeStaticFile($path, $res)) {
+        if ($this->publicFileServer->serve($path, $res)) {
             return;
         }
 
@@ -189,6 +180,14 @@ class Router
         if (!$route) {
             $this->respondNotFound($res);
             return;
+        }
+
+        // Missing 'gzip' key (a route compiled/cached before #[NoGzip]
+        // existed) defaults to compression allowed, not disabled -- so an
+        // old cached routes.php keeps behaving exactly as before until
+        // it's next rebuilt.
+        if (!($route['gzip'] ?? true)) {
+            $res->disableGzip();
         }
 
         $controller = $this->resolveController($route['controller']);
@@ -236,66 +235,26 @@ class Router
         return '/' . ltrim(rtrim($uri, '/'), '/');
     }
 
-    private function tryServeStaticFile(string $path, Response $res): bool
-    {
-        if ($this->fileSystemOptions->publicDirectory === null) {
-            return false;
-        }
-
-        $publicPath = $this->fileSystemOptions->getPublicDirectory();
-        $filePath   = realpath($publicPath . $path);
-
-        if (
-            $filePath
-            && str_starts_with($filePath, realpath($publicPath))
-            && is_file($filePath)
-        ) {
-            $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-
-            // Feste MIME-Types für kritische Web-Dateien
-            $mimeMap = [
-                'css' => 'text/css; charset=utf-8',
-                'js'  => 'application/javascript; charset=utf-8',
-                'mjs' => 'application/javascript; charset=utf-8',
-                'json'=> 'application/json; charset=utf-8',
-                'svg' => 'image/svg+xml',
-                'html'=> 'text/html; charset=utf-8',
-            ];
-
-            if (isset($mimeMap[$ext])) {
-                $mime = $mimeMap[$ext];
-            } else {
-                $mime = mime_content_type($filePath) ?: 'application/octet-stream';
-            }
-
-            $res->withHeader('Content-Type', $mime)
-                ->withHeader('Content-Length', (string) filesize($filePath))
-                ->write(file_get_contents($filePath))
-                ->send();
-
-            return true;
-        }
-
-        return false;
-    }
-
     /**
-     * Serves a view's cache-busted CSS/JS through GET /assets/{filename},
-     * resolving strictly against the compiled {filename => mime} map --
-     * never by constructing a path from the request's own filename, so an
-     * unrecognized filename is a 404, not a traversal attempt; $filename is
-     * only ever used to read FileSystem::getAssetsDirectory()/{filename}
-     * once it's already confirmed to be a known key, never built from
-     * unvalidated request input directly. The URL is content-hashed, so a
-     * hit can be cached by the browser forever.
+     * Serves a view's cache-busted CSS/JS through GET {assetsPath}/{filename}
+     * (assetsPath configured via FileSystemOptions::$assetsPath, default
+     * '/assets'), resolving strictly against the compiled {filename =>
+     * mime} map -- never by constructing a path from the request's own
+     * filename, so an unrecognized filename is a 404, not a traversal
+     * attempt; $filename is only ever used to read
+     * FileSystem::getAssetsDirectory()/{filename} once it's already
+     * confirmed to be a known key, never built from unvalidated request
+     * input directly. The URL is content-hashed, so a hit can be cached by
+     * the browser forever.
      */
     private function tryServeViewAsset(string $path, Response $res): bool
     {
-        if (!str_starts_with($path, '/assets/')) {
+        $prefix = $this->fileSystemOptions->assetsPath . '/';
+        if (!str_starts_with($path, $prefix)) {
             return false;
         }
 
-        $filename = substr($path, strlen('/assets/'));
+        $filename = substr($path, strlen($prefix));
         $mime = $this->viewAssetFiles[$filename] ?? null;
 
         if ($mime === null) {
@@ -473,446 +432,74 @@ class Router
         return $args;
     }
 
+    /**
+     * Dispatches a route handler's return value to a response: a View gets
+     * rendered here directly (renderView()), since that needs this
+     * Router's own compiled CSS/JS asset lookups and #[Inject] wiring;
+     * everything else (JSON/file/XML) is delegated to ResultRenderer, which
+     * needs none of that.
+     */
     private function renderResult($result, Response $res, array $formatter): void
     {
-        $type = $formatter['type'] ?? 'json';
-        $options = $formatter['options'] ?? [];
-
-        // HTML View
         if ($result instanceof View) {
-            $this->injectViewProperties($result);
+            $this->renderView($result, $res);
+            return;
+        }
 
-            $assets = $this->getViewAssets($result->getViewName());
-            // Always set, even when both are null: a full (non-partial)
-            // render's layout can call $result->assetTags()/scopeAttribute()
-            // itself, since it has no client-side JS running yet to read
-            // the equivalent response headers below the way a partial-swap
-            // navigation does.
-            $result->setAssets($assets);
+        $this->resultRenderer->render($result, $res, $formatter);
+    }
 
-            if ($assets['css'] !== null || $assets['js'] !== null) {
-                // The view's own name too, not just its asset filenames --
-                // a client applying these needs it to set data-view on the
-                // swapped container, which is what ViewAssets::scopeCss()'s
-                // [data-view="..."] selectors actually match against.
-                $res->withHeader('X-Waypoint-View-Name', $result->getViewName());
-                if ($assets['css'] !== null) {
-                    $res->withHeader('X-Waypoint-View-Css', $assets['css']);
-                }
-                if ($assets['js'] !== null) {
-                    $res->withHeader('X-Waypoint-View-Js', $assets['js']);
-                }
+    private function renderView(View $view, Response $res): void
+    {
+        $this->injectViewProperties($view);
+        $view->setAssetsPath($this->fileSystemOptions->assetsPath);
+        $view->setWaypointJsPath($this->resolveWaypointJsPath());
+
+        $assets = $this->getViewAssets($view->getViewName());
+        // Always set, even when both are null: a full (non-partial)
+        // render's layout can call $view->assetTags()/scopeAttribute()
+        // itself, since it has no client-side JS running yet to read
+        // the equivalent response headers below the way a partial-swap
+        // navigation does.
+        $view->setAssets($assets);
+
+        if ($assets['css'] !== null || $assets['js'] !== null) {
+            // The view's own name too, not just its asset filenames --
+            // a client applying these needs it to set data-view on the
+            // swapped container, which is what ViewAssets::scopeCss()'s
+            // [data-view="..."] selectors actually match against.
+            $res->withHeader('X-Waypoint-View-Name', $view->getViewName());
+            if ($assets['css'] !== null) {
+                $res->withHeader('X-Waypoint-View-Css', $assets['css']);
             }
-
-            $res->withHeader('Content-Type', 'text/html')
-                ->write($result->render())
-                ->send();
-            return;
+            if ($assets['js'] !== null) {
+                $res->withHeader('X-Waypoint-View-Js', $assets['js']);
+            }
         }
 
-        // File Formatter
-        if ($type === FileFormatter::class || $type === 'file') {
-            $this->renderFileResult($result, $res, $options);
-            return;
-        }
-
-        // XML Formatter
-        if ($type === SimpleXmlFormatter::class || $type === 'xml') {
-            $this->renderXmlResult($result, $res);
-            return;
-        }
-
-        // JSON (default)
-        $res->withHeader('Content-Type', 'application/json')
-            ->write(json_encode($result))
+        $res->withHeader('Content-Type', 'text/html')
+            ->write($view->render())
             ->send();
     }
 
-    private function renderFileResult($result, Response $res, array $options): void
-    {
-        $mimetype = $options['mimetype'] ?? 'application/octet-stream';
-        $res->withHeader('Content-Type', $mimetype);
-
-        if (!empty($options['download'])) {
-            $filename = $options['filename'] ?? (is_string($result) ? basename($result) : 'download.bin');
-            $res->withHeader('Content-Disposition', "attachment; filename=\"$filename\"");
-        }
-
-        if (is_string($result) && is_file($result)) {
-            $res->write(file_get_contents($result))->send();
-        } else {
-            $res->write(is_scalar($result) ? $result : json_encode($result))->send();
-        }
-    }
-
-    private function renderXmlResult($result, Response $res): void
-    {
-        $res->withHeader('Content-Type', 'application/xml');
-        $xml = simplexml_load_string('<root/>');
-        $arrayResult = is_array($result) ? $result : (array) $result;
-        array_walk_recursive($arrayResult, function ($v, $k) use ($xml) {
-            $xml->addChild($k, $v);
-        });
-        $res->write($xml->asXML())->send();
-    }
-
-    public function compileRoutePlans(array $classes): array
-    {
-        $staticRoutes = [];
-        $dynamicRoutes = [];
-        $tasks = [];
-
-        foreach ($classes as $class) {
-            if (!class_exists($class)) {
-                continue;
-            }
-            $rc = new ReflectionClass($class);
-
-            // find first class-level attribute that we support
-            $classAttrInstance = null;
-            foreach ($rc->getAttributes() as $attr) {
-                $instance = $attr->newInstance();
-                if ($instance instanceof Controller || $instance instanceof Manager) {
-                    $classAttrInstance = $instance;
-                    break;
-                }
-            }
-
-            if (!$classAttrInstance) {
-                // not a controller or manager; skip
-                continue;
-            }
-
-            // Derive a normalized prefix from the attribute (supports getPath/getPrefix/getName)
-            $prefix = $this->normalizePrefix($classAttrInstance);
-
-            // Dispatch (easy to extend with more kinds later)
-            match (true) {
-                $classAttrInstance instanceof Controller
-                => $this->compileController($rc, $class, $prefix, $staticRoutes, $dynamicRoutes),
-
-                $classAttrInstance instanceof Manager
-                => $this->compileManager($rc, $class, $prefix, $tasks),
-
-                // @codeCoverageIgnoreStart
-                // Unreachable: the loop above only ever sets
-                // $classAttrInstance to a Controller or Manager instance (or
-                // leaves it null, which continue's past this match entirely).
-                default => null, // future-proof
-                // @codeCoverageIgnoreEnd
-            };
-        }
-
-        return [
-            'staticRoutes' => $staticRoutes,
-            'dynamicRoutes' => $dynamicRoutes,
-            'tasks' => $tasks,
-        ];
-    }
-
     /**
-     * Normalize prefix from a class attribute instance (Controller|Manager).
-     * Accepts getPath(), getPrefix(), or getName() — first one found wins.
+     * The compiled URL path for WaypointController's own route, or null
+     * if that controller was never attached -- View::waypointJsTag() uses
+     * this to render nothing at all rather than a <script> tag pointing at
+     * a route that doesn't exist. A plain scan over the already-compiled
+     * static GET routes (WaypointController's #[Get('waypoint.js')] is
+     * never dynamic), not a reflection pass -- cheap enough to just redo
+     * per render rather than caching.
      */
-    private function normalizePrefix(object $attr): string
+    private function resolveWaypointJsPath(): ?string
     {
-        $raw = '';
-        foreach (['getPath', 'getPrefix', 'getName'] as $method) {
-            if (method_exists($attr, $method)) {
-                $raw = (string) $attr->{$method}();
-                break;
+        foreach ($this->staticRoutes['GET'] ?? [] as $path => $plan) {
+            if ($plan['controller'] === WaypointController::class) {
+                return $path;
             }
         }
-        // For controllers, treat prefix as a URL path; for managers it’s a plain name.
-        // We standardize to "string" here and let the per-kind compilers format as needed.
-        return trim((string) $raw);
+        return null;
     }
-
-    /**
-     * Compile HTTP routes from a Controller class.
-     * Populates $staticRoutes and $dynamicRoutes by reference.
-     */
-    private function compileController(
-        ReflectionClass $rc,
-        string|object $controller,
-        string $prefix,
-        array &$staticRoutes,
-        array &$dynamicRoutes
-    ): void {
-        // Controller path prefix (URL-ish)
-        $prefixPath = $prefix !== '' ? '/' . trim($prefix, '/') : '';
-
-        // Pre-compute property injections once per controller
-        $propInject = $this->collectPropertyInjections($rc);
-        // Pre-compute class-level middleware once per controller; it runs
-        // before any method-level middleware on every route below.
-        $classMiddlewares = $this->collectMiddlewares($rc->getAttributes(Middleware::class));
-
-        foreach ($rc->getMethods() as $method) {
-            [$routeAttr, $formatterAttr] = $this->extractRouteAndFormatter($method);
-            if (!$routeAttr) {
-                continue;
-            }
-
-            $methodPath = $routeAttr->getPath() ?: '';
-            $combined = rtrim($prefixPath, '/') . '/' . ltrim($methodPath, '/');
-            $path = '/' . trim($combined, '/');
-
-            $dynamic = strpos($path, '{') !== false;
-            $regex = $dynamic
-                ? '#^' . preg_replace('#\{(\w+)\}#', '(?P<\1>[^/]+)', $path) . '$#'
-                : null;
-
-            $argPlan = $this->buildArgPlan($method);
-            $formatter = $this->normalizeFormatter($formatterAttr);
-            $methodMiddlewares = $this->collectMiddlewares($method->getAttributes(Middleware::class));
-            $middlewares = [...$classMiddlewares, ...$methodMiddlewares];
-
-            $plan = [
-                'httpMethod' => strtoupper($routeAttr->getHttpMethod()),
-                'path' => $path,
-                'regex' => $regex,
-                'controller' => $controller,
-                'method' => $method->getName(),
-                'argPlan' => $argPlan,
-                'propInject' => $propInject,
-                'formatter' => $formatter,
-                'middlewares' => $middlewares,
-                'throws' => [],
-            ];
-
-            if ($dynamic) {
-                $dynamicRoutes[$plan['httpMethod']][] = $plan;
-            } else {
-                $staticRoutes[$plan['httpMethod']][$path] = $plan;
-            }
-        }
-    }
-
-    /**
-     * Compile named tasks from a Manager class.
-     * Populates $tasks by reference, keyed by full task name (prefix:name).
-     *
-     * All tasks behave like "static" entries (no HTTP method, direct lookup by name).
-     */
-    private function compileManager(
-        ReflectionClass $rc,
-        string|object $manager,
-        string $namePrefix,
-        array &$tasks
-    ): void {
-        // normalize manager prefix (no slashes, plain token)
-        $normalizedPrefix = trim($namePrefix, " \t\n\r\0\x0B/");
-
-        // Pre-compute property injections once per manager
-        $propInject = $this->collectPropertyInjections($rc);
-
-        foreach ($rc->getMethods() as $method) {
-            // find a #[Task('name')] on method
-            $taskAttr = null;
-            foreach ($method->getAttributes() as $attr) {
-                $instance = $attr->newInstance();
-                if ($instance instanceof Task) {
-                    $taskAttr = $instance;
-                    break;
-                }
-            }
-            if (!$taskAttr) {
-                continue;
-            }
-
-            $taskName = $this->extractTaskName($taskAttr);
-            if ($taskName === '') {
-                // ignore unnamed tasks
-                continue;
-            }
-
-            $fullName = $normalizedPrefix !== '' ? $normalizedPrefix . ':' . $taskName : $taskName;
-
-            // Tasks share the same arg/prop injection logic
-            $argPlan = $this->buildArgPlan($method);
-
-            $plan = [
-                'name' => $taskName,
-                'fullName' => $fullName,
-                'manager' => $manager,
-                'method' => $method->getName(),
-                'argPlan' => $argPlan,
-                'propInject' => $propInject,
-                // Optional: allow a formatter attribute to influence output of task runs
-                'formatter' => $this->extractFormatterOnly($method),
-                'throws' => [],
-            ];
-
-            // Tasks are "static-like" — direct lookup by exact name
-            $tasks[$fullName] = $plan;
-        }
-    }
-
-    /** Collect #[Inject] property metadata once per class. */
-    private function collectPropertyInjections(ReflectionClass $rc): array
-    {
-        $propInject = [];
-        foreach ($rc->getProperties() as $prop) {
-            if ($prop->getAttributes(Inject::class)) {
-                $type = $prop->getType()?->getName();
-                $propInject[] = [
-                    'name' => $prop->getName(),
-                    'type' => $type,
-                ];
-            }
-        }
-        return $propInject;
-    }
-
-    /**
-     * Collect #[Middleware(...)] attributes (from a controller class or a route
-     * method) in declaration order. A bare class name defaults to calling its
-     * 'handle' method. Each Middleware class is container-resolved at dispatch
-     * time so it can itself use #[Inject].
-     */
-    private function collectMiddlewares(array $attributes): array
-    {
-        $middlewares = [];
-        foreach ($attributes as $attr) {
-            $instance = $attr->newInstance();
-            $callable = $instance->callable;
-            if (!isset($callable[0]) || !class_exists($callable[0])) {
-                continue;
-            }
-            $middlewares[] = [
-                'class' => $callable[0],
-                'method' => $callable[1] ?? 'handle',
-                // Computed once at compile time so #[Inject] works on middleware
-                // classes too, without reflecting on every request.
-                'propInject' => $this->collectPropertyInjections(new ReflectionClass($callable[0])),
-            ];
-        }
-        return $middlewares;
-    }
-
-    /**
-     * Build argument injection plan for a method.
-     * Mirrors the original logic (Request/Response/Body/Query/Route/Scalar/Unknown).
-     */
-    private function buildArgPlan(ReflectionMethod $method): array
-    {
-        $argPlan = [];
-
-        foreach ($method->getParameters() as $param) {
-            $type = match (true) {
-                is_null($param->getType()) => null,
-                method_exists($param->getType(), 'getName') => $param->getType()->getName(),
-                default => null,
-            };
-
-            $bodyAttr = $param->getAttributes(Body::class)[0] ?? null;
-            $queryAttr = $param->getAttributes(Query::class)[0] ?? null;
-            $routeAttrP = $param->getAttributes(Param::class)[0] ?? null;
-
-            if ($type === Request::class) {
-                $argPlan[] = ['inject' => 'Request'];
-            } elseif ($type === Response::class) {
-                $argPlan[] = ['inject' => 'Response'];
-            } elseif ($bodyAttr && $type && class_exists($type)) {
-                $argPlan[] = ['inject' => 'Body', 'class' => $type, 'validate' => true];
-            } elseif ($bodyAttr && in_array($type, ['array', 'iterable'], true) && ($of = $bodyAttr->newInstance()->of) && class_exists($of)) {
-                $argPlan[] = ['inject' => 'BodyCollection', 'class' => $of, 'validate' => true];
-            } elseif ($queryAttr) {
-                $attrInstance = $queryAttr->newInstance();
-                $key = $attrInstance->name ?? $param->getName();
-                $argPlan[] = ['inject' => 'Query', 'name' => $key];
-            } elseif ($routeAttrP) {
-                $attrInstance = $routeAttrP->newInstance();
-                $key = $attrInstance->name ?? $param->getName();
-                $argPlan[] = ['inject' => 'Route', 'name' => $key];
-            } elseif ($type && in_array($type, ['string', 'int', 'float', 'bool'], true)) {
-                $key = $param->getName();
-                $argPlan[] = ['inject' => 'Scalar', 'name' => $key, 'type' => $type];
-            } else {
-                $argPlan[] = ['inject' => 'Unknown'];
-            }
-        }
-
-        return $argPlan;
-    }
-
-    /** Extract both route attribute (must have getPath + getHttpMethod) and optional formatter. */
-    private function extractRouteAndFormatter(ReflectionMethod $method): array
-    {
-        $routeAttr = null;
-        $formatter = null;
-
-        foreach ($method->getAttributes() as $attr) {
-            $instance = $attr->newInstance();
-            if (method_exists($instance, 'getPath') && method_exists($instance, 'getHttpMethod')) {
-                $routeAttr = $instance;
-            }
-            if (
-                $instance instanceof FileFormatter
-                || $instance instanceof SimpleXmlFormatter
-                || $instance instanceof JSONFormatter
-            ) {
-                $formatter = $instance;
-            }
-        }
-
-        return [$routeAttr, $formatter];
-    }
-
-    /** Extract only a formatter (for tasks; optional). */
-    private function extractFormatterOnly(ReflectionMethod $method): array
-    {
-        $formatterAttr = null;
-        foreach ($method->getAttributes() as $attr) {
-            $instance = $attr->newInstance();
-            if (
-                $instance instanceof FileFormatter
-                || $instance instanceof SimpleXmlFormatter
-                || $instance instanceof JSONFormatter
-            ) {
-                $formatterAttr = $instance;
-            }
-        }
-        return self::normalizeFormatter($formatterAttr);
-    }
-
-    /** Normalize formatter into a plan-friendly array. */
-    private function normalizeFormatter(?object $formatterAttr): array
-    {
-        return $formatterAttr
-            ? ['type' => get_class($formatterAttr), 'options' => get_object_vars($formatterAttr)]
-            : ['type' => 'json', 'options' => null];
-    }
-
-    /** Extract task name from a #[Task(...)] attribute instance defensively. */
-    private function extractTaskName(object $taskAttr): string
-    {
-        // Support common shapes: ->getName(), public $name, or ->name()
-        foreach (['getName', 'name', '__toString'] as $method) {
-            if (method_exists($taskAttr, $method)) {
-                $val = (string) $taskAttr->{$method}();
-                if ($val !== '') {
-                    return $val;
-                }
-            }
-        }
-        // Fallback for a *public* property named "name" -- checked via
-        // Reflection rather than `$taskAttr->name` directly, since that
-        // would fatal with "Cannot access private property" for an
-        // attribute (like Task itself) that declares $name as private.
-        if (property_exists($taskAttr, 'name')) {
-            $prop = new ReflectionProperty($taskAttr, 'name');
-            if ($prop->isPublic()) {
-                $value = $prop->getValue($taskAttr);
-                if (is_string($value)) {
-                    return $value;
-                }
-            }
-        }
-        return '';
-    }
-
 
     /**
      * The compiled {css, js} cache-busted filenames for the given
@@ -920,7 +507,7 @@ class Router
      * extension, in the configured RendererOptions directory), or
      * {css: null, js: null} if it has none. Public so View can look up its
      * *layout's* own assets (View::$layoutAssets) the same way
-     * renderResult() already looks up the view's own -- ViewAssets::compile()
+     * renderView() already looks up the view's own -- ViewAssets::compile()
      * treats every '.php' file in the views directory identically, whether
      * it's ever used as a plain view or as a layout, so this one lookup
      * serves both.
@@ -954,66 +541,6 @@ class Router
             }
         }
         return $routes;
-    }
-
-    public static function exportAllAttributes(array $controllers): array
-    {
-        $result = [];
-        foreach ($controllers as $className) {
-            if (!class_exists($className))
-                continue;
-            $rc = new ReflectionClass($className);
-
-            // Class-level
-            $result[$className]['__class'] = array_map(
-                fn($attr) => [
-                    'name' => $attr->getName(),
-                    'args' => $attr->getArguments(),
-                ],
-                $rc->getAttributes()
-            );
-
-            // Property-level
-            foreach ($rc->getProperties() as $prop) {
-                $result[$className]['properties'][$prop->getName()] = array_map(
-                    fn($attr) => [
-                        'name' => $attr->getName(),
-                        'args' => $attr->getArguments(),
-                    ],
-                    $prop->getAttributes()
-                );
-            }
-
-            // Method/Param-level
-            foreach ($rc->getMethods() as $method) {
-                $result[$className]['methods'][$method->getName()]['__method'] = array_map(
-                    fn($attr) => [
-                        'name' => $attr->getName(),
-                        'args' => $attr->getArguments(),
-                    ],
-                    $method->getAttributes()
-                );
-                foreach ($method->getParameters() as $param) {
-                    $type = $param->getType();
-                    $result[$className]['methods'][$method->getName()]['parameters'][$param->getName()] = [
-                        'attributes' => array_map(
-                            fn($attr) => [
-                                'name' => $attr->getName(),
-                                'args' => $attr->getArguments(),
-                            ],
-                            $param->getAttributes()
-                        ),
-                        // Only a plain named type (string, int, Some\Class, ...) is
-                        // reported; union/intersection types come through as null
-                        // since OpenAPI has no single-type slot to put them in.
-                        'type' => $type instanceof ReflectionNamedType ? $type->getName() : null,
-                        'nullable' => $type ? $type->allowsNull() : true,
-                        'hasDefault' => $param->isDefaultValueAvailable(),
-                    ];
-                }
-            }
-        }
-        return $result;
     }
 
     public function findRoute(array $routes, string $method, string $path): ?object

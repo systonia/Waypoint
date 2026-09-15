@@ -1,0 +1,1 @@
+<?= $this->env->get('APP_ENV') ?>

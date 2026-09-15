@@ -19,7 +19,7 @@ class OpenAPIController
     private string $assetDir;
 
     /**
-     * @param string|null $assetDir Overrides where swagger.html/lentodoc.html
+     * @param string|null $assetDir Overrides where swagger.html
      *  are read from; defaults to this class's own directory. Exists mainly
      *  so tests can point at a directory that deliberately doesn't have
      *  these files, without touching the real bundled assets.

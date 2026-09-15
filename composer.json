@@ -9,7 +9,7 @@
     "attributes",
     "middleware",
     "cors",
-    "htmx",
+    "gzip",
     "partial-views",
     "progressive-enhancement",
     "ajax",
@@ -23,9 +23,20 @@
       "email": "lento@leisenfeld.com"
     }
   ],
+  "scripts": {
+    "test": "vendor/bin/phpunit --testdox --display-deprecations --display-warnings",
+    "e2e": "php vendor/bin/phpunit --testdox Tests/EndToEnd",
+    "coverage:text": "XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-text",
+    "coverage:html": "XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-html coverage/"
+  },
   "autoload": {
     "psr-4": {
       "Waypoint\\": "src/Waypoint/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Waypoint\\Tests\\": "tests/"
     }
   },
   "require": {
@@ -34,7 +45,8 @@
     "psr/log": "^3.0"
   },
   "require-dev": {
-    "monolog/monolog": "^3.9"
+    "monolog/monolog": "^3.9",
+    "phpunit/phpunit": "^13.3"
   },
   "suggest": {
     "monolog/monolog": "Powerful logging with handlers, channels, and JSON output."

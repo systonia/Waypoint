@@ -1,0 +1,32 @@
+# alles als Text behandeln, Zeilenenden normalisieren
+* text=auto
+
+# --- Von Composer-Installationen ausschließen (export-ignore) ---
+
+/tests              export-ignore
+/phpunit.xml        export-ignore
+/phpunit.xml.dist   export-ignore
+/.phpunit.result.cache export-ignore
+
+/.github            export-ignore
+/.gitattributes     export-ignore
+/.gitignore         export-ignore
+
+/docs               export-ignore
+/examples           export-ignore
+
+/.php-cs-fixer.php  export-ignore
+/.php-cs-fixer.dist.php export-ignore
+/phpstan.neon       export-ignore
+/phpstan.neon.dist  export-ignore
+/rector.php         export-ignore
+
+/.editorconfig      export-ignore
+/CONTRIBUTING.md    export-ignore
+/CHANGELOG.md       export-ignore
+
+# --- Bewusst NICHT ausgeschlossen (bleiben im installierten Paket) ---
+# /LICENSE
+# /README.md
+# /composer.json
+# /src

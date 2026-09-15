@@ -9,7 +9,7 @@ use ReflectionNamedType;
 use InvalidArgumentException;
 
 use Waypoint\{Router};
-use Waypoint\Options\{FileSystemOptions, JWTOptions, CorsOptions};
+use Waypoint\Options\{FileSystemOptions, JWTOptions, CorsOptions, CompressionOptions};
 use Waypoint\Attributes\Inject;
 use Waypoint\Http\{Request, Response};
 use Waypoint\Exceptions\{ForbiddenException, UnauthorizedException, NotFoundException, ValidationException};
@@ -51,7 +51,7 @@ class App
 
         $this->router = new Router($controllers, $allClasses, $this->container, $cachedData, $fileSystemOptions);
 
-        $this->useLentoAcceptHeader();
+        $this->useWaypointAcceptHeader();
     }
 
     public function use(callable $middleware): void
@@ -80,7 +80,7 @@ class App
         });
     }
 
-    private function useLentoAcceptHeader(): void
+    private function useWaypointAcceptHeader(): void
     {
         $this->use(function (Request $req, Response $res, $next): mixed {
             // A direct case-insensitive scan for the one header we care
@@ -191,7 +191,7 @@ class App
     public function handleHttp(): void
     {
         $req = Request::capture();
-        $res = new Response();
+        $res = new Response($this->container->get(CompressionOptions::class));
 
         $handler = array_reduce(
             array: array_reverse(array: $this->middlewares),

@@ -1,0 +1,6 @@
+{
+    "FROM_CONFIG_JSON": "base",
+    "PRECEDENCE": "config.json",
+    "JSON_BOOL": true,
+    "JSON_INT": 42
+}
