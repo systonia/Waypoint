@@ -16,6 +16,7 @@ class JWT
      * @param integer|null $ttl
      * @return string
      */
+    #[\NoDiscard('The generated token is the entire point of calling encode() -- discarding it is always a bug.')]
     public static function encode(array $payload, ?int $ttl = null): string
     {
         $opts = Waypoint::getConfig(JWTOptions::class);
@@ -35,6 +36,7 @@ class JWT
      * @param string $jwt
      * @return array|null
      */
+    #[\NoDiscard('Ignoring the result (payload, or null for an invalid/expired token) silently skips checking whether the token actually verified.')]
     public static function decode(string $jwt): ?array
     {
         $opts = Waypoint::getConfig(JWTOptions::class);
@@ -61,6 +63,7 @@ class JWT
      * @param array $headers
      * @return array|null
      */
+    #[\NoDiscard('Same reason as decode() -- ignoring the result silently skips checking whether the request was actually authenticated.')]
     public static function fromRequestHeaders(array $headers): ?array
     {
         $opts = Waypoint::getConfig(JWTOptions::class);

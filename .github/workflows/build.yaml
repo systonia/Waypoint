@@ -37,6 +37,9 @@ jobs:
       - name: Dump autoload with PSR-4 check
         run: composer dump-autoload --optimize --strict-psr
 
+      - name: Run test suite
+        run: composer run test
+
       - name: Show final PHP version used
         run: |
           echo "PHP version used: ${{ steps.phpversion.outputs.php }}"

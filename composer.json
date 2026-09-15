@@ -40,7 +40,7 @@
     }
   },
   "require": {
-    "php": ">=8.4",
+    "php": ">=8.5",
     "psr/container": "^2.0",
     "psr/log": "^3.0"
   },

@@ -16,6 +16,7 @@ class UnauthorizedException extends Exception
      *
      * @var [type]
      */
+    #[\Override]
     protected $message = Message::Unauthorized->value;
 
     /**
@@ -23,6 +24,7 @@ class UnauthorizedException extends Exception
      *
      * @var integer
      */
+    #[\Override]
     protected $code = 401;
 
     /**

@@ -16,6 +16,7 @@ class ForbiddenException extends Exception
      *
      * @var [type]
      */
+    #[\Override]
     protected $message = Message::Forbidden->value;
 
     /**
@@ -23,6 +24,7 @@ class ForbiddenException extends Exception
      *
      * @var integer
      */
+    #[\Override]
     protected $code = 403;
 
     /**

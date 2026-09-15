@@ -16,6 +16,7 @@ class Validator
      * @param object $dto
      * @return array Errors: field => message
      */
+    #[\NoDiscard('Ignoring the returned errors means validation never actually gets enforced.')]
     public function validate(object $dto): array
     {
         $errors = [];
