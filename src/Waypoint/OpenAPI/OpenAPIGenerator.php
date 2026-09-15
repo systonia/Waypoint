@@ -27,7 +27,7 @@ class OpenAPIGenerator
     /** @var array<string, bool> Schema name => already generated, guarding against infinite recursion on a self-/mutually-referencing model. */
     private array $processedModels = [];
 
-    /** @var array<string, mixed> */
+    /** @var array{schemas: array<string, mixed>, securitySchemes: array<string, mixed>|stdClass} */
     private array $components = [
         'schemas' => [],
         'securitySchemes' => [],
@@ -68,8 +68,10 @@ class OpenAPIGenerator
         // from #[Body] DTOs, plus its own securitySchemes default) is what
         // actually gets returned below -- without this, configuring
         // OpenAPIOptions::$securitySchemes had no effect at all.
-        if (!empty($options['components']['securitySchemes'])) {
-            $this->components['securitySchemes'] = $options['components']['securitySchemes'];
+        $components = $options['components'] ?? null;
+        $securitySchemes = is_array($components) ? ($components['securitySchemes'] ?? null) : null;
+        if (is_array($securitySchemes) && !empty($securitySchemes)) {
+            $this->components['securitySchemes'] = $this->toStringKeyedArray($securitySchemes);
         }
 
         return array_filter([
@@ -95,6 +97,22 @@ class OpenAPIGenerator
         return false;
     }
 
+    /**
+     * Reads one field off a route -- Router::getRoutes()' RouteSummary in
+     * practice, but see this class's own tolerance for other shapes (e.g.
+     * OpenAPIGeneratorRouteShapeTest's stubbed array-shaped routes).
+     */
+    private static function routeField(mixed $route, string $field): mixed
+    {
+        if (is_object($route)) {
+            return $route->{$field} ?? null;
+        }
+        if (is_array($route)) {
+            return $route[$field] ?? null;
+        }
+        return null;
+    }
+
     /** @return array<string, mixed> */
     protected function buildPaths(?string $version = null): array
     {
@@ -108,15 +126,15 @@ class OpenAPIGenerator
 
             [$controllerClass, $methodName] = $handlerSpec;
 
-            $methodRef = is_object($route) ? ($route->method ?? null) : ($route['method'] ?? null);
-            $rawPath = is_object($route) ? ($route->rawPath ?? null) : ($route['rawPath'] ?? null);
-            if (!$methodRef || !$rawPath) {
+            $methodRef = self::routeField($route, 'method');
+            $rawPath = self::routeField($route, 'rawPath');
+            if (!is_string($methodRef) || !is_string($rawPath) || $methodRef === '' || $rawPath === '') {
                 continue;
             }
 
             // Use attribute cache instead of reflection
-            $classAttrs = $this->attributeCache[$controllerClass]['__class'] ?? [];
-            $methodAttrs = $this->attributeCache[$controllerClass]['methods'][$methodName]['__method'] ?? [];
+            $classAttrs = $this->attrList($this->classCacheEntry($controllerClass)['__class'] ?? null);
+            $methodAttrs = $this->attrList($this->methodCacheEntry($controllerClass, $methodName)['__method'] ?? null);
 
             if ($this->isIgnored($classAttrs, $methodAttrs)) {
                 continue;
@@ -162,7 +180,7 @@ class OpenAPIGenerator
         if ($version !== null) {
             return array_values(array_filter(
                 $routes,
-                fn($route) => ($route->version ?? null) === $version
+                fn($route) => self::routeField($route, 'version') === $version
             ));
         }
 
@@ -170,8 +188,8 @@ class OpenAPIGenerator
         $latestByGroup = []; // "$method $unversionedPath" => the route object currently winning that group
 
         foreach ($routes as $route) {
-            $routeVersion = $route->version ?? null;
-            if ($routeVersion === null) {
+            $routeVersion = self::routeField($route, 'version');
+            if (!is_string($routeVersion)) {
                 $unversioned[] = $route;
                 continue;
             }
@@ -180,9 +198,12 @@ class OpenAPIGenerator
             // purely by (HTTP method, pre-version-prefix path) -- their
             // actual rawPath differs (that's the whole point of URI
             // versioning), so rawPath itself can never be the group key.
-            $key = $route->method . ' ' . ($route->unversionedPath ?? $route->rawPath);
+            $method = self::routeField($route, 'method');
+            $unversionedPath = self::routeField($route, 'unversionedPath') ?? self::routeField($route, 'rawPath');
+            $key = (is_string($method) ? $method : '') . ' ' . (is_string($unversionedPath) ? $unversionedPath : '');
             $incumbent = $latestByGroup[$key] ?? null;
-            if ($incumbent === null || $this->compareVersions($routeVersion, $incumbent->version) > 0) {
+            $incumbentVersion = $incumbent !== null ? self::routeField($incumbent, 'version') : null;
+            if ($incumbent === null || (is_string($incumbentVersion) && $this->compareVersions($routeVersion, $incumbentVersion) > 0)) {
                 $latestByGroup[$key] = $route;
             }
         }
@@ -215,20 +236,138 @@ class OpenAPIGenerator
         return array_map('intval', $matches[0]) ?: [0];
     }
 
-    /** @return array{0: class-string, 1: string}|null */
+    /**
+     * [controller-class-name, method-name] -- the class name is not
+     * verified to actually exist here (see extractParameters()/buildPaths()'s
+     * own attributeCache[...] lookups, which already degrade to "no
+     * attributes" for one that doesn't); that's what lets
+     * OpenAPIGeneratorRouteShapeTest exercise this purely off a stubbed
+     * Router without real controller classes.
+     *
+     * @return array{0: string, 1: string}|null
+     */
     protected function getHandlerSpec(mixed $route): ?array
     {
         // Handles both object and array representations
-        if (is_object($route) && is_array($route->handlerSpec)) {
-            if (isset($route->handlerSpec[0], $route->handlerSpec[1])) {
-                return $route->handlerSpec;
-            } elseif (isset($route->handlerSpec['spec'])) {
-                return $route->handlerSpec['spec'];
+        $handlerSpec = is_object($route) ? ($route->handlerSpec ?? null) : null;
+        if (is_object($route) && is_array($handlerSpec)) {
+            if (isset($handlerSpec[0], $handlerSpec[1])) {
+                return self::toHandlerSpecPair($handlerSpec);
+            } elseif (isset($handlerSpec['spec'])) {
+                return self::toHandlerSpecPair($handlerSpec['spec']);
             }
-        } elseif (is_array($route) && isset($route['handlerSpec']['spec'])) {
-            return $route['handlerSpec']['spec'];
+        } elseif (is_array($route)) {
+            $nested = $route['handlerSpec'] ?? null;
+            $spec = is_array($nested) ? ($nested['spec'] ?? null) : null;
+            if ($spec !== null) {
+                return self::toHandlerSpecPair($spec);
+            }
         }
         return null;
+    }
+
+    /**
+     * Narrows a raw [class, method] pair (from an attribute cache entry or
+     * a route's handlerSpec -- both fundamentally untyped) to the precise
+     * shape callers need, or null if it doesn't actually look like one.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    private static function toHandlerSpecPair(mixed $spec): ?array
+    {
+        if (!is_array($spec) || !isset($spec[0], $spec[1])) {
+            return null;
+        }
+        $class = $spec[0];
+        $method = $spec[1];
+        if (!is_string($class) || !is_string($method)) {
+            return null;
+        }
+        return [$class, $method];
+    }
+
+    /**
+     * $this->attributeCache[$controllerClass] narrowed to a plain
+     * string-keyed array -- the cache entry is `mixed` (see
+     * $attributeCache's own docblock: it's a `require`d file this same
+     * class wrote via var_export(), but PHPStan can't trust that
+     * statically), and $controllerClass itself may not even be a key in
+     * it (a stale cache, or -- see getHandlerSpec()'s doc -- a
+     * test-stubbed route naming a class that was never compiled).
+     *
+     * @return array<string, mixed>
+     */
+    private function classCacheEntry(string $controllerClass): array
+    {
+        $entry = $this->attributeCache[$controllerClass] ?? null;
+        return $this->toStringKeyedArray($entry);
+    }
+
+    /**
+     * Same reasoning as classCacheEntry(), one level deeper:
+     * classCacheEntry($controllerClass)['methods'][$methodName].
+     *
+     * @return array<string, mixed>
+     */
+    private function methodCacheEntry(string $controllerClass, string $methodName): array
+    {
+        $methods = $this->classCacheEntry($controllerClass)['methods'] ?? null;
+        if (!is_array($methods)) {
+            return [];
+        }
+        return $this->toStringKeyedArray($methods[$methodName] ?? null);
+    }
+
+    /** @return array<string, mixed> */
+    private function toStringKeyedArray(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+        $result = [];
+        foreach ($value as $key => $item) {
+            if (is_string($key)) {
+                $result[$key] = $item;
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * Narrows an arbitrary attribute-cache list (see classCacheEntry()'s
+     * doc on why it's untyped) to the precise per-entry shape every
+     * consumer below actually needs.
+     *
+     * @return array<int, array{name?: string, args?: array<int|string, mixed>}>
+     */
+    private function attrList(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+        $result = [];
+        foreach ($value as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $entry = [];
+            $name = $item['name'] ?? null;
+            if (is_string($name)) {
+                $entry['name'] = $name;
+            }
+            $args = $item['args'] ?? null;
+            if (is_array($args)) {
+                $entry['args'] = $this->toIntOrStringKeyedArray($args);
+            }
+            $result[] = $entry;
+        }
+        return $result;
+    }
+
+    /** @return array<int|string, mixed> */
+    private function toIntOrStringKeyedArray(mixed $value): array
+    {
+        return is_array($value) ? $value : [];
     }
 
     /**
@@ -272,7 +411,12 @@ class OpenAPIGenerator
         foreach ($methodAttrs as $attr) {
             if (($attr['name'] ?? null) === Throws::class) {
                 $throws = $attr['args'] ?? [];
-                $statusCode = isset($throws['status']) ? (string) $throws['status'] : '500';
+                $rawStatusCode = $throws['status'] ?? null;
+                $statusCode = match (true) {
+                    is_string($rawStatusCode) => $rawStatusCode,
+                    is_int($rawStatusCode) => (string) $rawStatusCode,
+                    default => '500',
+                };
                 $desc = $throws['description'] ?? $throws['exception'] ?? "Error";
                 if (!isset($responses[$statusCode])) {
                     $responses[$statusCode] = [
@@ -337,16 +481,20 @@ class OpenAPIGenerator
         $requestBody = null;
         $schemas = [];
 
-        $paramsMeta = $this->attributeCache[$controllerClass]['methods'][$methodName]['parameters'] ?? [];
+        $paramsMeta = $this->methodCacheEntry($controllerClass, $methodName)['parameters'] ?? null;
+        $paramsMeta = $this->toStringKeyedArray($paramsMeta);
 
         foreach ($paramsMeta as $paramName => $meta) {
             // Tolerate the older cache shape (a bare list of attributes,
             // with no type/nullable/hasDefault) so a stale on-disk cache
             // degrades to "treat as string" instead of fataling.
-            $attributes = $meta['attributes'] ?? (is_array($meta) ? $meta : []);
-            $type = $meta['type'] ?? null;
-            $nullable = $meta['nullable'] ?? false;
-            $hasDefault = $meta['hasDefault'] ?? false;
+            $metaArr = $this->toStringKeyedArray($meta);
+            $rawAttributes = array_key_exists('attributes', $metaArr) ? $metaArr['attributes'] : $meta;
+            $attributes = $this->attrList($rawAttributes);
+            $type = $metaArr['type'] ?? null;
+            $type = is_string($type) ? $type : null;
+            $nullable = (bool) ($metaArr['nullable'] ?? false);
+            $hasDefault = (bool) ($metaArr['hasDefault'] ?? false);
 
             $kind = null; // 'path' | 'query' | 'body'
             $bindName = $paramName;
@@ -356,13 +504,13 @@ class OpenAPIGenerator
                 $args = $attr['args'] ?? [];
                 if ($name === Param::class) {
                     $kind = 'path';
-                    $bindName = $args[0] ?? $args['name'] ?? $paramName;
+                    $bindName = self::firstStringArg($args, 0, 'name') ?? $paramName;
                 } elseif ($name === Query::class) {
                     $kind = 'query';
-                    $bindName = $args[0] ?? $args['name'] ?? $paramName;
+                    $bindName = self::firstStringArg($args, 0, 'name') ?? $paramName;
                 } elseif ($name === Body::class) {
                     $kind = 'body';
-                    $bodyOf = $args[1] ?? $args['of'] ?? null;
+                    $bodyOf = self::firstStringArg($args, 1, 'of');
                 }
             }
 
@@ -388,7 +536,7 @@ class OpenAPIGenerator
                     'required' => !$nullable && !$hasDefault,
                     'schema' => $this->schemaForType($type),
                 ];
-            } elseif ($kind === 'body' && in_array($type, ['array', 'iterable'], true) && $bodyOf) {
+            } elseif ($kind === 'body' && $type !== null && in_array($type, ['array', 'iterable'], true) && $bodyOf) {
                 if (!class_exists($bodyOf)) {
                     $this->logger->warning(Message::GeneratorPropertyDoesNotExist2->interpolate(
                         type: $bodyOf,
@@ -431,6 +579,19 @@ class OpenAPIGenerator
         return [$params, $requestBody, $schemas];
     }
 
+    /**
+     * `$args[$posKey] ?? $args[$namedKey] ?? null`, narrowed to string --
+     * an attribute's positional/named constructor arg, as captured by
+     * RouteCompiler::exportAllAttributes() (see AttributeEntry's own doc).
+     *
+     * @param array<int|string, mixed> $args
+     */
+    private static function firstStringArg(array $args, int $posKey, string $namedKey): ?string
+    {
+        $value = $args[$posKey] ?? $args[$namedKey] ?? null;
+        return is_string($value) ? $value : null;
+    }
+
     private function isScalarType(?string $type): bool
     {
         return $type !== null && in_array($type, ['string', 'int', 'integer', 'float', 'bool', 'boolean'], true);
@@ -456,7 +617,12 @@ class OpenAPIGenerator
         return new stdClass();
     }
 
-    /** The schema key/$ref name for a DTO class: its #[Schema(name: ...)] override, or its short class name. */
+    /**
+     * The schema key/$ref name for a DTO class: its #[Schema(name: ...)]
+     * override, or its short class name.
+     *
+     * @param class-string $fqcn
+     */
     protected function schemaNameFor(string $fqcn): string
     {
         foreach ((new ReflectionClass($fqcn))->getAttributes(Schema::class) as $attr) {
@@ -618,15 +784,22 @@ class OpenAPIGenerator
             if (($attr['name'] ?? null) === Tags::class) {
                 // Positional
                 if (isset($attr['args'][0])) {
-                    return (array) $attr['args'][0];
+                    return self::toStringArray($attr['args'][0]);
                 }
                 // Named
                 if (isset($attr['args']['tags'])) {
-                    return (array) $attr['args']['tags'];
+                    return self::toStringArray($attr['args']['tags']);
                 }
             }
         }
         return [];
+    }
+
+    /** @return string[] */
+    private static function toStringArray(mixed $value): array
+    {
+        $items = is_array($value) ? $value : [$value];
+        return array_values(array_filter($items, 'is_string'));
     }
 
     /** @param array<int, array{name?: string, args?: array<int|string, mixed>}> $methodAttrs */
@@ -635,11 +808,15 @@ class OpenAPIGenerator
         foreach ($methodAttrs as $attr) {
             if (($attr['name'] ?? null) === Summary::class) {
                 // Positional
-                if (isset($attr['args'][0]))
-                    return $attr['args'][0];
+                $positional = $attr['args'][0] ?? null;
+                if (is_string($positional)) {
+                    return $positional;
+                }
                 // Named
-                if (isset($attr['args']['text']))
-                    return $attr['args']['text'];
+                $named = $attr['args']['text'] ?? null;
+                if (is_string($named)) {
+                    return $named;
+                }
             }
         }
         // Default fallback

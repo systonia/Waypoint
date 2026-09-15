@@ -1,6 +1,38 @@
 parameters:
-    level: 6
+    level: 10
     paths:
         - src
     excludePaths:
         - tests
+    typeAliases:
+        # One #[Get]/#[Post]/... route attribute (or #[Middleware(...)]'s
+        # own args), as captured by RouteCompiler::exportAllAttributes()/
+        # collectMiddlewares() -- read back attribute-cache-side by
+        # OpenAPIGenerator instead of re-reflecting.
+        AttributeEntry: 'array{name: string, args: array<int|string, mixed>}'
+        # One #[Inject] property, as collected by
+        # RouteCompiler::collectPropertyInjections().
+        PropInjectEntry: 'array{name: string, type: string|null}'
+        # One #[Middleware(...)], as collected by
+        # RouteCompiler::collectMiddlewares().
+        MiddlewareEntry: 'array{class: string, method: string, propInject: array<int, PropInjectEntry>}'
+        # A route/task's response formatter, as normalized by
+        # RouteCompiler::normalizeFormatter().
+        FormatterSpec: 'array{type: string, options: array<string, mixed>|null}'
+        # One compiled #[Controller] route, as built by
+        # RouteCompiler::compileController() and dispatched against by
+        # Router. gzip/version/unversionedPath/deprecated/sunsetHeader/
+        # middlewares/formatter are marked optional (not just nullable) to
+        # match Router's own `?? <default>` handling of each -- a
+        # routes.php cached by an older Waypoint version can genuinely lack
+        # a key added by a later feature.
+        RoutePlan: 'array{httpMethod: string, path: string, regex: string|null, controller: string|object, method: string, argPlan: array<int, array<string, mixed>>, propInject: array<int, PropInjectEntry>, formatter?: FormatterSpec, middlewares?: array<int, MiddlewareEntry>, gzip?: bool, version?: string|null, unversionedPath?: string, deprecated?: bool, sunsetHeader?: string|null, throws: array<int, mixed>}'
+        # One compiled #[Task], as built by RouteCompiler::compileManager().
+        TaskPlan: 'array{name: string, fullName: string, manager: string|object, method: string, argPlan: array<int, array<string, mixed>>, propInject: array<int, PropInjectEntry>, formatter: FormatterSpec, throws: array<int, mixed>}'
+        # One entry of Router::getRoutes()' plain-object listing, consumed
+        # by Router::findRoute() and OpenAPIGenerator's version-grouping
+        # (selectEligibleRoutes()/pickLatestPerGroup()) -- a stdClass, not
+        # RoutePlan itself, since it's a deliberately-flattened summary
+        # (method/rawPath/handlerSpec/version/unversionedPath) independent
+        # of whether the underlying route was static or dynamic.
+        RouteSummary: 'object{method: string, rawPath: string, handlerSpec: array{0: string|object, 1: string}, version: string|null, unversionedPath: string}'

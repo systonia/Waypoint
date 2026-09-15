@@ -23,8 +23,10 @@ class JWT
         $header = ['alg' => $opts->alg, 'typ' => 'JWT'];
         $payload['exp'] = time() + ($ttl ?? $opts->ttl);
 
-        $h = rtrim(strtr(base64_encode(json_encode($header)), '+/', '-_'), '=');
-        $p = rtrim(strtr(base64_encode(json_encode($payload)), '+/', '-_'), '=');
+        $encodedHeader = json_encode($header);
+        $encodedPayload = json_encode($payload);
+        $h = rtrim(strtr(base64_encode($encodedHeader !== false ? $encodedHeader : '{}'), '+/', '-_'), '=');
+        $p = rtrim(strtr(base64_encode($encodedPayload !== false ? $encodedPayload : '{}'), '+/', '-_'), '=');
         $sig = hash_hmac('sha256', "$h.$p", $opts->secret, true);
         $s = rtrim(strtr(base64_encode($sig), '+/', '-_'), '=');
         return "$h.$p.$s";
@@ -49,8 +51,18 @@ class JWT
         if (!hash_equals($validSig, $s)) {
             return null;
         }
-        $payload = json_decode(base64_decode(strtr($p, '-_', '+/')), true);
-        if (!$payload || (isset($payload['exp']) && $payload['exp'] < time())) {
+        $decoded = json_decode(base64_decode(strtr($p, '-_', '+/')), true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+        $payload = [];
+        foreach ($decoded as $key => $value) {
+            if (is_string($key)) {
+                $payload[$key] = $value;
+            }
+        }
+        $exp = $payload['exp'] ?? null;
+        if (is_int($exp) && $exp < time()) {
             return null;
         }
         return $payload;

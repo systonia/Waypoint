@@ -254,12 +254,19 @@ class Response
      */
     private function maybeCompress(string $body): string
     {
+        // $_SERVER values are typed mixed (PHPStan has no way to know what
+        // a given SAPI actually put there) -- a real header value is
+        // always a string in practice, but this narrows explicitly rather
+        // than assuming it.
+        $acceptEncoding = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? '';
+        $acceptEncoding = is_string($acceptEncoding) ? $acceptEncoding : '';
+
         if (
             $this->gzipDisabled
             || !$this->compressionOptions->enabled
             || strlen($body) < $this->compressionOptions->minBytes
             || isset($this->headers['Content-Encoding'])
-            || !str_contains($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '', 'gzip')
+            || !str_contains($acceptEncoding, 'gzip')
         ) {
             return $body;
         }

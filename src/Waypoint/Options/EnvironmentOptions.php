@@ -67,12 +67,14 @@ class EnvironmentOptions
 
         // 2. Overlay $_ENV
         foreach ($_ENV as $key => $val) {
-            $this->data[$key] = $val;
+            if (is_string($key)) { // Prevents object/array pollution
+                $this->data[$key] = $val;
+            }
         }
 
         // 3. Overlay $_SERVER
         foreach ($_SERVER as $key => $val) {
-            if (is_string($val)) { // Prevents object/array pollution
+            if (is_string($key) && is_string($val)) { // Prevents object/array pollution
                 $this->data[$key] = $val;
             }
         }
@@ -83,7 +85,8 @@ class EnvironmentOptions
         $this->extendWithEnvFile("$basePath/.env");
 
         // 5. Detect environment (from merged so far, or detect)
-        $env = $this->data['APP_ENV'] ?? $this->detectEnvironment();
+        $env = $this->data['APP_ENV'] ?? null;
+        $env = is_string($env) ? $env : $this->detectEnvironment();
         $this->data['APP_ENV'] = $env;
 
         // 6. Overlay .env.$env file
@@ -234,6 +237,7 @@ class EnvironmentOptions
      */
     private function detectEnvironment(): string
     {
+        /** @var string|null $result */
         static $result;
         if ($result !== null) {
             return $result;
@@ -242,7 +246,8 @@ class EnvironmentOptions
             return $result = 'development';
         }
         // @codeCoverageIgnoreStart
-        if (!empty($_SERVER['SERVER_NAME']) && str_contains($_SERVER['SERVER_NAME'], 'localhost')) {
+        $serverName = $_SERVER['SERVER_NAME'] ?? null;
+        if (is_string($serverName) && $serverName !== '' && str_contains($serverName, 'localhost')) {
             return $result = 'development';
         }
         if (extension_loaded('xdebug')) {

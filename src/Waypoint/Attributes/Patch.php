@@ -8,7 +8,7 @@ use Attribute;
  *
  */
 #[Attribute(Attribute::TARGET_METHOD)]
-class Patch
+class Patch implements RouteAttribute
 {
     /**
      * Undocumented variable

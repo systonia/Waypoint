@@ -31,6 +31,9 @@ class Logger
      */
     public function log($level, string|\Stringable $message, array $context = []): void
     {
+        if (!is_int($level) && !is_string($level)) {
+            return;
+        }
         foreach (Waypoint::getConfig(LoggerOptions::class)->getLoggers() as $entry) {
             if (isset($entry['levels'][$level])) {
                 $entry['logger']->log($level, $message, $context);

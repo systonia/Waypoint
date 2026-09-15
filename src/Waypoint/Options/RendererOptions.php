@@ -26,7 +26,7 @@ class RendererOptions
      */
     public string $layout = '_Layout'{
         get => $this->layout;
-        set(?string $value) => $this->layout = $value;
+        set(string $value) => $this->layout = $value;
     }
 
     /**

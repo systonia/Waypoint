@@ -102,7 +102,30 @@ final class FileSystem
             return null;
         }
         $data = @require $this->getRouteFile();
-        return is_array($data) ? $data : null;
+        return is_array($data) ? self::toStringKeyedArray($data) : null;
+    }
+
+    /**
+     * Narrows an arbitrary decoded/`require`d value to a string-keyed
+     * array, dropping any non-string key -- every routes.php/attributes
+     * cache file this class reads back is one this same class wrote (via
+     * var_export()), but PHPStan has no way to trust a `require`d file's
+     * shape statically.
+     *
+     * @return array<string, mixed>
+     */
+    private static function toStringKeyedArray(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+        $result = [];
+        foreach ($value as $key => $item) {
+            if (is_string($key)) {
+                $result[$key] = $item;
+            }
+        }
+        return $result;
     }
 
     /**
@@ -116,7 +139,11 @@ final class FileSystem
     public function loadCachedServices(): ?array
     {
         $data = $this->loadCachedRouteData();
-        return is_array($data['services'] ?? null) ? $data['services'] : null;
+        $services = $data['services'] ?? null;
+        if (!is_array($services)) {
+            return null;
+        }
+        return array_values(array_filter($services, 'is_string'));
     }
 
     /**
@@ -317,7 +344,17 @@ final class FileSystem
             return [];
         }
 
-        return require $file;
+        $data = require $file;
+        if (!is_array($data)) {
+            return [];
+        }
+        $result = [];
+        foreach ($data as $key => $item) {
+            if (is_string($key) && class_exists($key)) {
+                $result[$key] = $item;
+            }
+        }
+        return $result;
     }
 
     /**
@@ -333,6 +370,6 @@ final class FileSystem
             return;
         }
         $data = require $routeFile;
-        $router->importPlans($data);
+        $router->importPlans(is_array($data) ? self::toStringKeyedArray($data) : []);
     }
 }

@@ -75,12 +75,12 @@ class LoggerOptions
             $opts = new self([$options]);
         } elseif (is_array($options) && array_keys($options) === range(0, count($options) - 1)) {
             // Numeric array = list of levels
-            $opts = new self($options);
+            $opts = new self(self::toStringList($options));
         } elseif (is_array($options)) {
             // Assoc array
-            $levels = $options['levels'] ?? [];
+            $levels = self::toStringList($options['levels'] ?? []);
             $name = $options['name'] ?? null;
-            $opts = new self($levels, $name);
+            $opts = new self($levels, is_string($name) ? $name : null);
         } else {
             $opts = new self();
         }
@@ -113,6 +113,22 @@ class LoggerOptions
         }
 
         return $this;
+    }
+
+    /**
+     * Narrows an arbitrary value to a list of strings, dropping any
+     * non-string entry -- $options is fundamentally untyped in add() (see
+     * its own docblock), but $levels is always meant to be PSR-3 level
+     * strings.
+     *
+     * @return string[]
+     */
+    private static function toStringList(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+        return array_values(array_filter($value, 'is_string'));
     }
 
     /**

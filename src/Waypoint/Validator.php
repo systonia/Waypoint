@@ -63,7 +63,7 @@ class Validator
             foreach ($prop->getAttributes(Regex::class) as $attr) {
                 /** @var Regex $inst */
                 $inst = $attr->newInstance();
-                if ($value !== null && !preg_match($inst->pattern, $value)) {
+                if (is_string($value) && !preg_match($inst->pattern, $value)) {
                     $errors[$name] = "This value does not match the required format.";
                 }
             }

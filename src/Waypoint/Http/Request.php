@@ -32,7 +32,11 @@ class Request
     public array $query = [];
 
     /**
-     * @var array<string, mixed>
+     * Keyed by string for a JSON object/form body, or by int for a JSON
+     * list body (see #[Body(of: ...)] array-typed parameters, which bind a
+     * top-level list) -- both are real, intentionally supported shapes.
+     *
+     * @var array<array-key, mixed>
      */
     public array $body = [];
 
@@ -68,13 +72,19 @@ class Request
     public static function capture(?string $rawBody = null): self
     {
         $req = new self();
-        $req->method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+
+        // $_SERVER values are typed mixed by PHPStan (it can't know what a
+        // given SAPI actually put there) -- narrow explicitly rather than
+        // assuming string, the same pattern as Response::maybeCompress().
+        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        $req->method = is_string($method) ? $method : 'GET';
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
+        $uri = is_string($uri) ? $uri : '/';
         $req->path = parse_url($uri, PHP_URL_PATH) ?: '/';
 
         // Headers (SAPI-agnostic)
         foreach ($_SERVER as $key => $value) {
-            if (str_starts_with($key, 'HTTP_')) {
+            if (is_string($key) && is_string($value) && str_starts_with($key, 'HTTP_')) {
                 $name = str_replace(
                     ' ',
                     '-',
@@ -84,18 +94,43 @@ class Request
             }
         }
 
-        $req->query = $_GET;
+        $req->query = self::toStringKeyedArray($_GET);
 
-        // Parse JSON or form data, prefer JSON if present
+        // Parse JSON or form data, prefer JSON if present -- $data can be a
+        // JSON object (string keys) or a JSON list (int keys), both valid
+        // (see $body's own docblock), so unlike $query/$headers above this
+        // isn't filtered down to string keys only.
         $raw = $rawBody ?? file_get_contents('php://input');
         $req->body = [];
-        if ($raw && ($data = json_decode($raw, true))) {
+        if ($raw && is_array($data = json_decode($raw, true))) {
             $req->body = $data;
         } elseif ($_POST) {
             $req->body = $_POST;
         }
 
         return $req;
+    }
+
+    /**
+     * Narrows an arbitrary decoded/superglobal value to a string-keyed
+     * array, dropping any non-string key -- $_GET/$_POST/json_decode()
+     * are all typed with unknown key types by PHPStan even though a real
+     * HTTP request's keys are always strings.
+     *
+     * @return array<string, mixed>
+     */
+    private static function toStringKeyedArray(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+        $result = [];
+        foreach ($value as $key => $item) {
+            if (is_string($key)) {
+                $result[$key] = $item;
+            }
+        }
+        return $result;
     }
 
     /**
@@ -115,7 +150,7 @@ class Request
      *
      * @param string|null $key
      * @param mixed $default
-     * @return mixed
+     * @return ($key is null ? array<array-key, mixed> : mixed)
      */
     public function body(?string $key = null, $default = null): mixed
     {

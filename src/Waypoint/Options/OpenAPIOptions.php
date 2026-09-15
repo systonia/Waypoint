@@ -98,7 +98,10 @@ class OpenAPIOptions
         }
 
         if (!empty($this->securitySchemes)) {
-            $result['components']['securitySchemes'] = $this->securitySchemes;
+            // A single-level assignment (not $result['components']['securitySchemes'] = ...)
+            // on purpose: PHPStan can't track a doubly-nested offset being
+            // auto-vivified through an array<string, mixed>-typed $result.
+            $result['components'] = ['securitySchemes' => $this->securitySchemes];
         }
 
         if (!empty($this->security)) {

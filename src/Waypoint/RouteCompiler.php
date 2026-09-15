@@ -24,6 +24,7 @@ use Waypoint\Attributes\{
     Manager,
     Middleware,
     NoGzip,
+    RouteAttribute,
     SimpleXmlFormatter,
     Sunset,
     Task,
@@ -44,7 +45,7 @@ final class RouteCompiler
 {
     /**
      * @param class-string[] $classes
-     * @return array{staticRoutes: array<string, array<string, array<string, mixed>>>, dynamicRoutes: array<string, array<int, array<string, mixed>>>, tasks: array<string, array<string, mixed>>}
+     * @return array{staticRoutes: array<string, array<string, RoutePlan>>, dynamicRoutes: array<string, array<int, RoutePlan>>, tasks: array<string, TaskPlan>}
      */
     public function compile(array $classes): array
     {
@@ -109,13 +110,18 @@ final class RouteCompiler
         $raw = '';
         foreach (['getPath', 'getPrefix', 'getName'] as $method) {
             if (method_exists($attr, $method)) {
-                $raw = (string) $attr->{$method}();
+                $value = $attr->{$method}();
+                // A dynamic method-name call can't be statically resolved to
+                // a return type; every real caller (Controller::getPath(),
+                // Manager::getName()) returns string, but this narrows
+                // explicitly rather than assuming it.
+                $raw = is_string($value) ? $value : '';
                 break;
             }
         }
         // For controllers, treat prefix as a URL path; for managers it’s a plain name.
         // We standardize to "string" here and let the per-kind compilers format as needed.
-        return trim((string) $raw);
+        return trim($raw);
     }
 
     /**
@@ -123,8 +129,8 @@ final class RouteCompiler
      * Populates $staticRoutes and $dynamicRoutes by reference.
      *
      * @param ReflectionClass<object> $rc
-     * @param array<string, array<string, array<string, mixed>>> $staticRoutes
-     * @param array<string, array<int, array<string, mixed>>> $dynamicRoutes
+     * @param array<string, array<string, RoutePlan>> $staticRoutes
+     * @param array<string, array<int, RoutePlan>> $dynamicRoutes
      */
     private function compileController(
         ReflectionClass $rc,
@@ -237,10 +243,15 @@ final class RouteCompiler
     {
         $methodAttr = $method->getAttributes($attributeClass)[0] ?? null;
         if ($methodAttr) {
-            return $methodAttr->newInstance()->{$property};
+            $value = $methodAttr->newInstance()->{$property};
+            return is_string($value) ? $value : null;
         }
         $classAttr = $rc->getAttributes($attributeClass)[0] ?? null;
-        return $classAttr ? $classAttr->newInstance()->{$property} : null;
+        if (!$classAttr) {
+            return null;
+        }
+        $value = $classAttr->newInstance()->{$property};
+        return is_string($value) ? $value : null;
     }
 
     /**
@@ -296,7 +307,7 @@ final class RouteCompiler
      * All tasks behave like "static" entries (no HTTP method, direct lookup by name).
      *
      * @param ReflectionClass<object> $rc
-     * @param array<string, array<string, mixed>> $tasks
+     * @param array<string, TaskPlan> $tasks
      */
     private function compileManager(
         ReflectionClass $rc,
@@ -355,7 +366,7 @@ final class RouteCompiler
     /**
      * Collect #[Inject] property metadata once per class.
      * @param ReflectionClass<object> $rc
-     * @return array<int, array{name: string, type: string|null}>
+     * @return array<int, PropInjectEntry>
      */
     private function collectPropertyInjections(ReflectionClass $rc): array
     {
@@ -379,8 +390,8 @@ final class RouteCompiler
      * 'handle' method. Each Middleware class is container-resolved at dispatch
      * time so it can itself use #[Inject].
      *
-     * @param \ReflectionAttribute<object>[] $attributes
-     * @return array<int, array{class: string, method: string, propInject: array<int, array{name: string, type: string|null}>}>
+     * @param \ReflectionAttribute<Middleware>[] $attributes
+     * @return array<int, MiddlewareEntry>
      */
     private function collectMiddlewares(array $attributes): array
     {
@@ -388,7 +399,7 @@ final class RouteCompiler
         foreach ($attributes as $attr) {
             $instance = $attr->newInstance();
             $callable = $instance->callable;
-            if (!isset($callable[0]) || !class_exists($callable[0])) {
+            if (!class_exists($callable[0])) {
                 continue;
             }
             $middlewares[] = [
@@ -412,11 +423,11 @@ final class RouteCompiler
         $argPlan = [];
 
         foreach ($method->getParameters() as $param) {
-            $type = match (true) {
-                is_null($param->getType()) => null,
-                method_exists($param->getType(), 'getName') => $param->getType()->getName(),
-                default => null,
-            };
+            $paramType = $param->getType();
+            // Only a plain named type (string, int, Some\Class, ...) is
+            // usable below; union/intersection types (the only other
+            // ReflectionType subtypes) have no single name to extract.
+            $type = $paramType instanceof ReflectionNamedType ? $paramType->getName() : null;
 
             $bodyAttr = $param->getAttributes(Body::class)[0] ?? null;
             $queryAttr = $param->getAttributes(Query::class)[0] ?? null;
@@ -450,8 +461,8 @@ final class RouteCompiler
     }
 
     /**
-     * Extract both route attribute (must have getPath + getHttpMethod) and optional formatter.
-     * @return array{0: object|null, 1: object|null}
+     * Extract both route attribute (must implement RouteAttribute) and optional formatter.
+     * @return array{0: RouteAttribute|null, 1: object|null}
      */
     private function extractRouteAndFormatter(ReflectionMethod $method): array
     {
@@ -460,7 +471,7 @@ final class RouteCompiler
 
         foreach ($method->getAttributes() as $attr) {
             $instance = $attr->newInstance();
-            if (method_exists($instance, 'getPath') && method_exists($instance, 'getHttpMethod')) {
+            if ($instance instanceof RouteAttribute) {
                 $routeAttr = $instance;
             }
             if (
@@ -477,7 +488,7 @@ final class RouteCompiler
 
     /**
      * Extract only a formatter (for tasks; optional).
-     * @return array{type: string, options: array<string, mixed>|null}
+     * @return FormatterSpec
      */
     private function extractFormatterOnly(ReflectionMethod $method): array
     {
@@ -497,13 +508,25 @@ final class RouteCompiler
 
     /**
      * Normalize formatter into a plan-friendly array.
-     * @return array{type: string, options: array<string, mixed>|null}
+     * @return FormatterSpec
      */
     private function normalizeFormatter(?object $formatterAttr): array
     {
-        return $formatterAttr
-            ? ['type' => get_class($formatterAttr), 'options' => get_object_vars($formatterAttr)]
-            : ['type' => 'json', 'options' => null];
+        if ($formatterAttr === null) {
+            return ['type' => 'json', 'options' => null];
+        }
+
+        // get_object_vars() is typed array<mixed> by PHPStan (it can't
+        // guarantee string keys for an arbitrary object) even though a real
+        // object's property names are always strings -- narrow explicitly.
+        $options = [];
+        foreach (get_object_vars($formatterAttr) as $key => $value) {
+            if (is_string($key)) {
+                $options[$key] = $value;
+            }
+        }
+
+        return ['type' => get_class($formatterAttr), 'options' => $options];
     }
 
     /** Extract task name from a #[Task(...)] attribute instance defensively. */
@@ -512,8 +535,8 @@ final class RouteCompiler
         // Support common shapes: ->getName(), public $name, or ->name()
         foreach (['getName', 'name', '__toString'] as $method) {
             if (method_exists($taskAttr, $method)) {
-                $val = (string) $taskAttr->{$method}();
-                if ($val !== '') {
+                $val = $taskAttr->{$method}();
+                if (is_string($val) && $val !== '') {
                     return $val;
                 }
             }

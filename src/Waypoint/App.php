@@ -49,8 +49,13 @@ class App
             ? $fileSystem->loadCachedRouteData()
             : null;
 
-        $allClasses = (is_array($cachedData['services'] ?? null) ? $cachedData['services'] : null)
-            ?? $this->discoverAllClasses($controllers);
+        $cachedServices = $cachedData['services'] ?? null;
+        $allClasses = is_array($cachedServices)
+            ? array_values(array_filter(
+                $cachedServices,
+                static fn(mixed $v): bool => is_string($v) && class_exists($v)
+            ))
+            : $this->discoverAllClasses($controllers);
 
         $this->initDependencyInjection($allClasses);
 
@@ -73,7 +78,7 @@ class App
      */
     public function useCors(): void
     {
-        $this->use(function (Request $req, Response $res, $next): mixed {
+        $this->use(function (Request $req, Response $res, callable $next): mixed {
             foreach ($this->container->get(CorsOptions::class)->toHeaders() as $header => $value) {
                 $res = $res->withHeader($header, $value);
             }
@@ -87,14 +92,14 @@ class App
 
     private function useWaypointAcceptHeader(): void
     {
-        $this->use(function (Request $req, Response $res, $next): mixed {
+        $this->use(function (Request $req, Response $res, callable $next): mixed {
             // A direct case-insensitive scan for the one header we care
             // about, instead of allocating a whole lowercased copy of
             // every header via array_change_key_case() on every request.
             $req->acceptPartial = false;
             foreach ($req->headers as $name => $value) {
                 if (strcasecmp($name, 'X-Waypoint-Accept') === 0) {
-                    $req->acceptPartial = strcasecmp((string) $value, 'partial') === 0;
+                    $req->acceptPartial = strcasecmp($value, 'partial') === 0;
                     break;
                 }
             }
@@ -104,10 +109,11 @@ class App
 
     public function useJwt(): void
     {
-        $this->use(function (Request $req, Response $res, $next) {
+        $this->use(function (Request $req, Response $res, callable $next) {
             // Ensure "Authorization" fallback is always applied
-            if (isset($_SERVER['AUTHORIZATION']) && !isset($req->headers['Authorization'])) {
-                $req->headers['Authorization'] = $_SERVER['AUTHORIZATION'];
+            $serverAuth = $_SERVER['AUTHORIZATION'] ?? null;
+            if (is_string($serverAuth) && !isset($req->headers['Authorization'])) {
+                $req->headers['Authorization'] = $serverAuth;
             }
 
             // Attempt to parse JWT
@@ -121,8 +127,9 @@ class App
             // load too.
             if ($payload === null) {
                 $cookieName = $this->container->get(JWTOptions::class)->cookieName;
-                if ($cookieName !== null && isset($_COOKIE[$cookieName])) {
-                    $payload = JWT::decode($_COOKIE[$cookieName]);
+                $cookieValue = $cookieName !== null ? ($_COOKIE[$cookieName] ?? null) : null;
+                if (is_string($cookieValue)) {
+                    $payload = JWT::decode($cookieValue);
                 }
             }
 
@@ -178,7 +185,21 @@ class App
         }
 
         try {
-            echo $this->router->executeTask(name: $argv[1], argv: $argv, argc: $argc);
+            $result = $this->router->executeTask(name: $argv[1], argv: $argv, argc: $argc);
+            // A task's return is `mixed` (see Router::executeTask()), but
+            // every real task in this codebase returns a string -- the
+            // other arms only exist so an oddly-written task can't fatal
+            // echo itself, not because any of them are exercised in
+            // practice.
+            echo match (true) {
+                is_string($result) => $result,
+                // @codeCoverageIgnoreStart
+                is_scalar($result) => (string) $result,
+                $result instanceof \Stringable => (string) $result,
+                $result === null => '',
+                default => json_encode($result) ?: '',
+                // @codeCoverageIgnoreEnd
+            };
         } catch (Throwable $e) {
             fwrite(STDERR, $e->getMessage() . "\n");
             return 1;
@@ -252,9 +273,10 @@ class App
                     return;
                 }
                 // @codeCoverageIgnoreEnd
+                $body = json_encode(['error' => $e->getMessage(), 'details' => $e->getErrors()]);
                 $res->status($e->getCode() ?: 422)
                     ->withHeader('Content-Type', 'application/json')
-                    ->write(json_encode(['error' => $e->getMessage(), 'details' => $e->getErrors()]))
+                    ->write($body !== false ? $body : '{"error":"Validation failed"}')
                     ->send();
             }
         );
@@ -289,9 +311,10 @@ class App
 
     private function sendErrorResponse(Response $res, int $status, string $message): void
     {
+        $body = json_encode(['error' => $message]);
         $res->status($status)
             ->withHeader('Content-Type', 'application/json')
-            ->write(json_encode(['error' => $message]))
+            ->write($body !== false ? $body : '{"error":"Error"}')
             ->send();
     }
 
@@ -369,6 +392,7 @@ class App
         }
     }
 
+    /** @param class-string $cls */
     private function injectServiceProperties(string $cls, object $instance): void
     {
         // Same exclusion discoverAllClasses() already applies, and for the
@@ -387,7 +411,7 @@ class App
                 continue;
             }
             $type = self::namedTypeOf($prop);
-            if (!$type || in_array($type, $notContainerManaged, true) || !$this->container->has($type)) {
+            if (!$type || in_array($type, $notContainerManaged, true) || !class_exists($type) || !$this->container->has($type)) {
                 continue;
             }
             $prop->setValue($instance, $this->container->get($type));
@@ -423,7 +447,7 @@ class App
             foreach ($rc->getProperties() as $prop) {
                 foreach ($prop->getAttributes(Inject::class) as $attr) {
                     $type = self::namedTypeOf($prop);
-                    if ($type && !in_array($type, $notContainerManaged, true) && !in_array($type, $all, true)) {
+                    if ($type && class_exists($type) && !in_array($type, $notContainerManaged, true) && !in_array($type, $all, true)) {
                         $all[] = $type;
                         $queue[] = $type;
                     }
@@ -435,7 +459,7 @@ class App
                 foreach ($constructor->getParameters() as $param) {
                     foreach ($param->getAttributes(Inject::class) as $attr) {
                         $type = self::namedTypeOf($param);
-                        if ($type && !in_array($type, $notContainerManaged, true) && !in_array($type, $all, true)) {
+                        if ($type && class_exists($type) && !in_array($type, $notContainerManaged, true) && !in_array($type, $all, true)) {
                             $all[] = $type;
                             $queue[] = $type;
                         }
@@ -460,7 +484,12 @@ class App
         return $type instanceof ReflectionNamedType ? $type->getName() : null;
     }
 
-    public function get(string $class): mixed
+    /**
+     * @template T of object
+     * @param class-string<T> $class
+     * @return T|null
+     */
+    public function get(string $class): ?object
     {
         try {
             return $this->container->get($class);
@@ -486,7 +515,7 @@ class App
 
     public function configure(callable $config): void
     {
-        $reflection = new ReflectionFunction($config);
+        $reflection = new ReflectionFunction(\Closure::fromCallable($config));
         $args = [];
 
         foreach ($reflection->getParameters() as $param) {
@@ -498,7 +527,20 @@ class App
                 );
             }
 
-            $args[] = $this->container->get($type->getName());
+            $typeName = $type->getName();
+            // @codeCoverageIgnoreStart
+            // Every real Options class configure() is ever called with
+            // exists -- this only guards the theoretical case of a typo'd
+            // class name PHP still allows as a type hint, and is what lets
+            // PHPStan treat $typeName as class-string below.
+            if (!class_exists($typeName)) {
+                throw new InvalidArgumentException(
+                    "Closure parameters must be type-hinted with a non-builtin Options class"
+                );
+            }
+            // @codeCoverageIgnoreEnd
+
+            $args[] = $this->container->get($typeName);
         }
 
         $config(...$args);

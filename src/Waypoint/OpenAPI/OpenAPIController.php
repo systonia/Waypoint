@@ -78,6 +78,17 @@ class OpenAPIController
             throw new NotFoundException("Asset '$safeName' not found.");
         }
 
-        return file_get_contents($path);
+        $content = @file_get_contents($path);
+        // @codeCoverageIgnoreStart
+        // Only reachable via a race (deleted/permissions changed between
+        // is_file()/is_readable() and file_get_contents()) that can't be
+        // reliably reproduced cross platform -- same guard as
+        // FileSystem::readViewAssetFile().
+        if ($content === false) {
+            throw new NotFoundException("Asset '$safeName' not found.");
+        }
+        // @codeCoverageIgnoreEnd
+
+        return $content;
     }
 }

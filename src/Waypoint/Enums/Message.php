@@ -8,14 +8,19 @@ enum Message: string
     /**
      * Undocumented function
      *
-     * @param array<string, mixed> $vars
+     * @param array<array-key, mixed> $vars
      * @return string
      */
     public function format(array $vars = []): string
     {
         $result = $this->value;
         foreach ($vars as $key => $value) {
-            $result = str_replace('{' . $key . '}', (string) $value, $result);
+            $replacement = match (true) {
+                is_scalar($value) => (string) $value,
+                $value instanceof \Stringable => (string) $value,
+                default => '',
+            };
+            $result = str_replace('{' . $key . '}', $replacement, $result);
         }
         return $result;
     }

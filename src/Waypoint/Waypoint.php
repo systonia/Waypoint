@@ -2,6 +2,7 @@
 
 namespace Waypoint;
 
+use RuntimeException;
 use Stringable;
 
 class Waypoint {
@@ -38,15 +39,26 @@ class Waypoint {
 
     public static function getRouter(): Router
     {
+        if (self::$instance === null) {
+            throw new RuntimeException('Waypoint::getRouter() called before Waypoint::create().');
+        }
         return self::$instance->getRouter();
     }
 
     public static function getContainer(): Container
     {
+        if (self::$instance === null) {
+            throw new RuntimeException('Waypoint::getContainer() called before Waypoint::create().');
+        }
         return self::$instance->getContainer();
     }
 
-    public static function getConfig(string $className): mixed
+    /**
+     * @template T of object
+     * @param class-string<T> $className
+     * @return T
+     */
+    public static function getConfig(string $className): object
     {
         return self::getContainer()->get($className);
     }

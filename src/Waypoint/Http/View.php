@@ -276,7 +276,7 @@ class View
         if ($this->layoutAssets['css'] === null && $this->layoutAssets['js'] === null) {
             return '';
         }
-        return 'data-view="' . htmlspecialchars($this->layoutName, ENT_QUOTES) . '"';
+        return 'data-view="' . htmlspecialchars($this->layoutName ?? '', ENT_QUOTES) . '"';
     }
 
     /**
@@ -303,7 +303,12 @@ class View
         if ($this->currentSection === null) {
             throw new RuntimeException("No section is currently started.");
         }
-        $content = ob_get_clean();
+        // @codeCoverageIgnoreStart
+        // ob_get_clean() is only typed to allow false for when there's no
+        // active output buffer to pop -- can't happen right after the
+        // ob_start() in startSection() above.
+        $content = ob_get_clean() ?: '';
+        // @codeCoverageIgnoreEnd
         $this->sections[$this->currentSection] = $content;
         $this->currentSection = null;
     }
@@ -324,12 +329,7 @@ class View
         return '';
     }
 
-    /**
-     * Undocumented function
-     *
-     * @return bool|string
-     */
-    public function render()
+    public function render(): string
     {
         $model = $this->model;
         $viewFile = Waypoint::getConfig(RendererOptions::class)->directory . "/{$this->view}.php";
@@ -340,7 +340,12 @@ class View
         // Render view (inside $this context)
         ob_start();
         include $viewFile;
-        $content = ob_get_clean();
+        // @codeCoverageIgnoreStart
+        // ob_get_clean() is only typed to allow false for when there's no
+        // active output buffer to pop -- can't happen right after the
+        // ob_start() immediately above.
+        $content = ob_get_clean() ?: '';
+        // @codeCoverageIgnoreEnd
 
         if ($this->layout !== null) {
             $layoutFile = Waypoint::getConfig(RendererOptions::class)->directory . '/' . $this->layout;
@@ -364,7 +369,9 @@ class View
 
             ob_start();
             include $layoutFile;
-            return ob_get_clean();
+            // @codeCoverageIgnoreStart
+            return ob_get_clean() ?: '';
+            // @codeCoverageIgnoreEnd
         } else {
             return $content;
         }
