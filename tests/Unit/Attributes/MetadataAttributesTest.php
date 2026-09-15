@@ -4,11 +4,12 @@ namespace Waypoint\Tests\Unit\Attributes;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use Waypoint\Attributes\{Summary, Tags, Throws, Ignore, Schema, Property, Inject, Middleware};
+use Waypoint\Attributes\{Summary, Tags, Throws, Ignore, Schema, Property, Inject, Middleware, NoGzip};
 use Waypoint\Exceptions\NotFoundException;
 
 #[Ignore]
 #[Schema('Widget')]
+#[NoGzip]
 class MetadataAttributes_ClassFixture
 {
     #[Property]
@@ -44,6 +45,14 @@ final class MetadataAttributesTest extends TestCase
             ->getAttributes(Ignore::class)[0]->newInstance();
 
         $this->assertInstanceOf(Ignore::class, $attr);
+    }
+
+    public function testNoGzipIsInstantiable(): void
+    {
+        $attr = (new ReflectionClass(MetadataAttributes_ClassFixture::class))
+            ->getAttributes(NoGzip::class)[0]->newInstance();
+
+        $this->assertInstanceOf(NoGzip::class, $attr);
     }
 
     public function testSchemaStoresName(): void

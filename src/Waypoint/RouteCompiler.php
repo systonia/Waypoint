@@ -19,6 +19,7 @@ use Waypoint\Attributes\{
     JSONFormatter,
     Manager,
     Middleware,
+    NoGzip,
     SimpleXmlFormatter,
     Task
 };
@@ -130,6 +131,11 @@ final class RouteCompiler
         // Pre-compute class-level middleware once per controller; it runs
         // before any method-level middleware on every route below.
         $classMiddlewares = $this->collectMiddlewares($rc->getAttributes(Middleware::class));
+        // #[NoGzip] on the class disables compression for every route
+        // below regardless of the method's own attributes -- combined
+        // with each method's own below into a single 'gzip' bool per
+        // route, so Response::maybeCompress() never has to reflect.
+        $classHasNoGzip = $rc->getAttributes(NoGzip::class) !== [];
 
         foreach ($rc->getMethods() as $method) {
             [$routeAttr, $formatterAttr] = $this->extractRouteAndFormatter($method);
@@ -150,6 +156,7 @@ final class RouteCompiler
             $formatter = $this->normalizeFormatter($formatterAttr);
             $methodMiddlewares = $this->collectMiddlewares($method->getAttributes(Middleware::class));
             $middlewares = [...$classMiddlewares, ...$methodMiddlewares];
+            $methodHasNoGzip = $method->getAttributes(NoGzip::class) !== [];
 
             $plan = [
                 'httpMethod' => strtoupper($routeAttr->getHttpMethod()),
@@ -161,6 +168,7 @@ final class RouteCompiler
                 'propInject' => $propInject,
                 'formatter' => $formatter,
                 'middlewares' => $middlewares,
+                'gzip' => !($classHasNoGzip || $methodHasNoGzip),
                 'throws' => [],
             ];
 

@@ -23,6 +23,7 @@ routing and partial HTML views over AJAX.
 - JWT authentication (`useJwt()`), with a required (never-defaulted) signing secret
 - An HTML-rendering MVC view layer, with layouts, sections, and automatic scoped CSS/JS per view
 - Static file serving from a configured public directory
+- Gzip response compression, size-thresholded, with an opt-out `#[NoGzip]` attribute per controller/route
 - PSR-3 compatible logging (plug in any PSR-3 logger, or use `LoggerOptions::addMono()` for Monolog)
 - CLI task runner (`#[Manager]`/`#[Task]`), for the same app to serve HTTP and run background jobs
 - A complete OpenAPI 3.1.0 generator, driven by a compiled attribute cache rather than live reflection
@@ -420,6 +421,48 @@ Left unset (the default), no static directory is served at all. Requests are res
 plus a containment check, so a path can never escape `publicDirectory` — `/../`-style traversal 404s
 instead of serving anything outside it. `.css`/`.js`/`.mjs`/`.json`/`.svg`/`.html` get a fixed
 `Content-Type`; anything else falls back to `mime_content_type()`, then `application/octet-stream`.
+
+---
+
+## Gzip Compression
+
+Every response funnels through `Response::send()`, which gzips the body when the client's
+`Accept-Encoding` header includes `gzip` and the body meets a configurable size threshold — compressing
+a tiny response is a net loss once gzip's own framing overhead is counted, so anything shorter than
+`CompressionOptions::$minBytes` (default `1024` bytes) is always sent uncompressed. On by default, no
+setup required:
+
+```php
+use Waypoint\Options\CompressionOptions;
+
+$app->configure(function (CompressionOptions $opts) {
+    $opts->minBytes = 2048; // default: 1024
+    $opts->enabled = false; // default: true — turns compression off everywhere
+});
+```
+
+A compressed response gets `Content-Encoding: gzip` and `Vary: Accept-Encoding`; `Content-Length` always
+reflects the actual (possibly compressed) bytes being sent. A response that already carries its own
+`Content-Encoding` is left alone rather than double-encoded.
+
+Opt individual routes out with `#[NoGzip]`, on the controller class (every route on it) or a single
+method (just that route):
+
+```php
+use Waypoint\Attributes\{Controller, Get, NoGzip};
+
+#[Controller('/downloads')]
+#[NoGzip] // every route below skips compression
+class DownloadsController
+{
+    #[Get('/report.csv')]
+    #[NoGzip] // equivalent here, since the whole class already opts out
+    public function report(): string
+    {
+        // ...
+    }
+}
+```
 
 ---
 

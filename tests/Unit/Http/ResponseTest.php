@@ -4,14 +4,27 @@ namespace Waypoint\Tests\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
 use Waypoint\Http\Response;
+use Waypoint\Options\CompressionOptions;
 
 final class ResponseTest extends TestCase
 {
+    private ?string $originalAcceptEncoding;
+
     protected function setUp(): void
     {
         // PHP tracks "sent" headers process-wide even under the CLI SAPI;
         // clear them so each test observes only its own send() call.
         header_remove();
+        $this->originalAcceptEncoding = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? null;
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->originalAcceptEncoding !== null) {
+            $_SERVER['HTTP_ACCEPT_ENCODING'] = $this->originalAcceptEncoding;
+        } else {
+            unset($_SERVER['HTTP_ACCEPT_ENCODING']);
+        }
     }
 
     private function sentHeaderLines(): array
@@ -28,6 +41,18 @@ final class ResponseTest extends TestCase
             fn(string $h) => strtolower(explode(':', $h, 2)[0]),
             $this->sentHeaderLines()
         );
+    }
+
+    /** The value of the (first) sent header with this name, case-insensitive, or null if it was never sent. */
+    private function sentHeaderValue(string $name): ?string
+    {
+        foreach ($this->sentHeaderLines() as $line) {
+            [$sentName, $value] = array_map('trim', explode(':', $line, 2) + [1 => '']);
+            if (strcasecmp($sentName, $name) === 0) {
+                return $value;
+            }
+        }
+        return null;
     }
 
     /** Every "Set-Cookie" header's value (the part after "Set-Cookie: "), in send() order. */
@@ -222,5 +247,166 @@ final class ResponseTest extends TestCase
         ob_end_clean();
 
         $this->assertSame('session=; Path=/app; Domain=example.com; Max-Age=0; HttpOnly; SameSite=Lax', $this->sentCookies()[0]);
+    }
+
+    public function testDisableGzipIsChainable(): void
+    {
+        $res = new Response();
+        $this->assertSame($res, $res->disableGzip());
+    }
+
+    public function testSendCompressesWhenClientAcceptsGzipAndBodyMeetsTheThreshold(): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip, deflate, br';
+        $body = str_repeat('a', 2000);
+        $res = (new Response())->write($body);
+
+        ob_start();
+        $res->send();
+        $output = ob_get_clean();
+
+        $this->assertSame('gzip', $this->sentHeaderValue('Content-Encoding'));
+        $this->assertSame($body, gzdecode($output));
+    }
+
+    public function testCompressedResponseGetsAVaryAcceptEncodingHeader(): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';
+        $res = (new Response())->write(str_repeat('a', 2000));
+
+        ob_start();
+        $res->send();
+        ob_end_clean();
+
+        $this->assertSame('Accept-Encoding', $this->sentHeaderValue('Vary'));
+    }
+
+    public function testCompressedResponseAppendsToAnAlreadySetVaryHeader(): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';
+        $res = (new Response())->withHeader('Vary', 'Cookie')->write(str_repeat('a', 2000));
+
+        ob_start();
+        $res->send();
+        ob_end_clean();
+
+        $this->assertSame('Cookie, Accept-Encoding', $this->sentHeaderValue('Vary'));
+    }
+
+    public function testContentLengthReflectsTheCompressedBodyNotTheOriginal(): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';
+        $body = str_repeat('a', 2000);
+        $res = (new Response())->write($body);
+
+        ob_start();
+        $res->send();
+        $output = ob_get_clean();
+
+        $this->assertSame((string) strlen($output), $this->sentHeaderValue('Content-Length'));
+        $this->assertNotSame((string) strlen($body), $this->sentHeaderValue('Content-Length'));
+    }
+
+    public function testSendDoesNotCompressWhenTheClientSendsNoAcceptEncodingHeader(): void
+    {
+        unset($_SERVER['HTTP_ACCEPT_ENCODING']);
+        $body = str_repeat('a', 2000);
+        $res = (new Response())->write($body);
+
+        ob_start();
+        $res->send();
+        $output = ob_get_clean();
+
+        $this->assertNull($this->sentHeaderValue('Content-Encoding'));
+        $this->assertSame($body, $output);
+    }
+
+    public function testSendDoesNotCompressWhenTheClientAcceptEncodingDoesNotMentionGzip(): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'br, deflate';
+        $body = str_repeat('a', 2000);
+        $res = (new Response())->write($body);
+
+        ob_start();
+        $res->send();
+        $output = ob_get_clean();
+
+        $this->assertSame($body, $output);
+    }
+
+    public function testSendDoesNotCompressABodyBelowTheConfiguredThreshold(): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';
+        $options = new CompressionOptions();
+        $options->minBytes = 1024;
+        $body = str_repeat('a', 100);
+        $res = (new Response($options))->write($body);
+
+        ob_start();
+        $res->send();
+        $output = ob_get_clean();
+
+        $this->assertNull($this->sentHeaderValue('Content-Encoding'));
+        $this->assertSame($body, $output);
+    }
+
+    public function testSendCompressesABodyAtOrAboveACustomThreshold(): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';
+        $options = new CompressionOptions();
+        $options->minBytes = 50;
+        $body = str_repeat('a', 50);
+        $res = (new Response($options))->write($body);
+
+        ob_start();
+        $res->send();
+        $output = ob_get_clean();
+
+        $this->assertSame('gzip', $this->sentHeaderValue('Content-Encoding'));
+    }
+
+    public function testSendDoesNotCompressWhenCompressionOptionsDisablesIt(): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';
+        $options = new CompressionOptions();
+        $options->enabled = false;
+        $body = str_repeat('a', 2000);
+        $res = (new Response($options))->write($body);
+
+        ob_start();
+        $res->send();
+        $output = ob_get_clean();
+
+        $this->assertNull($this->sentHeaderValue('Content-Encoding'));
+        $this->assertSame($body, $output);
+    }
+
+    public function testSendDoesNotCompressWhenDisableGzipWasCalled(): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';
+        $body = str_repeat('a', 2000);
+        $res = (new Response())->write($body);
+        $res->disableGzip();
+
+        ob_start();
+        $res->send();
+        $output = ob_get_clean();
+
+        $this->assertNull($this->sentHeaderValue('Content-Encoding'));
+        $this->assertSame($body, $output);
+    }
+
+    public function testSendDoesNotDoubleCompressAResponseThatAlreadyHasAContentEncoding(): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';
+        $body = str_repeat('a', 2000);
+        $res = (new Response())->withHeader('Content-Encoding', 'identity')->write($body);
+
+        ob_start();
+        $res->send();
+        $output = ob_get_clean();
+
+        $this->assertSame('identity', $this->sentHeaderValue('Content-Encoding'));
+        $this->assertSame($body, $output);
     }
 }

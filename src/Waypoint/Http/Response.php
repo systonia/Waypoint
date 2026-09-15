@@ -2,6 +2,8 @@
 
 namespace Waypoint\Http;
 
+use Waypoint\Options\CompressionOptions;
+
 /**
  * Represents an HTTP response.
  */
@@ -13,6 +15,16 @@ class Response
      * @var integer
      */
     private int $status = 200;
+
+    /**
+     * Set by Router::dispatch() when the matched route's #[NoGzip]
+     * (class- or method-level) says this response must never be
+     * compressed, regardless of what CompressionOptions/Accept-Encoding
+     * would otherwise allow -- see maybeCompress().
+     *
+     * @var bool
+     */
+    private bool $gzipDisabled = false;
 
     /**
      * Undocumented variable
@@ -37,6 +49,21 @@ class Response
      * @var string[]
      */
     private array $cookies = [];
+
+    public function __construct(private CompressionOptions $compressionOptions = new CompressionOptions())
+    {
+    }
+
+    /**
+     * Opts this one response out of gzip compression -- see $gzipDisabled.
+     * Called by Router::dispatch() for a route carrying #[NoGzip]; nothing
+     * else in this class needs to call it directly.
+     */
+    public function disableGzip(): self
+    {
+        $this->gzipDisabled = true;
+        return $this;
+    }
 
     /**
      * Undocumented function
@@ -176,19 +203,25 @@ class Response
      */
     public function send(): void
     {
+        $body = $this->maybeCompress($this->body);
+
         if (!headers_sent()) {
             // Set HTTP status code
             http_response_code($this->status);
 
-            // Automatically add Content-Length header if not provided
-            if (!isset($this->headers['Content-Length'])) {
-                header('Content-Length: ' . strlen($this->body));
-            }
-
-            // Send all custom headers
+            // Send all custom headers except Content-Length -- always set
+            // fresh below instead, from whatever body actually ends up
+            // being sent: maybeCompress() can shrink it, so any
+            // Content-Length a caller already set here (e.g. from the
+            // uncompressed content) would otherwise win and corrupt the
+            // response.
             foreach ($this->headers as $name => $value) {
+                if (strcasecmp($name, 'Content-Length') === 0) {
+                    continue;
+                }
                 header("{$name}: {$value}");
             }
+            header('Content-Length: ' . strlen($body));
 
             // Each cookie as its own "Set-Cookie" header line -- false
             // (don't replace) so a second withCookie() call adds another
@@ -200,6 +233,51 @@ class Response
         }
 
         // Output the body
-        echo $this->body;
+        echo $body;
+    }
+
+    /**
+     * gzip-compresses $body and returns it, or returns $body unchanged, all
+     * gated behind (in order): $gzipDisabled (#[NoGzip] on the matched
+     * route), CompressionOptions::$enabled, the client actually advertising
+     * gzip support via Accept-Encoding, the body meeting
+     * CompressionOptions::$minBytes (compressing a small body is a net loss
+     * once gzip's own framing overhead is counted), and the response not
+     * already carrying its own Content-Encoding (e.g. a file/proxy result
+     * that's already compressed -- never double-encode).
+     */
+    private function maybeCompress(string $body): string
+    {
+        if (
+            $this->gzipDisabled
+            || !$this->compressionOptions->enabled
+            || strlen($body) < $this->compressionOptions->minBytes
+            || isset($this->headers['Content-Encoding'])
+            || !str_contains($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '', 'gzip')
+        ) {
+            return $body;
+        }
+
+        $compressed = gzencode($body, 6);
+        // @codeCoverageIgnoreStart
+        // gzencode() only fails on a genuine zlib-level failure, not
+        // reachable by feeding it any ordinary string -- same category of
+        // guard as FileSystem::readViewAssetFile()'s file_get_contents()
+        // false-branch.
+        if ($compressed === false) {
+            return $body;
+        }
+        // @codeCoverageIgnoreEnd
+
+        $this->headers['Content-Encoding'] = 'gzip';
+        // A compressed response varies by what the client sent in
+        // Accept-Encoding -- tells any cache sitting in front of this
+        // (CDN, browser disk cache) not to serve a gzip response to a
+        // client that never asked for one, or vice versa.
+        $this->headers['Vary'] = isset($this->headers['Vary'])
+            ? $this->headers['Vary'] . ', Accept-Encoding'
+            : 'Accept-Encoding';
+
+        return $compressed;
     }
 }

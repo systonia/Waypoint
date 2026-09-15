@@ -9,7 +9,7 @@ use ReflectionNamedType;
 use InvalidArgumentException;
 
 use Waypoint\{Router};
-use Waypoint\Options\{FileSystemOptions, JWTOptions, CorsOptions};
+use Waypoint\Options\{FileSystemOptions, JWTOptions, CorsOptions, CompressionOptions};
 use Waypoint\Attributes\Inject;
 use Waypoint\Http\{Request, Response};
 use Waypoint\Exceptions\{ForbiddenException, UnauthorizedException, NotFoundException, ValidationException};
@@ -191,7 +191,7 @@ class App
     public function handleHttp(): void
     {
         $req = Request::capture();
-        $res = new Response();
+        $res = new Response($this->container->get(CompressionOptions::class));
 
         $handler = array_reduce(
             array: array_reverse(array: $this->middlewares),

@@ -9,7 +9,7 @@
     "attributes",
     "middleware",
     "cors",
-    "htmx",
+    "gzip",
     "partial-views",
     "progressive-enhancement",
     "ajax",

@@ -182,6 +182,14 @@ class Router
             return;
         }
 
+        // Missing 'gzip' key (a route compiled/cached before #[NoGzip]
+        // existed) defaults to compression allowed, not disabled -- so an
+        // old cached routes.php keeps behaving exactly as before until
+        // it's next rebuilt.
+        if (!($route['gzip'] ?? true)) {
+            $res->disableGzip();
+        }
+
         $controller = $this->resolveController($route['controller']);
         $this->injectControllerProperties($controller, $route['propInject'], $req, $res);
 
