@@ -58,11 +58,15 @@ class LoggerOptions
      * Add one or more loggers (LoggerInterface), with flexible options:
      * - options can be LoggerOptions, string (level), array (levels), or assoc array.
      *
-     * @param LoggerInterface|LoggerInterface[] $logger
+     * @param LoggerInterface|array $logger A single logger, or a plain
+     *  array of them -- native `array` rather than `LoggerInterface[]`,
+     *  since nothing actually constrains an array's element types; any
+     *  element that isn't really a LoggerInterface is silently skipped
+     *  below (the instanceof check), not assumed away.
      * @param LoggerOptions|string|array|null $options
      * @return self
      */
-    public function add($logger, $options = null): self
+    public function add(LoggerInterface|array $logger, $options = null): self
     {
         $loggers = is_array($logger) ? $logger : [$logger];
 

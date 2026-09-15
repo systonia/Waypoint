@@ -142,12 +142,14 @@ class EnvironmentOptions
     // --- Private helpers ---
 
     /**
-     * Returns getenv() as an array (if available).
+     * Returns every system env var as an array -- the no-argument form of
+     * getenv() always returns array (never false; that's only possible
+     * for the single-argument "look up one var" form), so there's nothing
+     * to fall back from.
      */
     private function readSystemEnv(): array
     {
-        $env = getenv();
-        return is_array($env) ? $env : [];
+        return getenv();
     }
 
     /**

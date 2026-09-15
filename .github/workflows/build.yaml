@@ -40,6 +40,9 @@ jobs:
       - name: Run test suite
         run: composer run test
 
+      - name: Run PHPStan
+        run: composer run stan
+
       - name: Show final PHP version used
         run: |
           echo "PHP version used: ${{ steps.phpversion.outputs.php }}"

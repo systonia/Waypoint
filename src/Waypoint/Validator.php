@@ -25,11 +25,10 @@ class Validator
         foreach ($rc->getProperties(ReflectionProperty::IS_PUBLIC) as $prop) {
             $name = $prop->getName();
 
-            if (method_exists($prop, 'isInitialized') && !$prop->isInitialized($dto)) {
-                $value = null;
-            } else {
-                $value = $prop->getValue($dto);
-            }
+            // ReflectionProperty::isInitialized() has existed since PHP
+            // 7.4 -- always present given this framework's own >=8.5
+            // floor, so no method_exists() guard is needed around it.
+            $value = $prop->isInitialized($dto) ? $prop->getValue($dto) : null;
 
             #region #NotBlank
             foreach ($prop->getAttributes(NotBlank::class) as $attr) {

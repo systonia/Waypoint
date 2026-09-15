@@ -15,7 +15,7 @@ class NotFoundException extends Exception implements NotFoundExceptionInterface
     /**
      * Undocumented variable
      *
-     * @var [type]
+     * @var string
      */
     #[\Override]
     protected $message = Message::NotFound->value;

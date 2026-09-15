@@ -3,6 +3,7 @@
 namespace Waypoint;
 
 use ReflectionClass;
+use ReflectionNamedType;
 use ReflectionProperty;
 use RuntimeException;
 
@@ -371,7 +372,8 @@ class Router
             if (!$prop->getAttributes(Inject::class)) {
                 continue;
             }
-            $type = $prop->getType()?->getName();
+            $propType = $prop->getType();
+            $type = $propType instanceof ReflectionNamedType ? $propType->getName() : null;
             if (!$type || !class_exists($type) || !$this->container->has($type)) {
                 continue;
             }

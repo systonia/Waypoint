@@ -133,8 +133,11 @@ final class FileSystem
         $metaFile = $this->getMetaFile();
         $attributesFile = $this->getAttributesFile();
 
+        // getRouteFile()/getMetaFile()/getAttributesFile() are always
+        // strings (their own return type), so only existence needs
+        // checking here.
         foreach ([$routeFile, $metaFile, $attributesFile] as $file) {
-            if (!is_string($file) || !is_file($file)) {
+            if (!is_file($file)) {
                 return false;
             }
         }

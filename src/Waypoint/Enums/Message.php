@@ -23,7 +23,7 @@ enum Message: string
     /**
      * Optional: allow named params (PHP 8.1+)
      *
-     * @param [type] ...$vars
+     * @param mixed ...$vars
      * @return string
      */
     public function interpolate(...$vars): string

@@ -136,11 +136,17 @@ class OpenAPIGenerator
     }
 
     /**
-     * @param object[] $routes Router::getRoutes()' output.
+     * @param array $routes Router::getRoutes()' output -- in practice
+     *  always a list of plain objects, but typed as the same bare `array`
+     *  Router::getRoutes() itself declares (not narrowed to object[]),
+     *  since buildPaths()/getHandlerSpec() deliberately also tolerate an
+     *  array-shaped route (see their own doc); property access below is
+     *  always through `??`, so an array-shaped $route just falls into the
+     *  $unversioned bucket rather than erroring.
      * @param string|null $version See generate()'s own $version doc --
      *  exact-match filter when given, "latest version per group" dedup
      *  when null.
-     * @return object[]
+     * @return array
      */
     protected function selectEligibleRoutes(array $routes, ?string $version): array
     {

@@ -81,15 +81,15 @@ final class RouteCompiler
                 $classAttrInstance instanceof Controller
                 => $this->compileController($rc, $class, $prefix, $staticRoutes, $dynamicRoutes),
 
-                $classAttrInstance instanceof Manager
-                => $this->compileManager($rc, $class, $prefix, $tasks),
-
-                // @codeCoverageIgnoreStart
-                // Unreachable: the loop above only ever sets
-                // $classAttrInstance to a Controller or Manager instance (or
-                // leaves it null, which continue's past this match entirely).
-                default => null, // future-proof
-                // @codeCoverageIgnoreEnd
+                // Always Manager, not just a generic fallback: the loop
+                // above only ever sets $classAttrInstance to a Controller
+                // or a Manager instance (or leaves it null, which continue's
+                // past this match entirely) -- Controller was just ruled
+                // out above, so nothing else reaches this arm. Written as
+                // `default` rather than `instanceof Manager` because that
+                // instanceof would be statically always-true and unusable
+                // (PHPStan rejects a condition it can prove is redundant).
+                default => $this->compileManager($rc, $class, $prefix, $tasks),
             };
         }
 
@@ -349,7 +349,8 @@ final class RouteCompiler
         $propInject = [];
         foreach ($rc->getProperties() as $prop) {
             if ($prop->getAttributes(Inject::class)) {
-                $type = $prop->getType()?->getName();
+                $propType = $prop->getType();
+                $type = $propType instanceof ReflectionNamedType ? $propType->getName() : null;
                 $propInject[] = [
                     'name' => $prop->getName(),
                     'type' => $type,

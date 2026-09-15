@@ -51,12 +51,14 @@ class Response
     private array $cookies = [];
 
     public function __construct(
-        // final: Response isn't `final class` (a consumer app can
-        // reasonably subclass it), but redeclaring this property in a
-        // subclass would silently shadow it -- every method here still
-        // reads/writes the parent's own private slot, so a naive override
-        // would look like it does something and quietly do nothing.
-        final private CompressionOptions $compressionOptions = new CompressionOptions()
+        // private (not final private -- PHPStan rejects that combination
+        // outright, since a private property has no override surface for
+        // final to protect in the first place): a subclass could still
+        // declare its own $compressionOptions, which would just shadow
+        // this one rather than "override" it in any way that matters --
+        // every method here always reads/writes this exact private slot
+        // regardless.
+        private CompressionOptions $compressionOptions = new CompressionOptions()
     ) {
     }
 

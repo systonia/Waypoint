@@ -24,32 +24,32 @@ class View
     protected Environment $env;
 
     /**
-     * Undocumented variable
+     * The view name passed to the constructor, e.g. "ProductDetail".
      *
-     * @var [type]
+     * @var string
      */
-    protected $view;
+    protected string $view;
 
     /**
-     * Undocumented variable
+     * Whatever was passed to the constructor as $model -- commonly an
+     * array, but never itself constrained by View.
      *
-     * @var [type]
+     * @var mixed
      */
-    protected $model;
+    protected mixed $model;
 
     /**
-     * Undocumented variable
-     *
-     * @var [type]
+     * @var bool
      */
-    protected $partial;
+    protected bool $partial;
 
     /**
-     * Undocumented variable
+     * The resolved layout template's basename (e.g. "_Layout.php"), or
+     * null for no layout -- see the constructor's own $layout parameter.
      *
-     * @var [type]
+     * @var string|null
      */
-    protected $layout;
+    protected ?string $layout = null;
 
     /**
      * Undocumented variable
@@ -59,11 +59,12 @@ class View
     protected $sections = [];
 
     /**
-     * Undocumented variable
+     * The name of the section currently being captured via
+     * startSection(), or null when none is open.
      *
-     * @var [type]
+     * @var string|null
      */
-    protected $currentSection = null;
+    protected ?string $currentSection = null;
 
     /**
      * Undocumented variable
@@ -73,14 +74,12 @@ class View
     protected $sectionBufferLevel = 0;
 
     /**
-     * Undocumented function
-     *
-     * @param [type] $view
-     * @param [type] $model
-     * @param boolean $partial
-     * @param [type] $layout
+     * @param string $view
+     * @param mixed $model
+     * @param bool $partial
+     * @param string|null $layout
      */
-    public function __construct($view, $model = null, $partial = false, $layout = null)
+    public function __construct(string $view, mixed $model = null, bool $partial = false, ?string $layout = null)
     {
         $this->view = $view;
         $this->model = $model;
@@ -278,12 +277,10 @@ class View
     }
 
     /**
-     * Undocumented function
-     *
-     * @param [type] $name
+     * @param string $name
      * @return void
      */
-    public function startSection($name): void
+    public function startSection(string $name): void
     {
         if ($this->currentSection !== null) {
             throw new RuntimeException("A section is already started: '{$this->currentSection}'");
@@ -309,13 +306,11 @@ class View
     }
 
     /**
-     * Undocumented function
-     *
-     * @param [type] $name
+     * @param string $name
      * @param boolean $required
      * @return bool|string
      */
-    public function section($name, $required = false): bool|string
+    public function section(string $name, bool $required = false): bool|string
     {
         if (isset($this->sections[$name])) {
             return $this->sections[$name];

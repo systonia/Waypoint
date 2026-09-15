@@ -6,6 +6,8 @@ use Throwable;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionNamedType;
+use ReflectionParameter;
+use ReflectionProperty;
 use InvalidArgumentException;
 
 use Waypoint\{Router};
@@ -229,7 +231,24 @@ class App
     {
         $this->useExceptionHandler(
             ValidationException::class,
-            function (ValidationException $e, Request $req, Response $res): void {
+            // Typed Throwable, not ValidationException, to actually satisfy
+            // useExceptionHandler()'s callable(Throwable, ...) contract --
+            // resolveExceptionHandler() only ever invokes a handler
+            // registered under ValidationException::class with a real
+            // ValidationException (looked up by the thrown exception's own
+            // class/parents), so this narrows back immediately.
+            function (Throwable $e, Request $req, Response $res): void {
+                // @codeCoverageIgnoreStart
+                // Unreachable in practice: resolveExceptionHandler() only
+                // ever selects this handler (registered under
+                // ValidationException::class) for an exception that IS a
+                // ValidationException -- either the exact class or one of
+                // class_parents($e). This exists solely to satisfy
+                // useExceptionHandler()'s callable(Throwable, ...) contract.
+                if (!$e instanceof ValidationException) {
+                    return;
+                }
+                // @codeCoverageIgnoreEnd
                 $res->status($e->getCode() ?: 422)
                     ->withHeader('Content-Type', 'application/json')
                     ->write(json_encode(['error' => $e->getMessage(), 'details' => $e->getErrors()]))
@@ -239,19 +258,19 @@ class App
 
         $this->useExceptionHandler(
             ForbiddenException::class,
-            fn(ForbiddenException $e, Request $req, Response $res) =>
+            fn(Throwable $e, Request $req, Response $res) =>
                 $this->sendErrorResponse($res, $e->getCode() ?: 403, $e->getMessage())
         );
 
         $this->useExceptionHandler(
             UnauthorizedException::class,
-            fn(UnauthorizedException $e, Request $req, Response $res) =>
+            fn(Throwable $e, Request $req, Response $res) =>
                 $this->sendErrorResponse($res, $e->getCode() ?: 401, $e->getMessage())
         );
 
         $this->useExceptionHandler(
             NotFoundException::class,
-            fn(NotFoundException $e, Request $req, Response $res) =>
+            fn(Throwable $e, Request $req, Response $res) =>
                 $this->sendErrorResponse($res, $e->getCode() ?: 404, $e->getMessage())
         );
 
@@ -362,7 +381,7 @@ class App
             if (!$prop->getAttributes(Inject::class)) {
                 continue;
             }
-            $type = $prop->getType()?->getName();
+            $type = self::namedTypeOf($prop);
             if (!$type || in_array($type, $notContainerManaged, true) || !$this->container->has($type)) {
                 continue;
             }
@@ -394,7 +413,7 @@ class App
 
             foreach ($rc->getProperties() as $prop) {
                 foreach ($prop->getAttributes(Inject::class) as $attr) {
-                    $type = $prop->getType()?->getName();
+                    $type = self::namedTypeOf($prop);
                     if ($type && !in_array($type, $notContainerManaged, true) && !in_array($type, $all, true)) {
                         $all[] = $type;
                         $queue[] = $type;
@@ -406,7 +425,7 @@ class App
             if ($constructor) {
                 foreach ($constructor->getParameters() as $param) {
                     foreach ($param->getAttributes(Inject::class) as $attr) {
-                        $type = $param->getType()?->getName();
+                        $type = self::namedTypeOf($param);
                         if ($type && !in_array($type, $notContainerManaged, true) && !in_array($type, $all, true)) {
                             $all[] = $type;
                             $queue[] = $type;
@@ -417,6 +436,19 @@ class App
         }
 
         return $all;
+    }
+
+    /**
+     * The declared type's name, or null if untyped -- or if it's a union/
+     * intersection type, which (unlike a plain ReflectionNamedType) has no
+     * single name to give. #[Inject] is only ever meaningful on a plain
+     * single-class type anyway, so treating either case as "no type" is
+     * exactly the right fallback, not just a type-checker workaround.
+     */
+    private static function namedTypeOf(ReflectionProperty|ReflectionParameter $member): ?string
+    {
+        $type = $member->getType();
+        return $type instanceof ReflectionNamedType ? $type->getName() : null;
     }
 
     public function get(string $class): mixed

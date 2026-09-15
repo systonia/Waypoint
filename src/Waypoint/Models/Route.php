@@ -36,20 +36,18 @@ class Route
     public array $paramNames;
 
     /**
-     * Undocumented variable
+     * [controllerClass, methodName], verbatim.
      *
-     * @var [type]
+     * @var array
      */
-    public $handlerSpec;
+    public array $handlerSpec;
 
     /**
-     * Undocumented function
-     *
      * @param string $method
      * @param string $path
-     * @param [type] $handlerSpec
+     * @param array $handlerSpec
      */
-    public function __construct(string $method, string $path, $handlerSpec)
+    public function __construct(string $method, string $path, array $handlerSpec)
     {
         $this->method = strtoupper($method);
         $this->rawPath = '/' . ltrim(rtrim($path, '/'), '/');

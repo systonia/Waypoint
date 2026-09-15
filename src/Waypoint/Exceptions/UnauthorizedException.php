@@ -14,7 +14,7 @@ class UnauthorizedException extends Exception
     /**
      * Undocumented variable
      *
-     * @var [type]
+     * @var string
      */
     #[\Override]
     protected $message = Message::Unauthorized->value;
