@@ -2,14 +2,14 @@
 
 namespace Waypoint\Tests\Fixtures\Middlewares;
 
-use Waypoint\Http\{Request, Response};
+use Waypoint\Http\{MiddlewareBase, Request, Response};
 use Waypoint\Tests\Fixtures\Support\CallTracker;
 
-class ClassLevelMiddleware
+class ClassLevelMiddleware extends MiddlewareBase
 {
-    public function handle(Request $req, Response $res, callable $next): mixed
+    protected function before(Request $req, Response $res): bool
     {
         CallTracker::record('class-level');
-        return $next($req, $res);
+        return true;
     }
 }

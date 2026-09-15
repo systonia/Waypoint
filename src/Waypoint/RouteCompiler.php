@@ -13,6 +13,7 @@ use ReflectionProperty;
 use Waypoint\Enums\Message;
 use Waypoint\Http\Request;
 use Waypoint\Http\Response;
+use Waypoint\Http\MiddlewareBase;
 use Waypoint\Attributes\{
     Inject,
     Body,
@@ -406,18 +407,42 @@ final class RouteCompiler
         foreach ($attributes as $attr) {
             $instance = $attr->newInstance();
             $callable = $instance->callable;
-            if (!class_exists($callable[0])) {
+            $method = $callable[1] ?? 'handle';
+            // MiddlewareBase is required, not optional: its handle() is
+            // the only valid entry point (final, always runs
+            // before()/$next()/after()), so a middleware that doesn't
+            // extend it -- or that names some other method via
+            // #[Middleware([Class::class, 'notHandle'])] -- is rejected
+            // here, the same "skip at compile time, don't crash app boot"
+            // treatment a nonexistent class already gets below.
+            if (!class_exists($callable[0]) || !self::extendsMiddlewareBase($callable[0]) || $method !== 'handle') {
                 continue;
             }
             $middlewares[] = [
                 'class' => $callable[0],
-                'method' => $callable[1] ?? 'handle',
+                'method' => $method,
                 // Computed once at compile time so #[Inject] works on middleware
                 // classes too, without reflecting on every request.
                 'propInject' => $this->collectPropertyInjections(new ReflectionClass($callable[0])),
             ];
         }
         return $middlewares;
+    }
+
+    /**
+     * Same check as `is_subclass_of($class, MiddlewareBase::class)`,
+     * wrapped so PHPStan doesn't narrow the caller's $class to
+     * class-string<MiddlewareBase> -- ReflectionClass's own template
+     * param isn't covariant, so passing that narrowed type into `new
+     * ReflectionClass($class)` right after would produce a
+     * ReflectionClass<MiddlewareBase> collectPropertyInjections()'s
+     * ReflectionClass<object> parameter then refuses.
+     *
+     * @param class-string $class
+     */
+    private static function extendsMiddlewareBase(string $class): bool
+    {
+        return is_subclass_of($class, MiddlewareBase::class);
     }
 
     /**
