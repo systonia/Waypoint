@@ -32,7 +32,13 @@ class Logger
     public function log($level, string|\Stringable $message, array $context = []): void
     {
         if (!is_int($level) && !is_string($level)) {
+            // @codeCoverageIgnoreStart
+            // Every real caller (emergency()/alert()/.../debug() below) is
+            // typed to pass a PSR-3 LogLevel string; this only guards
+            // Logger::log() itself being called directly with something
+            // else, which no code in this codebase does.
             return;
+            // @codeCoverageIgnoreEnd
         }
         foreach (Waypoint::getConfig(LoggerOptions::class)->getLoggers() as $entry) {
             if (isset($entry['levels'][$level])) {

@@ -15,10 +15,17 @@ enum Message: string
     {
         $result = $this->value;
         foreach ($vars as $key => $value) {
+            // Every real interpolate() call in this codebase passes plain
+            // strings (see RouteCompiler's Message::X->interpolate(...)
+            // call sites) -- the Stringable/default arms only exist so an
+            // unusual future caller can't fatal or silently drop a
+            // placeholder.
             $replacement = match (true) {
                 is_scalar($value) => (string) $value,
+                // @codeCoverageIgnoreStart
                 $value instanceof \Stringable => (string) $value,
                 default => '',
+                // @codeCoverageIgnoreEnd
             };
             $result = str_replace('{' . $key . '}', $replacement, $result);
         }

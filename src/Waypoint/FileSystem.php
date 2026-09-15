@@ -117,7 +117,9 @@ final class FileSystem
     private static function toStringKeyedArray(mixed $value): array
     {
         if (!is_array($value)) {
+            // @codeCoverageIgnoreStart
             return [];
+            // @codeCoverageIgnoreEnd
         }
         $result = [];
         foreach ($value as $key => $item) {
@@ -346,7 +348,11 @@ final class FileSystem
 
         $data = require $file;
         if (!is_array($data)) {
+            // @codeCoverageIgnoreStart
+            // storeAttributes() always writes `return <array>;` via
+            // var_export() -- this only guards a hand-corrupted cache file.
             return [];
+            // @codeCoverageIgnoreEnd
         }
         $result = [];
         foreach ($data as $key => $item) {

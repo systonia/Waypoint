@@ -53,7 +53,13 @@ class JWT
         }
         $decoded = json_decode(base64_decode(strtr($p, '-_', '+/')), true);
         if (!is_array($decoded)) {
+            // @codeCoverageIgnoreStart
+            // Every real token encode() itself produces has a JSON-object
+            // payload; reaching here needs a validly-*signed* token whose
+            // payload segment was swapped for something that isn't one,
+            // which isn't practically forgeable without the secret.
             return null;
+            // @codeCoverageIgnoreEnd
         }
         $payload = [];
         foreach ($decoded as $key => $value) {

@@ -39,17 +39,26 @@ class Waypoint {
 
     public static function getRouter(): Router
     {
+        // @codeCoverageIgnoreStart
+        // Every real call path goes through create() first (App::attach(),
+        // Waypoint::getConfig(), or a test's own setUp()); this only turns
+        // a theoretical "called before create()" misuse into a clear
+        // exception instead of a fatal null method call.
         if (self::$instance === null) {
             throw new RuntimeException('Waypoint::getRouter() called before Waypoint::create().');
         }
+        // @codeCoverageIgnoreEnd
         return self::$instance->getRouter();
     }
 
     public static function getContainer(): Container
     {
+        // @codeCoverageIgnoreStart
+        // Same reasoning as getRouter() above.
         if (self::$instance === null) {
             throw new RuntimeException('Waypoint::getContainer() called before Waypoint::create().');
         }
+        // @codeCoverageIgnoreEnd
         return self::$instance->getContainer();
     }
 

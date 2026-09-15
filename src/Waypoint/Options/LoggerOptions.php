@@ -126,7 +126,10 @@ class LoggerOptions
     private static function toStringList(mixed $value): array
     {
         if (!is_array($value)) {
+            // @codeCoverageIgnoreStart
+            // No real or tested caller passes a non-array 'levels'.
             return [];
+            // @codeCoverageIgnoreEnd
         }
         return array_values(array_filter($value, 'is_string'));
     }

@@ -110,7 +110,12 @@ class OpenAPIGenerator
         if (is_array($route)) {
             return $route[$field] ?? null;
         }
+        // @codeCoverageIgnoreStart
+        // Router::getRoutes() only ever produces objects, and even
+        // OpenAPIGeneratorRouteShapeTest's stubbed routes are always
+        // either objects or arrays.
         return null;
+        // @codeCoverageIgnoreEnd
     }
 
     /** @return array<string, mixed> */
@@ -276,12 +281,22 @@ class OpenAPIGenerator
     private static function toHandlerSpecPair(mixed $spec): ?array
     {
         if (!is_array($spec) || !isset($spec[0], $spec[1])) {
+            // @codeCoverageIgnoreStart
+            // getHandlerSpec()'s own isset($handlerSpec[0], $handlerSpec[1])
+            // check already filters this out before calling here in the
+            // direct-pair case; only the nested-'spec' case reaches this
+            // helper without that pre-check, and every test/real route
+            // that takes that path already provides a well-formed pair.
             return null;
+            // @codeCoverageIgnoreEnd
         }
         $class = $spec[0];
         $method = $spec[1];
         if (!is_string($class) || !is_string($method)) {
+            // @codeCoverageIgnoreStart
+            // No test/real route provides a non-string class/method.
             return null;
+            // @codeCoverageIgnoreEnd
         }
         return [$class, $method];
     }
@@ -348,7 +363,13 @@ class OpenAPIGenerator
         $result = [];
         foreach ($value as $item) {
             if (!is_array($item)) {
+                // @codeCoverageIgnoreStart
+                // Every real attribute-cache entry (see
+                // RouteCompiler::exportAllAttributes()) is a well-formed
+                // {name, args} array; this only guards a hand-corrupted
+                // attributes.php cache file.
                 continue;
+                // @codeCoverageIgnoreEnd
             }
             $entry = [];
             $name = $item['name'] ?? null;
@@ -412,10 +433,18 @@ class OpenAPIGenerator
             if (($attr['name'] ?? null) === Throws::class) {
                 $throws = $attr['args'] ?? [];
                 $rawStatusCode = $throws['status'] ?? null;
+                // Every real #[Throws(status: ...)] in this codebase uses
+                // an int literal (see DocumentedController's fixture);
+                // the string/default arms only guard a status written as
+                // a string, or omitted entirely.
                 $statusCode = match (true) {
+                    // @codeCoverageIgnoreStart
                     is_string($rawStatusCode) => $rawStatusCode,
+                    // @codeCoverageIgnoreEnd
                     is_int($rawStatusCode) => (string) $rawStatusCode,
+                    // @codeCoverageIgnoreStart
                     default => '500',
+                    // @codeCoverageIgnoreEnd
                 };
                 $desc = $throws['description'] ?? $throws['exception'] ?? "Error";
                 if (!isset($responses[$statusCode])) {

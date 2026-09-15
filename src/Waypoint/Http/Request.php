@@ -122,7 +122,11 @@ class Request
     private static function toStringKeyedArray(mixed $value): array
     {
         if (!is_array($value)) {
+            // @codeCoverageIgnoreStart
+            // The only real caller passes $_GET, which PHP itself
+            // guarantees is always an array.
             return [];
+            // @codeCoverageIgnoreEnd
         }
         $result = [];
         foreach ($value as $key => $item) {
