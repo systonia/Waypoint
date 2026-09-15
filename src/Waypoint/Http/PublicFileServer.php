@@ -62,8 +62,7 @@ final class PublicFileServer
 
         $res->withHeader('Content-Type', $mime)
             ->withHeader('Content-Length', (string) filesize($filePath))
-            ->write($content)
-            ->send();
+            ->write($content);
 
         return true;
     }

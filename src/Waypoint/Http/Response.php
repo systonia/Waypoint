@@ -48,6 +48,21 @@ class Response
      */
     private array $cookies = [];
 
+    /**
+     * True once send() has actually run -- makes send() idempotent (see
+     * its own doc). App::handleHttp() is the only place that calls it for
+     * a real request, exactly once, but a custom exception handler
+     * registered via App::useExceptionHandler() (a public extension
+     * point) is free to call it itself too, the way every handler here
+     * did before this became automatic; without this flag, that would
+     * double-send -- echoing the body twice, since send() doesn't clear
+     * it -- once from the handler's own call and once more from
+     * App::handleHttp()'s.
+     *
+     * @var bool
+     */
+    private bool $sent = false;
+
     public function __construct(
         // private (not final private -- PHPStan rejects that combination
         // outright, since a private property has no override surface for
@@ -237,12 +252,21 @@ class Response
     }
 
     /**
-     * Send headers and body to the client.
+     * Send headers and body to the client. Idempotent -- a second call
+     * does nothing (see $sent's own doc for why that matters), so it's
+     * always safe to call directly even though App::handleHttp() also
+     * calls it once, automatically, after the full middleware chain has
+     * run.
      *
      * @return void
      */
     public function send(): void
     {
+        if ($this->sent) {
+            return;
+        }
+        $this->sent = true;
+
         $body = $this->maybeCompress($this->body);
 
         if (!headers_sent()) {

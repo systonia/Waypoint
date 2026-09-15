@@ -6,9 +6,12 @@ use Waypoint\Http\{MiddlewareBase, Request, Response};
 use Waypoint\Tests\Fixtures\Support\CallTracker;
 
 /**
- * Sends its own response and returns false from before() -- proves
+ * Builds its own response and returns false from before() -- proves
  * MiddlewareBase's veto mechanism prevents $next() (and after(), and the
- * controller) from ever running.
+ * controller) from ever running. Doesn't call Response::send() itself --
+ * nothing in this codebase does anymore; App::handleHttp() sends the
+ * final $res exactly once, after the whole pipe (this veto included) has
+ * run.
  */
 class ShortCircuitMiddleware extends MiddlewareBase
 {
@@ -17,8 +20,7 @@ class ShortCircuitMiddleware extends MiddlewareBase
         CallTracker::record('short-circuit');
         $res->status(403)
             ->withHeader('Content-Type', 'application/json')
-            ->write(json_encode(['error' => 'blocked by middleware']))
-            ->send();
+            ->write(json_encode(['error' => 'blocked by middleware']));
         return false;
     }
 }

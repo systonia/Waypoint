@@ -10,7 +10,11 @@ use Waypoint\Tests\Fixtures\Support\CallTracker;
  * overridden here (it's `final` -- attempting to would be a compile-time
  * error), only before()/after(), and CallTracker records their order
  * relative to the controller to prove handle() really does wrap $next()
- * between them.
+ * between them. Both before() and after() set a response header -- proves
+ * both actually reach the client: Response::send() only ever runs once,
+ * in App::handleHttp(), after the *entire* middleware chain (this one
+ * included) has finished, so a header set from either hook is still
+ * there by the time it's sent.
  */
 class BeforeAfterMiddleware extends MiddlewareBase
 {
@@ -21,17 +25,9 @@ class BeforeAfterMiddleware extends MiddlewareBase
         return true;
     }
 
-    /**
-     * Only records the call -- setting a response header here would be a
-     * no-op for a plain (non-View) route: Router::buildRouteHandler()'s
-     * innermost closure already calls Response::send() right after the
-     * controller returns, before the middleware chain unwinds back out
-     * through after(). $req/$res are still real, live objects here (e.g.
-     * for logging, metrics, cleanup), just past the point where mutating
-     * $res has any effect on what was actually sent.
-     */
     protected function after(Request $req, Response $res): void
     {
         CallTracker::record('before-after:after');
+        $res->withHeader('X-After', 'yes');
     }
 }

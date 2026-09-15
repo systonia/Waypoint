@@ -581,8 +581,7 @@ class Router
         $res->withHeader('Content-Type', $mime)
             ->withHeader('Cache-Control', 'public, max-age=31536000, immutable')
             ->withHeader('Content-Length', (string) strlen($content))
-            ->write($content)
-            ->send();
+            ->write($content);
 
         return true;
     }
@@ -638,8 +637,7 @@ class Router
             ->withHeader('Content-Type', 'application/json')
             // A hardcoded literal array always encodes successfully;
             // json_encode() is just typed to allow failure in general.
-            ->write(json_encode(['error' => 'Not found']) ?: '{"error":"Not found"}')
-            ->send();
+            ->write(json_encode(['error' => 'Not found']) ?: '{"error":"Not found"}');
     }
 
     /** @param class-string $class */
@@ -872,8 +870,7 @@ class Router
         }
 
         $res->withHeader('Content-Type', 'text/html')
-            ->write($view->render())
-            ->send();
+            ->write($view->render());
     }
 
     /**

@@ -46,16 +46,17 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
         $this->assertSame(['ok' => true], json_decode($output, true));
     }
 
-    public function testMiddlewareBaseSubclassCanSetResponseHeadersFromBefore(): void
+    public function testMiddlewareBaseSubclassCanSetResponseHeadersFromBothBeforeAndAfter(): void
     {
-        // Only before() is asserted here: by the time after() runs, the
-        // innermost handler has already called Response::send() (see
-        // BeforeAfterMiddleware::after()'s own doc), so a header set from
-        // after() would never reach the client for a plain route like
-        // this one.
+        // Response::send() only runs once, in App::handleHttp(), after
+        // the entire chain (per-route #[Middleware(...)] included) has
+        // unwound -- so a header set from either hook actually reaches
+        // the client, not just before().
         $this->dispatch('GET', '/middleware/before-after');
+        $headers = $this->sentHeaders();
 
-        $this->assertSame('yes', $this->sentHeaders()['x-before'] ?? null);
+        $this->assertSame('yes', $headers['x-before'] ?? null);
+        $this->assertSame('yes', $headers['x-after'] ?? null);
     }
 
     public function testShortCircuitingMiddlewarePreventsTheControllerFromRunning(): void

@@ -83,8 +83,12 @@ class App
                 $res = $res->withHeader($header, $value);
             }
             if ($req->method === 'OPTIONS') {
-                $res->status(204)->send();
-                return $res;
+                // Not calling $next() already short-circuits the rest of
+                // the chain (no dispatch, no controller) -- $res just
+                // needs to carry the 204 status; App::handleHttp() sends
+                // it, once, after the whole pipe unwinds, same as every
+                // other response.
+                return $res->status(204);
             }
             return $next($req, $res);
         });
@@ -213,6 +217,21 @@ class App
      * Public (not gated behind php_sapi_name() like run() is) so it can be
      * driven directly -- e.g. from tests, or a host environment that reports
      * a 'cli'-like SAPI name but is still serving an HTTP request.
+     *
+     * The one and only place Response::send() is called for a real HTTP
+     * request -- every dispatch()/renderResult()/exception-handler code
+     * path below only ever builds $res (status/headers/body) and returns;
+     * none of them send it themselves anymore. That's what makes every
+     * $app->use() middleware's after() hook (and, nested one level in,
+     * every per-route #[Middleware(...)]'s after()) able to actually
+     * affect what the client receives: by the time $handler($req, $res)
+     * returns here, the *entire* chain -- app-level before()s, dispatch()
+     * (itself wrapping the per-route middleware chain and the controller),
+     * app-level after()s -- has already run, and $res reflects all of it.
+     * A middleware that never calls $next() (a veto, e.g.
+     * MiddlewareBase::before() returning false, or useCors()'s OPTIONS
+     * short-circuit above) still reaches this same single send() call --
+     * it just skips straight there without dispatch() ever running.
      */
     public function handleHttp(): void
     {
@@ -235,6 +254,7 @@ class App
             );
 
             $handler($req, $res);
+            $res->send();
         } finally {
             $this->container->get(RequestContext::class)->setRequestId(null);
             $this->container->get(Csrf::class)->reset();
@@ -254,7 +274,10 @@ class App
     /**
      * Register (or override) the handler invoked when a route/middleware throws
      * an exception of the given class (or one of its parents/interfaces, if no
-     * exact match is registered). The handler is responsible for sending $res.
+     * exact match is registered). The handler is responsible for building $res
+     * (status/headers/body) -- not for sending it; App::handleHttp() sends it
+     * once, after the whole $app->use() pipe has unwound, same as every other
+     * response.
      *
      * @param class-string $exceptionClass
      * @param callable(Throwable, Request, Response): void $handler
@@ -289,8 +312,7 @@ class App
                 $body = json_encode(['error' => $e->getMessage(), 'details' => $e->getErrors()]);
                 $res->status($e->getCode() ?: 422)
                     ->withHeader('Content-Type', 'application/json')
-                    ->write($body !== false ? $body : '{"error":"Validation failed"}')
-                    ->send();
+                    ->write($body !== false ? $body : '{"error":"Validation failed"}');
             }
         );
 
@@ -327,8 +349,7 @@ class App
         $body = json_encode(['error' => $message]);
         $res->status($status)
             ->withHeader('Content-Type', 'application/json')
-            ->write($body !== false ? $body : '{"error":"Error"}')
-            ->send();
+            ->write($body !== false ? $body : '{"error":"Error"}');
     }
 
     /**

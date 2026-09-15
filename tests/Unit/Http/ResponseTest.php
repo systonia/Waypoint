@@ -130,6 +130,34 @@ final class ResponseTest extends TestCase
         $this->assertContains('x-custom', $this->sentHeaderNames());
     }
 
+    public function testSendIsIdempotentAndDoesNotEchoTheBodyTwice(): void
+    {
+        $res = (new Response())->write('hello');
+
+        ob_start();
+        $res->send();
+        $res->send();
+        $output = ob_get_clean();
+
+        $this->assertSame('hello', $output);
+    }
+
+    public function testSendIsIdempotentEvenWhenAHeaderIsAddedBetweenCalls(): void
+    {
+        // A header added after the first send() was never actually sent
+        // to the client -- the first call is the one that counts, exactly
+        // like a real HTTP response can only be sent once.
+        $res = (new Response())->write('hello');
+
+        ob_start();
+        $res->send();
+        $res->withHeader('X-Too-Late', 'yes');
+        $res->send();
+        ob_end_clean();
+
+        $this->assertNull($this->sentHeaderValue('X-Too-Late'));
+    }
+
     public function testHasHeaderIsFalseBeforeAnyHeaderIsSet(): void
     {
         $res = new Response();

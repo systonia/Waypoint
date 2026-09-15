@@ -7,60 +7,37 @@ use Waypoint\Options\SecurityHeaderOptions;
 
 /**
  * Adds the standard security response headers (see SecurityHeaderOptions
- * for the full list and their defaults) -- every header is only *filled
- * in*, via Response::hasHeader(), never overwritten: a controller that
- * already set X-Frame-Options (or any of the others) itself always wins.
- *
- * IMPORTANT: this runs from before(), not after() -- see this class's own
- * "why not after()" note below before changing that. It costs nothing in
- * practice: every header here is filled in *before* the controller runs,
- * and Response::withHeader() is plain last-write-wins ($this->headers[$name]
- * = $value), so a controller's own later withHeader() call for the same
- * name still overwrites this middleware's default regardless -- "runs
- * early, but the controller still has final say" holds either way.
+ * for the full list and their defaults) in after(), once the controller
+ * has already run -- every header is only *filled in*, via
+ * Response::hasHeader(), never overwritten: a controller that already set
+ * X-Frame-Options (or any of the others) itself always wins, regardless
+ * of where this middleware sits in the pipe.
  *
  * Registered like any other $app->use() middleware -- MiddlewareBase's
  * __invoke() is what makes that possible, see its own doc:
  *
  *   $app->use(new SecurityHeadersMiddleware());
  *
- * ## Why before(), not after() (as originally specified)
- *
- * Router::dispatch() calls Response::send() synchronously, deep inside
- * itself (ResultRenderer::render()/Router::renderView() both end in
- * ->write(...)->send()), *before* control ever returns to any wrapping
- * middleware -- $app->use()'s pipe included, since App::handle()
- * (dispatch()'s caller) sits at the very center of that pipe's onion.
- * Response::send() is also one-shot: it calls PHP's own header()
- * function once, for whatever's in Response::$headers *at that moment*;
- * nothing re-invokes it afterward. So a header set from *any* after()
- * hook -- $app->use()-registered or #[Middleware(...)]-attached -- is
- * always too late to reach the client; it only mutates an in-memory
- * array send() already finished reading. (The same limitation is
- * documented on Fixtures\Middlewares\BeforeAfterMiddleware::after() for
- * the #[Middleware(...)] pipeline -- this is that same architectural
- * fact, not specific to this middleware.) before() is therefore the only
- * hook where setting a *response* header actually has an effect, for any
- * middleware, on either pipe.
- *
  * ## Position in the $app->use() pipe
  *
- * before() hooks run in *registration* order (App::handleHttp()'s
- * array_reduce nests middlewares onion-style: the first-registered
- * middleware's before() runs first, the last-registered middleware's
- * before() runs last, right before the controller). So among multiple
- * $app->use() middlewares that each try to set the *same* header name,
- * whichever was registered *last* wins (its before() runs closest to the
- * controller, overwriting anything set earlier) -- register this one
- * first if something else should be able to override its defaults, or
- * last if it should win over other middlewares' own header choices.
- * Either way, the controller's own explicit header always wins over any
- * middleware, since the controller always runs after every before()
- * hook, on both pipes, no matter the registration order.
+ * after() hooks run in *reverse* registration order (App::handleHttp()'s
+ * array_reduce nests middlewares onion-style: the *last*-registered
+ * middleware's before() runs last, right before the controller, so its
+ * after() -- the way back out -- runs *first*). That means, among
+ * multiple $app->use() middlewares that each try to fill in the *same*
+ * header name, whichever runs its after() *last* wins the
+ * Response::hasHeader() check -- i.e. whichever was registered *first*.
+ * Register this one first if it should have the final say over other
+ * middlewares' own header choices (the usual case for a small, generic
+ * security-defaults middleware), or last if something else should be
+ * able to override it. Either way, the controller's own explicit header
+ * always wins over every middleware, since the controller always runs
+ * before any after() hook, on both pipes, regardless of registration
+ * order.
  */
 class SecurityHeadersMiddleware extends MiddlewareBase
 {
-    protected function before(Request $req, Response $res): bool
+    protected function after(Request $req, Response $res): void
     {
         $opts = Waypoint::getConfig(SecurityHeaderOptions::class);
 
@@ -85,8 +62,6 @@ class SecurityHeadersMiddleware extends MiddlewareBase
         if ($opts->cspEnabled && $opts->csp !== null) {
             $this->fillIn($res, 'Content-Security-Policy', $opts->csp);
         }
-
-        return true;
     }
 
     private function fillIn(Response $res, string $name, string $value): void

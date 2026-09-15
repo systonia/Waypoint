@@ -11,6 +11,13 @@ use Waypoint\Attributes\{FileFormatter, SimpleXmlFormatter};
  * its own compiled CSS/JS asset lookups and #[Inject] wiring that this
  * class has no business knowing about. Stateless -- everything render()
  * needs comes in through its own parameters.
+ *
+ * Only ever builds $res (status/headers/body) -- never calls
+ * Response::send() itself. App::handleHttp() is the one place that does,
+ * exactly once, after the full $app->use() middleware chain (and, nested
+ * inside it, the per-route #[Middleware(...)] chain) has completely
+ * unwound, so every middleware's after() hook still gets a chance to
+ * inspect/adjust the response before it's actually sent.
  */
 final class ResultRenderer
 {
@@ -35,8 +42,7 @@ final class ResultRenderer
         // JSON (default)
         $encoded = json_encode($result);
         $res->withHeader('Content-Type', 'application/json')
-            ->write($encoded !== false ? $encoded : 'null')
-            ->send();
+            ->write($encoded !== false ? $encoded : 'null');
     }
 
     /** @param array<string, mixed> $options */
@@ -62,12 +68,12 @@ final class ResultRenderer
                 $content = '';
             }
             // @codeCoverageIgnoreEnd
-            $res->write($content)->send();
+            $res->write($content);
         } elseif (is_string($result) || is_int($result) || is_float($result) || is_bool($result)) {
-            $res->write((string) $result)->send();
+            $res->write((string) $result);
         } else {
             $encoded = json_encode($result);
-            $res->write($encoded !== false ? $encoded : 'null')->send();
+            $res->write($encoded !== false ? $encoded : 'null');
         }
     }
 
@@ -80,7 +86,7 @@ final class ResultRenderer
         // simplexml_load_string() is just typed to allow failure for
         // arbitrary/untrusted XML input in general.
         if ($xml === false) {
-            $res->write('<root/>')->send();
+            $res->write('<root/>');
             return;
         }
         // @codeCoverageIgnoreEnd
@@ -96,6 +102,6 @@ final class ResultRenderer
             $content = '<root/>';
         }
         // @codeCoverageIgnoreEnd
-        $res->write($content)->send();
+        $res->write($content);
     }
 }
