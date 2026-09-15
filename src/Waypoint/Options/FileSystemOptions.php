@@ -41,6 +41,20 @@ class FileSystemOptions
     }
 
     /**
+     * The URL path prefix view/layout CSS/JS and the bundled waypoint.js
+     * client are served under -- e.g. `GET {assetsPath}/{filename}` (see
+     * Router::tryServeViewAsset()). Always normalized to a leading slash
+     * and no trailing slash, so `"$assetsPath/$filename"` is always safe
+     * to build directly.
+     *
+     * @var string
+     */
+    public string $assetsPath = '/assets' {
+        get => $this->assetsPath;
+        set(string $value) => $this->assetsPath = '/' . trim($value, '/');
+    }
+
+    /**
      * When true (the default), a cached route/DI compilation is only used
      * after re-verifying it's still fresh -- reflecting every controller
      * and comparing file mtimes, on every single request. Set to false to
@@ -90,7 +104,7 @@ class FileSystemOptions
      */
     public function getCacheDirectory(): string
     {
-        return $this->cacheDirectory ?? (sys_get_temp_dir() . '/lentocache');
+        return $this->cacheDirectory ?? (sys_get_temp_dir() . '/cache');
     }
 
     /**

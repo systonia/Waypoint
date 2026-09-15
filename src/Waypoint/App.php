@@ -51,7 +51,7 @@ class App
 
         $this->router = new Router($controllers, $allClasses, $this->container, $cachedData, $fileSystemOptions);
 
-        $this->useLentoAcceptHeader();
+        $this->useWaypointAcceptHeader();
     }
 
     public function use(callable $middleware): void
@@ -80,7 +80,7 @@ class App
         });
     }
 
-    private function useLentoAcceptHeader(): void
+    private function useWaypointAcceptHeader(): void
     {
         $this->use(function (Request $req, Response $res, $next): mixed {
             // A direct case-insensitive scan for the one header we care

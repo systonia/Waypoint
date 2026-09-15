@@ -298,7 +298,7 @@ final class FileSystem
             mkdir($dir, 0777, true);
         }
 
-        $attributes = Router::exportAllAttributes($controllers);
+        $attributes = RouteCompiler::exportAllAttributes($controllers);
 
         $header = "<?php\n// AUTO-GENERATED FILE - DO NOT EDIT\n\n";
         file_put_contents($dir . '/' . self::ATTRIBUTES_FILE, $header . 'return ' . var_export($attributes, true) . ';');

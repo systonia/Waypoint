@@ -101,6 +101,32 @@ class View
     protected array $assets = ['css' => null, 'js' => null];
 
     /**
+     * The URL path prefix assetTags()/layoutAssetTags() build hrefs/srcs
+     * under, e.g. "/assets" -- mirrors FileSystemOptions::$assetsPath.
+     * Defaults to the framework's own default so a View constructed and
+     * rendered directly (bypassing Router, e.g. in a unit test) still
+     * produces correct output; Router::renderResult() overwrites it with
+     * whatever assetsPath is actually configured right before render().
+     *
+     * @var string
+     */
+    protected string $assetsPath = '/assets';
+
+    /**
+     * The compiled URL path for Waypoint\UI\WaypointController's own
+     * route (e.g. "/waypoint.js"), or null when that controller was never
+     * attached -- set by Router::renderView() from
+     * Router::resolveWaypointJsPath(). Null by default so a View
+     * constructed and rendered directly (bypassing Router) renders no tag
+     * at all, the same "safe until told otherwise" default $assetsPath
+     * uses, just inverted: there's no sensible default *path* to guess at
+     * for a controller that might not even be attached.
+     *
+     * @var string|null
+     */
+    protected ?string $waypointJsPath = null;
+
+    /**
      * The resolved layout template's own basename (no .php), e.g.
      * "_Layout" or "AltLayout" -- whatever it actually is, set by render()
      * right before including it. Null until then (or for a partial render,
@@ -141,6 +167,18 @@ class View
         $this->assets = $assets;
     }
 
+    /** Called by Router::renderView() before render() -- see $assetsPath. */
+    public function setAssetsPath(string $assetsPath): void
+    {
+        $this->assetsPath = $assetsPath;
+    }
+
+    /** Called by Router::renderView() before render() -- see $waypointJsPath. */
+    public function setWaypointJsPath(?string $waypointJsPath): void
+    {
+        $this->waypointJsPath = $waypointJsPath;
+    }
+
     /**
      * <link>/<script> tags for this view's own CSS/JS, if any. Call from
      * the layout, e.g. `<?= $this->assetTags() ?>` alongside the rest of
@@ -164,6 +202,25 @@ class View
         return $this->renderAssetTags($this->layoutAssets);
     }
 
+    /**
+     * `<script>` tag for the bundled waypoint.js client (see
+     * Waypoint\UI\WaypointController), pointed at wherever that
+     * controller's own route actually resolved to -- call from the layout,
+     * e.g. `<?= $this->waypointJsTag() ?>`, instead of hardcoding the path
+     * yourself. Empty string when WaypointController was never attached
+     * (see $waypointJsPath): nothing to link to, so nothing is rendered,
+     * rather than a tag pointing at a route that 404s.
+     */
+    public function waypointJsTag(): string
+    {
+        if ($this->waypointJsPath === null) {
+            return '';
+        }
+
+        $src = htmlspecialchars($this->waypointJsPath, ENT_QUOTES);
+        return "<script src=\"$src\"></script>\n";
+    }
+
     /** Shared by assetTags()/layoutAssetTags() -- builds <link>/<script> tags for one {css, js} pair. */
     private function renderAssetTags(array $assets): string
     {
@@ -176,12 +233,12 @@ class View
             // dedup check, and navigating away and back injects a second,
             // duplicate tag for the exact same asset.
             $filename = htmlspecialchars($assets['css'], ENT_QUOTES);
-            $href = htmlspecialchars('/assets/' . $assets['css'], ENT_QUOTES);
+            $href = htmlspecialchars($this->assetsPath . '/' . $assets['css'], ENT_QUOTES);
             $tags .= "<link rel=\"stylesheet\" href=\"$href\" data-wp-asset=\"$filename\">\n";
         }
         if ($assets['js'] !== null) {
             $filename = htmlspecialchars($assets['js'], ENT_QUOTES);
-            $src = htmlspecialchars('/assets/' . $assets['js'], ENT_QUOTES);
+            $src = htmlspecialchars($this->assetsPath . '/' . $assets['js'], ENT_QUOTES);
             $tags .= "<script src=\"$src\" data-wp-asset=\"$filename\"></script>\n";
         }
         return $tags;

@@ -18,7 +18,7 @@ routing and partial HTML views over AJAX.
 - Simple, reachability-based dependency injection via `#[Inject]` (no separate "service" attribute)
 - Request validation attributes (`#[NotBlank]`, `#[Email]`, `#[Length]`, `#[Regex]`)
 - An explicit exception-handler registry, with sensible defaults out of the box
-- Middleware pipeline, including per-route middleware via `#[Middleware([Class::class, 'method'])]`
+- Middleware pipeline, including per-route middleware via `#[Middleware(Class::class)]`
 - Built-in CORS support
 - JWT authentication (`useJwt()`), with a required (never-defaulted) signing secret
 - An HTML-rendering MVC view layer, with layouts, sections, and automatic scoped CSS/JS per view
@@ -267,7 +267,7 @@ $app->use(function ($req, $res, $next) {
 
 `useCors()` and `useJwt()` (see below) are both just built-in middleware registered this way.
 
-Per-route middleware is declared with `#[Middleware([Class::class, 'method'])]` directly on a
+Per-route middleware is declared with `#[Middleware(Class::class)]` directly on a
 controller method (repeatable). The class is resolved through the container at dispatch time — so it
 can itself use `#[Inject]` — rather than being instantiated directly:
 
@@ -277,7 +277,7 @@ use Waypoint\Attributes\{Get, Middleware};
 class AdminController
 {
     #[Get('/dashboard')]
-    #[Middleware([RequireAdminMiddleware::class, 'handle'])]
+    #[Middleware(RequireAdminMiddleware::class)]
     public function dashboard(): array
     {
         return ['ok' => true];
@@ -488,7 +488,6 @@ Mount `Waypoint\OpenAPI\OpenAPIController` in your `attach()` call to get:
 
 - `GET /openapi/spec.json` — the generated OpenAPI 3.1.0 document
 - `GET /openapi/swagger.html` — bundled Swagger UI
-- `GET /openapi/lentodoc.html` — bundled alternative docs UI
 
 The generator is driven entirely by a compiled attribute cache (see
 [Route/DI Compilation Caching](#routedi-compilation-caching--production-performance)) rather than live

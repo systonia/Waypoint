@@ -1,0 +1,4 @@
+{
+    "FROM_CONFIG_ENV_JSON": "dev",
+    "PRECEDENCE": "config.development.json"
+}
