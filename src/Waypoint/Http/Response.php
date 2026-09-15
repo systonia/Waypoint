@@ -85,6 +85,25 @@ class Response
     }
 
     /**
+     * True if a header named $name (case-insensitively -- HTTP header
+     * names are case-insensitive, the same reasoning as
+     * JWT::fromRequestHeaders()'s/Csrf::submittedToken()'s own lookups)
+     * has already been queued via withHeader(), regardless of casing.
+     * Lets a middleware that runs after the controller (e.g.
+     * SecurityHeadersMiddleware::after()) only fill in a header the
+     * controller hasn't already set, never overwrite it.
+     */
+    public function hasHeader(string $name): bool
+    {
+        foreach ($this->headers as $existingName => $value) {
+            if (strcasecmp($existingName, $name) === 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Mirrors the triggering Request's id (Request::$id) back to the
      * client as X-Request-ID, so it can correlate this response with the
      * request it made -- the same id Logger::log() automatically attaches

@@ -70,4 +70,34 @@ final class MiddlewareBaseTest extends TestCase
         $this->assertFalse($called);
         $this->assertNull($result);
     }
+
+    public function testInstanceIsDirectlyUsableAsACallableForAppUse(): void
+    {
+        // App::use(callable $middleware) is what this exists to satisfy --
+        // proves an instance is callable() without any wrapping closure.
+        $middleware = new PlainMiddleware();
+        $this->assertTrue(is_callable($middleware));
+
+        $req = Request::capture();
+        $res = new Response();
+        $result = $middleware($req, $res, fn(Request $r, Response $s): string => 'next-ran');
+
+        $this->assertSame('next-ran', $result);
+    }
+
+    public function testInvokeDelegatesToHandleSoVetoingStillWorksThroughIt(): void
+    {
+        $middleware = new VetoingMiddleware();
+        $req = Request::capture();
+        $res = new Response();
+
+        $called = false;
+        $result = $middleware($req, $res, function (Request $r, Response $s) use (&$called): string {
+            $called = true;
+            return 'next-ran';
+        });
+
+        $this->assertFalse($called);
+        $this->assertNull($result);
+    }
 }

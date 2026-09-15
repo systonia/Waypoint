@@ -19,10 +19,13 @@ namespace Waypoint\Http;
  * middleware further down the chain) never runs. Returning true (the
  * default) continues as normal.
  *
- * Unrelated to $app->use()'s own middleware pipe (App::$middlewares,
- * plain callables run outside routing) -- this only applies to the
- * per-route #[Middleware(...)] class pipeline Router::buildRouteHandler()
- * builds and resolves through the container the same way as always.
+ * __invoke() (below) is what also makes any subclass directly usable on
+ * $app->use()'s own pipe (App::$middlewares, plain callables) -- both
+ * pipes call a middleware the exact same way ($mw($req, $res, $next)), so
+ * one class works unmodified on either: `$app->use(new
+ * SecurityHeadersMiddleware())` for something that should run on every
+ * request, or #[Middleware(SomeMiddleware::class)] for one scoped to a
+ * single route/controller. Nothing here couples this to routing.
  */
 abstract class MiddlewareBase
 {
@@ -34,6 +37,12 @@ abstract class MiddlewareBase
         $result = $next($req, $res);
         $this->after($req, $res);
         return $result;
+    }
+
+    /** Delegates to handle() -- see this class's own doc on why, and Waypoint\Http\SecurityHeadersMiddleware for a real $app->use()-registered example. */
+    final public function __invoke(Request $req, Response $res, callable $next): mixed
+    {
+        return $this->handle($req, $res, $next);
     }
 
     /**

@@ -130,6 +130,25 @@ final class ResponseTest extends TestCase
         $this->assertContains('x-custom', $this->sentHeaderNames());
     }
 
+    public function testHasHeaderIsFalseBeforeAnyHeaderIsSet(): void
+    {
+        $res = new Response();
+        $this->assertFalse($res->hasHeader('X-Custom'));
+    }
+
+    public function testHasHeaderIsTrueAfterWithHeader(): void
+    {
+        $res = (new Response())->withHeader('X-Custom', 'yes');
+        $this->assertTrue($res->hasHeader('X-Custom'));
+    }
+
+    public function testHasHeaderIsCaseInsensitive(): void
+    {
+        $res = (new Response())->withHeader('X-Custom', 'yes');
+        $this->assertTrue($res->hasHeader('x-custom'));
+        $this->assertTrue($res->hasHeader('X-CUSTOM'));
+    }
+
     public function testWithRequestIdSendsItBackAsXRequestIdHeader(): void
     {
         $res = (new Response())->withRequestId('abc-123-correlation');
