@@ -4,6 +4,7 @@ namespace Waypoint\Http;
 
 use Waypoint\Waypoint;
 use Waypoint\Environment;
+use Waypoint\Csrf;
 use Waypoint\Attributes\Inject;
 use Waypoint\Options\RendererOptions;
 use RuntimeException;
@@ -22,6 +23,20 @@ class View
      */
     #[Inject]
     protected Environment $env;
+
+    /**
+     * Available as $this->csrf inside a view/layout template, e.g.
+     * `<?= $this->csrf->field() ?>` for a classic no-JS <form>, or
+     * `$this->csrf->token()` for the raw value (e.g. to hand to
+     * client-side JS via a data attribute for the AJAX path). Wired up by
+     * Router::injectViewProperties() the same way -- and already carrying
+     * this request's resolved token by the time it's injected, since
+     * Router::renderView() calls Csrf::issueFor() first (see there).
+     *
+     * @var Csrf
+     */
+    #[Inject]
+    protected Csrf $csrf;
 
     /**
      * The view name passed to the constructor, e.g. "ProductDetail".

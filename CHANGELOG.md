@@ -4,6 +4,7 @@
 
 - *(openapi)* Add versioned spec output with latest-wins dedup
 - *(php)* [**breaking**] Raise minimum PHP version to 8.5
+- *(http)* Add request/correlation ID tracking
 
 ### 🐛 Bug Fixes
 
@@ -17,6 +18,6 @@
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(quality)* Reach PHPStan level 5 compliance
 - *(phpstan)* Add dedicated workflow and status badge
-- *(quality)* Reach PHPStan level 6 compliance
+- *(quality)* Reach PHPStan level 10 compliance
+- *(quality)* Added codecoverage marker after stan level 10 changes

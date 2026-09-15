@@ -26,6 +26,7 @@ use Waypoint\Attributes\{
     NoGzip,
     RouteAttribute,
     SimpleXmlFormatter,
+    SkipCsrf,
     Sunset,
     Task,
     Version
@@ -152,6 +153,10 @@ final class RouteCompiler
         // with each method's own below into a single 'gzip' bool per
         // route, so Response::maybeCompress() never has to reflect.
         $classHasNoGzip = $rc->getAttributes(NoGzip::class) !== [];
+        // Same "class or method, combined once" reasoning as #[NoGzip]
+        // above, for #[SkipCsrf] -- Router::dispatch() never has to
+        // reflect to know whether CSRF verification applies to this route.
+        $classSkipsCsrf = $rc->getAttributes(SkipCsrf::class) !== [];
 
         foreach ($rc->getMethods() as $method) {
             [$routeAttr, $formatterAttr] = $this->extractRouteAndFormatter($method);
@@ -186,6 +191,7 @@ final class RouteCompiler
             $methodMiddlewares = $this->collectMiddlewares($method->getAttributes(Middleware::class));
             $middlewares = [...$classMiddlewares, ...$methodMiddlewares];
             $methodHasNoGzip = $method->getAttributes(NoGzip::class) !== [];
+            $methodSkipsCsrf = $method->getAttributes(SkipCsrf::class) !== [];
 
             // PHP's own native #[\Deprecated] (8.4+), not a Waypoint
             // attribute -- there's nothing to "override" the way
@@ -215,6 +221,7 @@ final class RouteCompiler
                 'formatter' => $formatter,
                 'middlewares' => $middlewares,
                 'gzip' => !($classHasNoGzip || $methodHasNoGzip),
+                'skipCsrf' => $classSkipsCsrf || $methodSkipsCsrf,
                 'version' => $effectiveVersion,
                 'unversionedPath' => $unversionedPath,
                 'deprecated' => $isDeprecated,

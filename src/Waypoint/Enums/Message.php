@@ -49,6 +49,7 @@ enum Message: string
     case NotFound = "Not Found";
     case Unauthorized = "Unauthorized";
     case ValidationFailed = "Validation failed";
+    case CsrfTokenInvalid = "Invalid or missing CSRF token";
     #endregion
 
     #region OpenAPI

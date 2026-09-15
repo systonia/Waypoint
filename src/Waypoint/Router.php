@@ -8,11 +8,12 @@ use ReflectionProperty;
 use RuntimeException;
 
 use Waypoint\Container;
-use Waypoint\Enums\RouteType;
+use Waypoint\Csrf;
+use Waypoint\Enums\{Message, RouteType};
 use Waypoint\Http\{PublicFileServer, Request, Response, ResultRenderer, View};
 use Waypoint\UI\WaypointController;
 use Waypoint\Validator;
-use Waypoint\Exceptions\ValidationException;
+use Waypoint\Exceptions\{ForbiddenException, ValidationException};
 use Waypoint\FileSystem;
 use Waypoint\Options\{FileSystemOptions, RendererOptions};
 use Waypoint\ViewAssets;
@@ -454,6 +455,22 @@ class Router
             $res->withHeader('Sunset', $sunsetHeader);
         }
 
+        // State-changing methods only (GET/HEAD never carry a body/side
+        // effect worth protecting); #[SkipCsrf] on the route opts out
+        // entirely, e.g. a token-auth-only JSON API with no HTML forms.
+        // Missing 'skipCsrf' key (a route compiled/cached before
+        // #[SkipCsrf] existed) defaults to checking, not skipping --
+        // unlike 'gzip'/'deprecated' above, the safe default for a
+        // security check is "on" for a plan that predates it, not "off".
+        if (
+            in_array(strtoupper($httpMethod), ['POST', 'PUT', 'PATCH', 'DELETE'], true)
+            && !($route['skipCsrf'] ?? false)
+            && $this->container
+            && !$this->container->get(Csrf::class)->verify($req)
+        ) {
+            throw new ForbiddenException(Message::CsrfTokenInvalid->value);
+        }
+
         $controllerRef = $route['controller'] ?? null;
         // Every real compiled route's 'controller' names a real, already-
         // verified-to-exist class (see RouteCompiler::compileController());
@@ -497,7 +514,7 @@ class Router
                 // @codeCoverageIgnoreEnd
             }
             $result = $controller->{$method}(...$args);
-            $this->renderResult($result, $res, $this->toFormatterSpec($route['formatter'] ?? null));
+            $this->renderResult($result, $req, $res, $this->toFormatterSpec($route['formatter'] ?? null));
         };
 
         return array_reduce(
@@ -807,18 +824,27 @@ class Router
      *
      * @param array{type?: string, options?: array<string, mixed>|null} $formatter
      */
-    private function renderResult(mixed $result, Response $res, array $formatter): void
+    private function renderResult(mixed $result, Request $req, Response $res, array $formatter): void
     {
         if ($result instanceof View) {
-            $this->renderView($result, $res);
+            $this->renderView($result, $req, $res);
             return;
         }
 
         $this->resultRenderer->render($result, $res, $formatter);
     }
 
-    private function renderView(View $view, Response $res): void
+    private function renderView(View $view, Request $req, Response $res): void
     {
+        // Resolved through this Router's own container (not
+        // Waypoint::getConfig()) so it's the exact same Csrf instance
+        // injectViewProperties() hands to $view->csrf below -- issueFor()'s
+        // resolved token has to already be sitting on that instance by the
+        // time the view's #[Inject] properties are wired up.
+        if ($this->container) {
+            $this->container->get(Csrf::class)->issueFor($req, $res);
+        }
+
         $this->injectViewProperties($view);
         $view->setAssetsPath($this->fileSystemOptions->assetsPath);
         $view->setWaypointJsPath($this->resolveWaypointJsPath());

@@ -237,6 +237,7 @@ class App
             $handler($req, $res);
         } finally {
             $this->container->get(RequestContext::class)->setRequestId(null);
+            $this->container->get(Csrf::class)->reset();
         }
     }
 
