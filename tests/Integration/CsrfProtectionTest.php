@@ -81,7 +81,10 @@ final class CsrfProtectionTest extends IntegrationTestCase
         $output = $this->dispatch('POST', '/csrf/submit');
 
         $this->assertSame(403, http_response_code());
-        $this->assertSame(['error' => 'Invalid or missing CSRF token'], json_decode($output, true));
+        $this->assertSame(
+            ['type' => 'about:blank', 'title' => 'Forbidden', 'status' => 403, 'detail' => 'Invalid or missing CSRF token'],
+            json_decode($output, true)
+        );
     }
 
     public function testPostWithOnlyACookieAndNoSubmittedValueIsRejectedWith403(): void
@@ -97,7 +100,10 @@ final class CsrfProtectionTest extends IntegrationTestCase
         }
 
         $this->assertSame(403, http_response_code());
-        $this->assertSame(['error' => 'Invalid or missing CSRF token'], json_decode($output, true));
+        $this->assertSame(
+            ['type' => 'about:blank', 'title' => 'Forbidden', 'status' => 403, 'detail' => 'Invalid or missing CSRF token'],
+            json_decode($output, true)
+        );
     }
 
     public function testPostWithAMismatchedCookieAndBodyFieldIsRejectedWith403(): void
@@ -112,7 +118,10 @@ final class CsrfProtectionTest extends IntegrationTestCase
         }
 
         $this->assertSame(403, http_response_code());
-        $this->assertSame(['error' => 'Invalid or missing CSRF token'], json_decode($output, true));
+        $this->assertSame(
+            ['type' => 'about:blank', 'title' => 'Forbidden', 'status' => 403, 'detail' => 'Invalid or missing CSRF token'],
+            json_decode($output, true)
+        );
     }
 
     public function testPostWithAnExpiredTokenIsRejectedWith403(): void

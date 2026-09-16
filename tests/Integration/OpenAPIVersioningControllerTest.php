@@ -39,7 +39,12 @@ final class OpenAPIVersioningControllerTest extends IntegrationTestCase
         $output = $this->dispatch('GET', '/openapi/spec.v99.json');
 
         $this->assertSame(
-            ['error' => "OpenAPI spec for version 'v99' not found."],
+            [
+                'type' => 'about:blank',
+                'title' => 'Not Found',
+                'status' => 404,
+                'detail' => "OpenAPI spec for version 'v99' not found.",
+            ],
             json_decode($output, true)
         );
     }

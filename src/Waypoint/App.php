@@ -14,7 +14,7 @@ use Waypoint\{Router};
 use Waypoint\Options\{FileSystemOptions, JWTOptions, CorsOptions, CompressionOptions};
 use Waypoint\Attributes\Inject;
 use Waypoint\Http\{Request, Response};
-use Waypoint\Exceptions\{ForbiddenException, UnauthorizedException, NotFoundException, ValidationException};
+use Waypoint\Exceptions\HttpException;
 
 class App
 {
@@ -279,6 +279,14 @@ class App
      * once, after the whole $app->use() pipe has unwound, same as every other
      * response.
      *
+     * A handler is still free to call Response::send() itself if it really
+     * wants to (it's idempotent -- see its own doc -- so App::handleHttp()'s
+     * own trailing send() afterward is always a safe no-op either way, never
+     * a double-send). That's no longer the recommended shape though: a
+     * handler that only builds $res and returns is what actually keeps this
+     * codebase's "exactly one send() call, at the very end" property intact
+     * -- every default handler below follows that now.
+     *
      * @param class-string $exceptionClass
      * @param callable(Throwable, Request, Response): void $handler
      */
@@ -290,72 +298,81 @@ class App
     private function registerDefaultExceptionHandlers(): void
     {
         $this->useExceptionHandler(
-            ValidationException::class,
-            // Typed Throwable, not ValidationException, to actually satisfy
+            HttpException::class,
+            // Typed Throwable, not HttpException, to actually satisfy
             // useExceptionHandler()'s callable(Throwable, ...) contract --
             // resolveExceptionHandler() only ever invokes a handler
-            // registered under ValidationException::class with a real
-            // ValidationException (looked up by the thrown exception's own
-            // class/parents), so this narrows back immediately.
+            // registered under HttpException::class with a real
+            // HttpException (looked up by the thrown exception's own
+            // class/parents -- every one of this codebase's own HTTP-facing
+            // exceptions, NotFoundException/ForbiddenException/
+            // UnauthorizedException/ValidationException included, extends
+            // it), so this narrows back immediately.
             function (Throwable $e, Request $req, Response $res): void {
                 // @codeCoverageIgnoreStart
-                // Unreachable in practice: resolveExceptionHandler() only
-                // ever selects this handler (registered under
-                // ValidationException::class) for an exception that IS a
-                // ValidationException -- either the exact class or one of
-                // class_parents($e). This exists solely to satisfy
-                // useExceptionHandler()'s callable(Throwable, ...) contract.
-                if (!$e instanceof ValidationException) {
+                // Unreachable in practice -- see the comment above.
+                if (!$e instanceof HttpException) {
                     return;
                 }
                 // @codeCoverageIgnoreEnd
-                $body = json_encode(['error' => $e->getMessage(), 'details' => $e->getErrors()]);
-                $res->status($e->getCode() ?: 422)
-                    ->withHeader('Content-Type', 'application/json')
-                    ->write($body !== false ? $body : '{"error":"Validation failed"}');
+                $this->writeProblemDetails($res, $e->getStatusCode(), $e->toProblemDetails());
             }
-        );
-
-        $this->useExceptionHandler(
-            ForbiddenException::class,
-            fn(Throwable $e, Request $req, Response $res) =>
-                $this->sendErrorResponse($res, $e->getCode() ?: 403, $e->getMessage())
-        );
-
-        $this->useExceptionHandler(
-            UnauthorizedException::class,
-            fn(Throwable $e, Request $req, Response $res) =>
-                $this->sendErrorResponse($res, $e->getCode() ?: 401, $e->getMessage())
-        );
-
-        $this->useExceptionHandler(
-            NotFoundException::class,
-            fn(Throwable $e, Request $req, Response $res) =>
-                $this->sendErrorResponse($res, $e->getCode() ?: 404, $e->getMessage())
         );
 
         $this->useExceptionHandler(
             Throwable::class,
             function (Throwable $e, Request $req, Response $res): void {
                 $this->container->get(Logger::class)->error($e->getMessage(), ['exception' => $e]);
-                $isDev = $this->container->get(Environment::class)->isDev();
-                $this->sendErrorResponse($res, 500, $isDev ? $e->getMessage() : 'Internal Server Error');
+                // Deliberately never $e->getMessage()/a stack trace here,
+                // not even in development (see Environment::isDev(), used
+                // elsewhere in this codebase for exactly that kind of
+                // gate) -- an *unexpected* exception's message can easily
+                // contain internal details (a file path, a query, a raw
+                // driver error) never meant to reach whoever triggered the
+                // crash, and isDev() alone isn't a safe enough switch for
+                // that. A project wanting more than this generic message
+                // needs its own explicit useExceptionHandler(Throwable::class,
+                // ...) override (registered after attach(), per this
+                // method's own doc) -- an actual opt-in, not an implicit one.
+                $this->writeProblemDetails($res, 500, [
+                    'type' => 'about:blank',
+                    'title' => 'Internal Server Error',
+                    'status' => 500,
+                ]);
             }
         );
     }
 
-    private function sendErrorResponse(Response $res, int $status, string $message): void
+    /**
+     * Builds an RFC 9457 ("Problem Details for HTTP APIs") response from
+     * $problem -- HttpException::toProblemDetails()'s own shape, or the
+     * generic 500 fallback above, which deliberately doesn't go through a
+     * real HttpException (there's nothing to attach $problem's extra
+     * members to; a plain array is simplest).
+     *
+     * @param array<string, mixed> $problem
+     */
+    private function writeProblemDetails(Response $res, int $status, array $problem): void
     {
-        $body = json_encode(['error' => $message]);
+        $body = json_encode($problem);
         $res->status($status)
-            ->withHeader('Content-Type', 'application/json')
-            ->write($body !== false ? $body : '{"error":"Error"}');
+            ->withHeader('Content-Type', 'application/problem+json')
+            ->write($body !== false ? $body : '{"type":"about:blank","title":"Internal Server Error","status":500}');
     }
 
     /**
      * Finds the most specific registered handler for $e: exact class first,
      * then parent classes, then implemented interfaces, then the Throwable
      * catch-all (always registered by registerDefaultExceptionHandlers).
+     *
+     * Throwable itself is skipped in the interface loop: every real
+     * Exception/Error implements it, so class_implements() always lists it
+     * -- typically before any more specific interface the class also
+     * implements (e.g. Psr\Container\NotFoundExceptionInterface) -- which
+     * would otherwise make the interface loop match the Throwable::class
+     * catch-all instead of a more specific interface handler a caller
+     * registered via useExceptionHandler(). Throwable::class is still the
+     * final fallback below, just no longer found early by accident.
      */
     private function resolveExceptionHandler(Throwable $e): callable
     {
@@ -371,17 +388,15 @@ class App
         }
 
         foreach (class_implements($e) as $interface) {
+            if ($interface === Throwable::class) {
+                continue;
+            }
             if (isset($this->exceptionHandlers[$interface])) {
                 return $this->exceptionHandlers[$interface];
             }
         }
 
-        // @codeCoverageIgnoreStart
-        // Every real PHP Exception/Error implements Throwable, so the
-        // interface loop above always finds the Throwable::class handler
-        // first; this only guards a hypothetical future/engine change.
         return $this->exceptionHandlers[Throwable::class];
-        // @codeCoverageIgnoreEnd
     }
 
     /**

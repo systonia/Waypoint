@@ -67,9 +67,9 @@ final class RouterDispatchTest extends IntegrationTestCase
         $output = $this->dispatch('POST', '/products', body: ['name' => '', 'sku' => 'x']);
         $decoded = json_decode($output, true);
 
-        $this->assertSame('Validation failed', $decoded['error']);
-        $this->assertArrayHasKey('name', $decoded['details']);
-        $this->assertArrayHasKey('sku', $decoded['details']);
+        $this->assertSame('Validation failed', $decoded['title']);
+        $this->assertArrayHasKey('name', $decoded['errors']);
+        $this->assertArrayHasKey('sku', $decoded['errors']);
     }
 
     public function testFileFormatterSetsDownloadHeadersAndRawBody(): void

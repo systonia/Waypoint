@@ -448,17 +448,12 @@ class OpenAPIGenerator
                 };
                 $desc = $throws['description'] ?? $throws['exception'] ?? "Error";
                 if (!isset($responses[$statusCode])) {
+                    $this->ensureProblemDetailsSchema();
                     $responses[$statusCode] = [
                         'description' => $desc,
                         'content' => [
-                            'application/json' => [
-                                'schema' => [
-                                    'type' => 'object',
-                                    'properties' => [
-                                        'error' => ['type' => 'string'],
-                                    ],
-                                    'required' => ['error'],
-                                ],
+                            'application/problem+json' => [
+                                'schema' => ['$ref' => '#/components/schemas/ProblemDetails'],
                             ],
                         ],
                     ];
@@ -678,6 +673,34 @@ class OpenAPIGenerator
             'content' => ['application/json' => ['schema' => $schema]],
         ];
         return $responses;
+    }
+
+    /**
+     * Registers the shared RFC 9457 ("Problem Details for HTTP APIs")
+     * schema under components/schemas/ProblemDetails, if not already
+     * present -- every #[Throws(...)]-declared error response ($ref)s it
+     * rather than repeating the same object inline per operation, the
+     * same sharing pattern generateModelSchema() already uses for DTOs.
+     * Mirrors HttpException::toProblemDetails()'s shape (the five
+     * standard RFC 9457 members; 'detail'/'instance' are optional, so
+     * not listed under 'required').
+     */
+    private function ensureProblemDetailsSchema(): void
+    {
+        if (isset($this->components['schemas']['ProblemDetails'])) {
+            return;
+        }
+        $this->components['schemas']['ProblemDetails'] = [
+            'type' => 'object',
+            'properties' => [
+                'type' => ['type' => 'string', 'format' => 'uri-reference'],
+                'title' => ['type' => 'string'],
+                'status' => ['type' => 'integer'],
+                'detail' => ['type' => 'string'],
+                'instance' => ['type' => 'string', 'format' => 'uri-reference'],
+            ],
+            'required' => ['type', 'title', 'status'],
+        ];
     }
 
     /** @return array<string, mixed> */

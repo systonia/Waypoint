@@ -5,6 +5,7 @@ namespace Waypoint\Tests\Integration;
 use RuntimeException;
 use Psr\Container\NotFoundExceptionInterface;
 use Psr\Log\LogLevel;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Waypoint\Waypoint;
 use Waypoint\Http\{Request, Response};
 use Waypoint\Exceptions\ForbiddenException;
@@ -24,13 +25,19 @@ final class ExceptionHandlingTest extends IntegrationTestCase
     public function testForbiddenExceptionMapsTo403(): void
     {
         $output = $this->dispatch('GET', '/guarded/forbidden');
-        $this->assertSame(['error' => 'Forbidden'], json_decode($output, true));
+        $this->assertSame(
+            ['type' => 'about:blank', 'title' => 'Forbidden', 'status' => 403],
+            json_decode($output, true)
+        );
     }
 
     public function testUnauthorizedExceptionMapsTo401(): void
     {
         $output = $this->dispatch('GET', '/guarded/unauthorized');
-        $this->assertSame(['error' => 'Unauthorized'], json_decode($output, true));
+        $this->assertSame(
+            ['type' => 'about:blank', 'title' => 'Unauthorized', 'status' => 401],
+            json_decode($output, true)
+        );
     }
 
     public function testSubclassOfARegisteredExceptionFallsBackToItsParentsHandler(): void
@@ -38,7 +45,10 @@ final class ExceptionHandlingTest extends IntegrationTestCase
         // No handler is registered for SpecificForbiddenException itself;
         // resolveExceptionHandler() must walk up to ForbiddenException.
         $output = $this->dispatch('GET', '/guarded/forbidden-subclass');
-        $this->assertSame(['error' => 'Forbidden'], json_decode($output, true));
+        $this->assertSame(
+            ['type' => 'about:blank', 'title' => 'Forbidden', 'status' => 403],
+            json_decode($output, true)
+        );
     }
 
     public function testExceptionMatchingARegisteredInterfaceUsesThatHandler(): void
@@ -65,36 +75,46 @@ final class ExceptionHandlingTest extends IntegrationTestCase
     public function testNotFoundExceptionMapsTo404WithItsOwnMessage(): void
     {
         $output = $this->dispatch('GET', '/guarded/missing');
-        $this->assertSame(['error' => 'Widget not found'], json_decode($output, true));
+        $this->assertSame(
+            ['type' => 'about:blank', 'title' => 'Not Found', 'status' => 404, 'detail' => 'Widget not found'],
+            json_decode($output, true)
+        );
     }
 
-    public function testUnexpectedExceptionHidesItsMessageOutsideDevelopment(): void
+    /**
+     * The generic Throwable fallback never exposes $e->getMessage() (or a
+     * stack trace), regardless of environment -- see App::
+     * registerDefaultExceptionHandlers()'s Throwable::class handler for why
+     * isDev() alone was judged not to be a safe enough switch for that.
+     * Both "development" and "production" are asserted explicitly so a
+     * future reintroduction of environment-conditional exposure fails this
+     * test in either direction, not just one.
+     *
+     */
+    #[DataProvider('environmentProvider')]
+    public function testUnexpectedExceptionHidesItsMessageRegardlessOfEnvironment(string $env): void
     {
-        // EnvironmentOptions::load() (triggered lazily on first use) defaults
-        // APP_ENV to "development" under the CLI SAPI -- which is what this
-        // whole suite runs under -- so we force "production" explicitly to
-        // exercise the message-hiding branch.
-        Waypoint::create()->configure(function (EnvironmentOptions $opts) {
-            $opts->set('APP_ENV', 'production');
+        Waypoint::create()->configure(function (EnvironmentOptions $opts) use ($env) {
+            $opts->set('APP_ENV', $env);
         });
 
         $output = $this->dispatch('GET', '/guarded/boom');
         $decoded = json_decode($output, true);
 
-        $this->assertSame('Internal Server Error', $decoded['error']);
+        $this->assertSame(
+            ['type' => 'about:blank', 'title' => 'Internal Server Error', 'status' => 500],
+            $decoded
+        );
         $this->assertStringNotContainsString('unexpected failure', $output);
     }
 
-    public function testUnexpectedExceptionExposesItsMessageInDevelopment(): void
+    /** @return array<string, array{string}> */
+    public static function environmentProvider(): array
     {
-        Waypoint::create()->configure(function (EnvironmentOptions $opts) {
-            $opts->set('APP_ENV', 'development');
-        });
-
-        $output = $this->dispatch('GET', '/guarded/boom');
-        $decoded = json_decode($output, true);
-
-        $this->assertSame('unexpected failure', $decoded['error']);
+        return [
+            'development' => ['development'],
+            'production' => ['production'],
+        ];
     }
 
     public function testUnexpectedExceptionIsLoggedThroughTheConfiguredLogger(): void
