@@ -757,6 +757,7 @@ class Router
                         // @codeCoverageIgnoreEnd
                     }
                     $dto = new $class($req->body());
+                    $req->bodyDto = $dto;
                     if ($arg['validate'] ?? false) {
                         $validator = new Validator();
                         $errors = $validator->validate($dto);

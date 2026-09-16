@@ -2,9 +2,10 @@
 
 namespace Waypoint\Tests\Fixtures\Controllers;
 
-use Waypoint\Attributes\{Controller, Get, Middleware};
-use Waypoint\Tests\Fixtures\Middlewares\{AddHeaderMiddleware, BeforeAfterMiddleware, InjectingMiddleware, NotAMiddlewareBase, ShortCircuitMiddleware};
+use Waypoint\Attributes\{Controller, Get, Post, Body, Middleware};
+use Waypoint\Tests\Fixtures\Middlewares\{AddHeaderMiddleware, BeforeAfterMiddleware, BodyDtoCaptureMiddleware, InjectingMiddleware, NotAMiddlewareBase, ShortCircuitMiddleware};
 use Waypoint\Tests\Fixtures\Support\CallTracker;
+use Waypoint\Tests\Fixtures\DTO\CreateProductDTO;
 
 #[Controller('/middleware')]
 class MiddlewareController
@@ -61,5 +62,13 @@ class MiddlewareController
     public function unionParam(string|int $value): array
     {
         return ['value' => $value];
+    }
+
+    #[Post('/with-body-dto')]
+    #[Middleware(BodyDtoCaptureMiddleware::class)]
+    public function withBodyDto(#[Body] CreateProductDTO $product): array
+    {
+        CallTracker::record('controller');
+        return ['name' => $product->name];
     }
 }

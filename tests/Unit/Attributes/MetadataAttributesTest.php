@@ -4,7 +4,7 @@ namespace Waypoint\Tests\Unit\Attributes;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use Waypoint\Attributes\{Summary, Tags, Throws, Ignore, Schema, Property, Inject, Middleware, NoGzip};
+use Waypoint\Attributes\{Summary, Tags, Throws, Ignore, Schema, Property, Inject, Middleware, NoGzip, Sensitive, PII};
 use Waypoint\Exceptions\NotFoundException;
 
 #[Ignore]
@@ -17,6 +17,15 @@ class MetadataAttributes_ClassFixture
 
     #[Inject]
     public $dependency;
+
+    #[Sensitive]
+    public string $password = '';
+
+    #[Sensitive(placeholder: '***')]
+    public string $customPlaceholder = '';
+
+    #[PII]
+    public string $email = '';
 }
 
 class MetadataAttributes_MethodFixture
@@ -77,6 +86,30 @@ final class MetadataAttributesTest extends TestCase
             ->getProperty('dependency')->getAttributes(Inject::class)[0]->newInstance();
 
         $this->assertInstanceOf(Inject::class, $attr);
+    }
+
+    public function testSensitiveDefaultsToTheRedactedPlaceholder(): void
+    {
+        $attr = (new ReflectionClass(MetadataAttributes_ClassFixture::class))
+            ->getProperty('password')->getAttributes(Sensitive::class)[0]->newInstance();
+
+        $this->assertSame('**redacted**', $attr->placeholder);
+    }
+
+    public function testSensitivePlaceholderIsOverridable(): void
+    {
+        $attr = (new ReflectionClass(MetadataAttributes_ClassFixture::class))
+            ->getProperty('customPlaceholder')->getAttributes(Sensitive::class)[0]->newInstance();
+
+        $this->assertSame('***', $attr->placeholder);
+    }
+
+    public function testPiiDefaultsToTheRedactedPlaceholder(): void
+    {
+        $attr = (new ReflectionClass(MetadataAttributes_ClassFixture::class))
+            ->getProperty('email')->getAttributes(PII::class)[0]->newInstance();
+
+        $this->assertSame('**redacted**', $attr->placeholder);
     }
 
     public function testSummaryStoresText(): void

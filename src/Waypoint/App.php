@@ -64,8 +64,29 @@ class App
         $this->useWaypointAcceptHeader();
     }
 
+    /**
+     * Registers $middleware on the app-level pipe (see useCors()/useJwt()
+     * for two built-in examples, or MiddlewareBase's own doc for how a
+     * subclass instance -- e.g. `$app->use(new SomeMiddleware())` --
+     * works here directly via __invoke()).
+     *
+     * An object middleware never goes through Router::resolveController()/
+     * injectControllerProperties() the way a per-route #[Middleware(...)]
+     * class does -- the caller already constructed it with `new` before
+     * handing it here, so there's no class-string for the container to
+     * resolve. #[Inject] properties on it still get wired though, via the
+     * same injectServiceProperties() pass attach() already runs for
+     * eagerly-constructed services -- the same "user built this directly,
+     * not through the container" situation Router::injectViewProperties()
+     * already solves for View, applied here. A plain closure has no
+     * properties to find, so this is a harmless no-op for one.
+     */
     public function use(callable $middleware): void
     {
+        if (is_object($middleware)) {
+            $this->injectServiceProperties(get_class($middleware), $middleware);
+        }
+
         $this->middlewares[] = $middleware;
     }
 

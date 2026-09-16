@@ -2,8 +2,11 @@
 
 namespace Waypoint;
 
+use ReflectionObject;
+use ReflectionProperty;
 use RuntimeException;
 use Stringable;
+use Waypoint\Attributes\{Sensitive, PII};
 
 class Waypoint {
 
@@ -70,5 +73,51 @@ class Waypoint {
     public static function getConfig(string $className): object
     {
         return self::getContainer()->get($className);
+    }
+
+    /**
+     * Builds a safe-to-log/display copy of $target's public properties:
+     * each one's real value, except any marked #[Sensitive] (a
+     * credential/secret) or #[PII] (personally identifiable information,
+     * GDPR/DSGVO) -- those come back as that attribute's own
+     * $placeholder ('**redacted**' unless overridden) instead of the
+     * real value. The one place this redaction logic lives, so nothing
+     * that wants to log/display a DTO safely (a request logger, an error
+     * report, ...) has to hand-roll its own field-name blocklist.
+     *
+     * Generic on purpose -- works on any object, not just a FromArray
+     * user: reflects $target's own public, non-static, *initialized*
+     * properties (a typed property never assigned a value can't be read
+     * at all, so it's skipped rather than fatal-erroring here).
+     *
+     * @return array<string, mixed>
+     */
+    public static function redact(object $target): array
+    {
+        $result = [];
+
+        foreach ((new ReflectionObject($target))->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+            if ($property->isStatic() || !$property->isInitialized($target)) {
+                continue;
+            }
+
+            $placeholder = self::redactionPlaceholder($property);
+            $result[$property->getName()] = $placeholder ?? $property->getValue($target);
+        }
+
+        return $result;
+    }
+
+    /** The #[Sensitive]/#[PII] placeholder for $property, or null if it carries neither. */
+    private static function redactionPlaceholder(ReflectionProperty $property): ?string
+    {
+        foreach ($property->getAttributes(Sensitive::class) as $attribute) {
+            return $attribute->newInstance()->placeholder;
+        }
+        foreach ($property->getAttributes(PII::class) as $attribute) {
+            return $attribute->newInstance()->placeholder;
+        }
+
+        return null;
     }
 }

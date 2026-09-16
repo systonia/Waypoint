@@ -48,6 +48,20 @@ class Request
     public mixed $jwt = null;
 
     /**
+     * The constructed #[Body] DTO for this request, if the matched route
+     * has one -- set by Router::buildMethodArguments() right after
+     * building it (before validation runs, so this is still set even if
+     * the DTO then fails validation), null otherwise. Same idea as $jwt
+     * above: routing/dispatch resolves it once, downstream code (e.g. an
+     * $app->use() middleware's after(), which runs once dispatch has
+     * already completed) reads it back rather than re-deriving it.
+     * Always null in a before() hook -- routing hasn't run yet there.
+     *
+     * @var object|null
+     */
+    public ?object $bodyDto = null;
+
+    /**
      * True if the client accepts a partial response (AJAX navigation)
      *
      * @var bool

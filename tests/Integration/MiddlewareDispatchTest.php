@@ -5,6 +5,8 @@ namespace Waypoint\Tests\Integration;
 use Waypoint\Waypoint;
 use Waypoint\Tests\Fixtures\Controllers\ClassMiddlewareController;
 use Waypoint\Tests\Fixtures\Controllers\MiddlewareController;
+use Waypoint\Tests\Fixtures\DTO\CreateProductDTO;
+use Waypoint\Tests\Fixtures\Middlewares\InjectingMiddleware;
 use Waypoint\Tests\Fixtures\Services\ExampleService;
 use Waypoint\Tests\Fixtures\Support\CallTracker;
 
@@ -31,6 +33,20 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
     public function testMiddlewareCanInjectItsOwnDependencies(): void
     {
         $this->dispatch('GET', '/middleware/stacked');
+
+        $this->assertContains('injecting:' . ExampleService::class, CallTracker::$calls);
+    }
+
+    public function testAppLevelMiddlewareRegisteredViaUseGetsInjectPropertiesWiredToo(): void
+    {
+        // Unlike a per-route #[Middleware(...)] class, an instance passed
+        // to $app->use() never goes through Router::resolveController()/
+        // injectControllerProperties() -- App::use() wires #[Inject]
+        // itself (injectServiceProperties(), the same pass attach() runs
+        // for eagerly-constructed services), or this would stay unset.
+        Waypoint::create()->use(new InjectingMiddleware());
+
+        $this->dispatch('GET', '/class-middleware/plain');
 
         $this->assertContains('injecting:' . ExampleService::class, CallTracker::$calls);
     }
@@ -87,6 +103,17 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
 
         $this->assertSame(['controller'], CallTracker::$calls);
         $this->assertSame(['ok' => true], json_decode($output, true));
+    }
+
+    public function testRequestBodyDtoIsSetBeforeAnAfterHookRuns(): void
+    {
+        $output = $this->dispatch('POST', '/middleware/with-body-dto', [], ['name' => 'Widget', 'sku' => 'ABC123']);
+
+        $this->assertSame(
+            ['controller', 'bodyDto:' . CreateProductDTO::class],
+            CallTracker::$calls
+        );
+        $this->assertSame(['name' => 'Widget'], json_decode($output, true));
     }
 
     public function testClassLevelMiddlewareRunsForEveryRouteOnTheController(): void
