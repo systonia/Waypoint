@@ -1302,9 +1302,9 @@ composer stan            # PHPStan level 10
 composer coverage:text   # 100% line coverage is the bar
 ```
 
-The client (`waypoint.js`) is built from the separate `waypoint-ui` repository; a change there is
-`npm run build`, which writes the bundle into `src/Waypoint/UI/waypoint.js` — commit that file with
-the change. New features that go beyond the core belong in a plugin package (see [Plugins](#plugins)).
+The client (`waypoint.js`) lives in `ui/` (TypeScript, Vitest); `composer build:ui` writes the bundle
+into `src/Waypoint/UI/waypoint.js` — commit that file with the change, CI fails when it is stale.
+New features that go beyond the core belong in a plugin package (see [Plugins](#plugins)).
 
 ---
 

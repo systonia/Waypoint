@@ -1,0 +1,34 @@
+name: UI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ui:
+    name: waypoint.js
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm --prefix ui ci
+
+      - name: Type-check and test
+        run: |
+          npm --prefix ui run check
+          npm --prefix ui test
+
+      - name: Verify the committed bundle is current
+        run: npm --prefix ui run check:bundle

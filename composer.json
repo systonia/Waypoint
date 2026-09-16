@@ -28,7 +28,10 @@
     "e2e": "php vendor/bin/phpunit --testdox Tests/EndToEnd",
     "stan": "phpstan analyse",
     "coverage:text": "XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-text",
-    "coverage:html": "XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-html coverage/"
+    "coverage:html": "XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-html coverage/",
+    "build:ui": "npm --prefix ui ci && npm --prefix ui run build",
+    "test:ui": "npm --prefix ui ci && npm --prefix ui test",
+    "check:ui": "npm --prefix ui ci --silent && npm --prefix ui run --silent check:bundle"
   },
   "autoload": {
     "psr-4": {
