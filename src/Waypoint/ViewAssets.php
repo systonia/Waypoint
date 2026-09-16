@@ -15,15 +15,27 @@ namespace Waypoint;
  * Router::tryServeViewAsset() -- a strict {filename => mime} map lookup,
  * never a path built from request input, so a request is only ever
  * answered for a filename this compile pass actually produced, regardless
- * of what a client asks for. Every '*.php' file in the views directory is
- * a candidate view name; there's no separate declaration to keep in sync
- * with what's on disk.
+ * of what a client asks for. Every '*.php' file in the views directory
+ * (any depth -- see discoverViewNames() for how a nested one is named)
+ * is a candidate view name; there's no separate declaration to keep in
+ * sync with what's on disk.
  */
 final class ViewAssets
 {
     private const EXTENSIONS = ['css', 'js'];
 
-    /** @return string[] Basenames (no .php) of every view file found. */
+    /**
+     * Every view file under $viewsDir, recursively, as the name a
+     * controller passes to `new View(...)`: the path relative to
+     * $viewsDir, no .php, always '/'-separated regardless of platform --
+     * "Home" for Home.php, "Admin/Users" for Admin/Users.php. That exact
+     * string is also the key compile()'s 'views' map (and so Router::
+     * getViewAssets()) is looked up by, and what scopeCss() bakes into the
+     * `[data-view="..."]` wrapper, so a nested view's sibling .css/.js is
+     * found and scoped precisely like a top-level one's.
+     *
+     * @return string[]
+     */
     public static function discoverViewNames(string $viewsDir): array
     {
         if (!is_dir($viewsDir)) {
@@ -31,10 +43,24 @@ final class ViewAssets
         }
 
         $names = [];
-        foreach (glob("$viewsDir/*.php") ?: [] as $file) {
-            $names[] = basename($file, '.php');
-        }
+        self::collectViewNames($viewsDir, '', $names);
         return $names;
+    }
+
+    /**
+     * discoverViewNames()'s recursion: $prefix is the '/'-terminated
+     * relative path of $dir under the views root ('' at the root itself).
+     *
+     * @param string[] $names
+     */
+    private static function collectViewNames(string $dir, string $prefix, array &$names): void
+    {
+        foreach (glob("$dir/*.php") ?: [] as $file) {
+            $names[] = $prefix . basename($file, '.php');
+        }
+        foreach (glob("$dir/*", GLOB_ONLYDIR) ?: [] as $subdir) {
+            self::collectViewNames($subdir, $prefix . basename($subdir) . '/', $names);
+        }
     }
 
     /**

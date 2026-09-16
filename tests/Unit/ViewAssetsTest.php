@@ -22,12 +22,27 @@ final class ViewAssetsTest extends TestCase
         $this->assertSame([], ViewAssets::discoverViewNames(self::FIXTURES_DIR . '/does-not-exist'));
     }
 
-    public function testDiscoverViewNamesReturnsEveryPhpFileBasename(): void
+    public function testDiscoverViewNamesReturnsEveryPhpFileAtAnyDepthAsASlashedRelativeName(): void
     {
         $names = ViewAssets::discoverViewNames(self::FIXTURES_DIR);
 
         sort($names);
-        $this->assertSame(['CssOnly', 'JsOnly', 'NoAssets', 'WithBoth'], $names);
+        $this->assertSame(
+            ['CssOnly', 'JsOnly', 'Nested/CssOnly', 'Nested/Deeper/Plain', 'NoAssets', 'WithBoth'],
+            $names
+        );
+    }
+
+    public function testCompileFindsANestedViewsSiblingCssUnderItsSlashedName(): void
+    {
+        $compiled = ViewAssets::compile(self::FIXTURES_DIR);
+
+        $this->assertArrayHasKey('Nested/CssOnly', $compiled['views']);
+        $this->assertNull($compiled['views']['Nested/CssOnly']['js']);
+        $this->assertArrayNotHasKey('Nested/Deeper/Plain', $compiled['views']);
+
+        $css = $compiled['files'][$compiled['views']['Nested/CssOnly']['css']]['content'];
+        $this->assertStringContainsString('[data-view="Nested/CssOnly"] {', $css);
     }
 
     public function testDiscoverMetaOnlyIncludesFilesThatActuallyExist(): void

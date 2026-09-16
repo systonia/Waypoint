@@ -68,6 +68,7 @@ benchmarked well over an order of magnitude faster than uncached reflection-base
   - [CORS](#cors)
 - [Exception Handling](#exception-handling)
 - [Views](#views)
+  - [Redirects](#redirects)
 - [Static Files](#static-files)
 - [Gzip Compression](#gzip-compression)
 - [JWT Authentication](#jwt-authentication)
@@ -654,7 +655,12 @@ array, e.g. `$model['product']`), and `$this` is the `View` instance itself:
   attribute is present.
 
 A view or layout's sibling `.css`/`.js` is discovered automatically (same basename, same directory,
-either role) — nothing to register. Compiled, content-hashed copies are written under
+either role) — nothing to register. Views can live in subdirectories: `views/Admin/Users.php` is
+`new View('Admin/Users')`, always `/`-separated, and its `Admin/Users.css` is found, scoped
+(`[data-view="Admin/Users"]`) and announced under that same name. A name that starts with `/` or
+contains a `..` segment is rejected at construction, so a view name built from request input can never
+reach outside the views directory. The layout is still resolved from the root of the directory only.
+Compiled, content-hashed copies are written under
 `{cacheDirectory}/assets/` (see [Route/DI Compilation Caching](#routedi-compilation-caching--production-performance)
 below) and served through `GET /assets/{hash}.css`/`.js` with a year-long, immutable `Cache-Control`
 header.
@@ -663,6 +669,33 @@ Passing `partial: true` (typically driven by a request header your client sets �
 reflects the built-in `X-Waypoint-Accept: partial` handling `attach()` installs) skips the layout
 entirely and renders just the view. The response also carries `X-Waypoint-View-Name`/`-Css`/`-Js`
 headers describing what was rendered, for a client-side router to apply without a full page reload.
+
+### Redirects
+
+Return `Waypoint\Http\Redirect` to send a redirect instead of a body — typically from a form `POST`
+that succeeded (POST/redirect/GET), next to the `View` the same handler renders when it didn't:
+
+```php
+use Waypoint\Http\{Redirect, Request, Response, View};
+
+#[Post('/login')]
+public function loginSubmit(Request $req, Response $res): View|Redirect
+{
+    if (!$this->credentialsValid($req)) {
+        return new View('Login', ['error' => 'Invalid email or password.']);
+    }
+    $res->withCookie('auth_token', $token);
+    return new Redirect('/dashboard');
+}
+```
+
+`new Redirect($location, $status = 302)` accepts any `3xx` (e.g. `303` for an explicit See Other, `301`/`308`
+for a permanent move, `307` to preserve the original method). The response is just the status and a
+`Location` header — no body, and the route's formatter is ignored — while anything the handler already
+queued on the `Response` (cookies, headers) is kept. A `$location` that is empty or contains a line break
+is rejected at construction. A redirect is an ordinary result, not an exception: the cases that *should*
+redirect on failure (no/expired JWT on an `#[Authenticated]` route) already go through
+`JWTOptions::$loginRedirectUrl` — see [JWTOptions](#jwtoptions).
 
 ---
 
@@ -1092,6 +1125,7 @@ Configuration mainly happens through `load(?string $dir = null)`, not a plain pr
 | `tokenType` | `'Bearer'` | Expected prefix on the `Authorization` header value. |
 | `header` | `'Authorization'` | Request header the token is read from. |
 | `cookieName` | `null` (disabled) | Cookie name to additionally read the token from when the header didn't produce one — lets a signed-in session survive a plain page load, not just fetch()/XHR calls. |
+| `loginRedirectUrl` | `null` (disabled) | Where an `UnauthorizedException` (e.g. `#[Authenticated]` with no/expired JWT) sends a real browser navigation (`Sec-Fetch-Mode: navigate`) as a `302` instead of `401` JSON. A `fetch()`/XHR call still gets the `401` either way. |
 
 ### [LoggerOptions](#logging)
 

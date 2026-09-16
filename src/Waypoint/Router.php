@@ -10,7 +10,7 @@ use RuntimeException;
 use Waypoint\Container;
 use Waypoint\Csrf;
 use Waypoint\Enums\{Message, RouteType};
-use Waypoint\Http\{PublicFileServer, Request, Response, ResultRenderer, View};
+use Waypoint\Http\{PublicFileServer, Redirect, Request, Response, ResultRenderer, View};
 use Waypoint\UI\WaypointController;
 use Waypoint\Validator;
 use Waypoint\Exceptions\{ForbiddenException, UnauthorizedException, ValidationException};
@@ -846,9 +846,10 @@ class Router
     /**
      * Dispatches a route handler's return value to a response: a View gets
      * rendered here directly (renderView()), since that needs this
-     * Router's own compiled CSS/JS asset lookups and #[Inject] wiring;
-     * everything else (JSON/file/XML) is delegated to ResultRenderer, which
-     * needs none of that.
+     * Router's own compiled CSS/JS asset lookups and #[Inject] wiring; a
+     * Redirect becomes just a status + Location header (no body, no
+     * formatter involved); everything else (JSON/file/XML) is delegated
+     * to ResultRenderer, which needs none of that.
      *
      * @param array{type?: string, options?: array<string, mixed>|null} $formatter
      */
@@ -856,6 +857,11 @@ class Router
     {
         if ($result instanceof View) {
             $this->renderView($result, $req, $res);
+            return;
+        }
+
+        if ($result instanceof Redirect) {
+            $res->status($result->status)->withHeader('Location', $result->location);
             return;
         }
 

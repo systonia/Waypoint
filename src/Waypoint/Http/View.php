@@ -7,6 +7,7 @@ use Waypoint\Environment;
 use Waypoint\Csrf;
 use Waypoint\Attributes\Inject;
 use Waypoint\Options\RendererOptions;
+use InvalidArgumentException;
 use RuntimeException;
 
 class View
@@ -87,13 +88,29 @@ class View
     protected $sectionBufferLevel = 0;
 
     /**
-     * @param string $view
+     * @param string $view The template's path under RendererOptions::
+     *  $directory, without .php and '/'-separated: "Home" for Home.php,
+     *  "Admin/Users" for Admin/Users.php -- exactly the name
+     *  ViewAssets::discoverViewNames() produces for it, so its sibling
+     *  .css/.js are found under the same key. Never a path *outside* that
+     *  directory: a leading '/' or any '..' segment is rejected outright,
+     *  since $view is commonly built from something (a route param, a
+     *  query value) that ultimately came from the request.
      * @param mixed $model
      * @param bool $partial
      * @param string|null $layout
      */
     public function __construct(string $view, mixed $model = null, bool $partial = false, ?string $layout = null)
     {
+        if (
+            $view === ''
+            || str_starts_with($view, '/')
+            || str_contains($view, '\\')
+            || in_array('..', explode('/', $view), true)
+        ) {
+            throw new InvalidArgumentException("Invalid view name '{$view}': must be a '/'-separated path inside the views directory, without '..' segments.");
+        }
+
         $this->view = $view;
         $this->model = $model;
         $this->partial = $partial;
