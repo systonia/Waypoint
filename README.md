@@ -14,14 +14,37 @@ routing and partial HTML views over AJAX.
 
 ---
 
-## Features
+## Overview
+
+Waypoint is for a team that wants **one small framework covering both sides of a typical app** — a JSON
+API and a server-rendered, progressively-enhanced UI (partial HTML swaps over AJAX, no separate frontend
+build) — without reaching for a full-stack framework's config files, service definitions, or implicit
+magic. Routing, dependency injection, validation, and the OpenAPI spec are all driven directly off PHP
+attributes on your own classes; there's nothing else to wire up or keep in sync.
+
+It also ships production-grade defaults for the things a real API needs — RFC 9457 structured error
+responses, CSRF protection, security headers, request correlation IDs, JWT auth — on by default or a
+few lines of `configure()` away, rather than left to every app to reimplement. And it's built to be fast
+under real load: attribute discovery compiles to a cache with an opt-in "trust mode" for production,
+benchmarked well over an order of magnitude faster than uncached reflection-based discovery.
+
+### Feature highlights
 
 - Attribute-based routing and controllers (`#[Get]`/`#[Post]`/`#[Put]`/`#[Patch]`/`#[Delete]`)
 - Simple, reachability-based dependency injection via `#[Inject]` (no separate "service" attribute)
 - Request validation attributes (`#[NotBlank]`, `#[Email]`, `#[Length]`, `#[Regex]`)
-- An explicit exception-handler registry, with sensible defaults out of the box
-- Middleware pipeline, including per-route middleware via `#[Middleware(Class::class)]`
+- A `FromArray` trait for `#[Body]`-bound DTOs, so their array-hydrating constructor never has to be
+  hand-written
+- A unified `HttpException` hierarchy with RFC 9457 ("Problem Details for HTTP APIs") JSON error
+  responses out of the box, plus an explicit exception-handler registry for anything more specific
+- Middleware pipeline built on a mandatory `MiddlewareBase` (`before()`/`after()` hooks, with a
+  short-circuit veto), including per-route middleware via `#[Middleware(Class::class)]`
 - Built-in CORS support
+- Security response headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, HSTS, opt-in
+  CSP) via `SecurityHeadersMiddleware`
+- Stateless, double-submit-cookie CSRF protection, with a per-route/controller `#[SkipCsrf]` opt-out
+- Request/correlation ID tracking (`X-Request-Id`/`X-Correlation-Id`), automatically stamped onto every
+  log line for the duration of that request
 - JWT authentication (`useJwt()`), with a required (never-defaulted) signing secret
 - An HTML-rendering MVC view layer, with layouts, sections, and automatic scoped CSS/JS per view
 - Static file serving from a configured public directory
@@ -30,6 +53,35 @@ routing and partial HTML views over AJAX.
 - CLI task runner (`#[Manager]`/`#[Task]`), for the same app to serve HTTP and run background jobs
 - A complete OpenAPI 3.1.0 generator, driven by a compiled attribute cache rather than live reflection
 - Optional route/DI compilation caching with an opt-in "trust mode" for production deploys
+
+---
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Basic Usage](#basic-usage)
+- [Routing & Parameter Binding](#routing--parameter-binding)
+- [Dependency Injection](#dependency-injection)
+- [Middleware](#middleware)
+  - [Security Headers](#security-headers)
+  - [CSRF Protection](#csrf-protection)
+  - [CORS](#cors)
+- [Exception Handling](#exception-handling)
+- [Views](#views)
+- [Static Files](#static-files)
+- [Gzip Compression](#gzip-compression)
+- [JWT Authentication](#jwt-authentication)
+- [OpenAPI](#openapi)
+- [Request / Correlation ID](#request--correlation-id)
+- [Logging](#logging)
+- [CLI Tasks](#cli-tasks)
+- [Environment Variables](#environment-variables)
+- [Route/DI Compilation Caching & Production Performance](#routedi-compilation-caching--production-performance)
+- [Options Reference](#options-reference)
+- [Requirements](#requirements)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact](#contact)
 
 ---
 
@@ -191,7 +243,59 @@ class CreateProductDTO
 ```
 
 A failing DTO throws `ValidationException`, which the default exception handler turns into a `422`
-with `{"error": "...", "details": {...}}`.
+RFC 9457 Problem Details response, with per-field errors under `errors`:
+`{"type": "about:blank", "title": "Validation failed", "status": 422, "detail": "Validation failed", "errors": {"sku": "..."}}`
+— see [Exception Handling](#exception-handling).
+
+### Hydrating DTOs (`FromArray`)
+
+`#[Body]`/`#[Body(of: ...)]` construct your DTO directly as `new YourDTO($req->body())` (see
+[Array/collection request bodies](#arraycollection-request-bodies) above), so every DTO used that way
+needs a constructor that hydrates its public properties from an array. `use Waypoint\FromArray;` provides
+exactly that, instead of writing (and keeping in sync across every DTO) the same `foreach`/`property_exists`
+loop by hand:
+
+```php
+use Waypoint\FromArray;
+use Waypoint\Attributes\{NotBlank, Email};
+
+class CreateProductDTO
+{
+    use FromArray;
+
+    #[NotBlank]
+    public string $name = '';
+
+    #[Email]
+    public ?string $contactEmail = null;
+}
+```
+
+Unknown keys in the input array are silently ignored. A property that must never be settable this way
+(e.g. a server-computed or nested value — `#[Body]` hydration is flat, so assigning a raw array straight
+to a typed object property would `TypeError` instead of recursively hydrating it) can be excluded by
+overriding `fromArrayExcludes()`:
+
+```php
+use Waypoint\FromArray;
+
+class ProductDTO
+{
+    use FromArray;
+
+    public ?ProductDTO $relatedProduct = null; // set server-side, never from client input
+
+    /** @return array<int, string> */
+    protected function fromArrayExcludes(): array
+    {
+        return ['relatedProduct'];
+    }
+}
+```
+
+A DTO that needs extra logic around hydration (not just the plain loop) can declare its own
+`__construct()` — which overrides the trait's, same as any other method — and call
+`$this->hydrateFromArray($data)` from it directly.
 
 ---
 
@@ -257,7 +361,7 @@ Notes:
 
 ## Middleware
 
-Global middleware runs on every request, registered via `use()`:
+Global middleware runs on every request, registered via `use()` with a plain callable:
 
 ```php
 $app->use(function ($req, $res, $next) {
@@ -270,9 +374,28 @@ $app->use(function ($req, $res, $next) {
 
 `useCors()` and `useJwt()` (see below) are both just built-in middleware registered this way.
 
-Per-route middleware is declared with `#[Middleware(Class::class)]` directly on a
-controller method (repeatable). The class is resolved through the container at dispatch time — so it
-can itself use `#[Inject]` — rather than being instantiated directly:
+Per-route middleware is declared with `#[Middleware(Class::class)]` directly on a controller method
+(repeatable). **The class must extend `Waypoint\Http\MiddlewareBase`** — any `#[Middleware(...)]` class
+that doesn't is silently skipped at compile time (the same treatment a nonexistent class already gets),
+so this isn't optional. `MiddlewareBase::handle()` is `final` and always runs `before()` → `$next()` →
+`after()`, in that fixed order; override `before()`/`after()` instead of reimplementing that plumbing
+yourself:
+
+```php
+use Waypoint\Http\{MiddlewareBase, Request, Response};
+use Waypoint\Exceptions\ForbiddenException;
+
+class RequireAdminMiddleware extends MiddlewareBase
+{
+    protected function before(Request $req, Response $res): bool
+    {
+        if (($req->jwt['role'] ?? null) !== 'admin') {
+            throw new ForbiddenException('Admin access required.');
+        }
+        return true; // false vetoes: $next() and after() are both skipped
+    }
+}
+```
 
 ```php
 use Waypoint\Attributes\{Get, Middleware};
@@ -285,6 +408,95 @@ class AdminController
     {
         return ['ok' => true];
     }
+}
+```
+
+`before()` returning `false` is the veto point: `$next()` (and `after()`) are skipped entirely and the
+chain short-circuits there — typically because `before()` already threw, or built its own response.
+`before()`/`after()` are both no-ops by default, so a subclass only overrides whichever one it needs. The
+class is resolved through the container at dispatch time — so it can itself use `#[Inject]` — rather than
+being instantiated directly.
+
+Because `MiddlewareBase` also implements `__invoke()` (delegating to `handle()`), any subclass is
+directly usable on the `$app->use()` pipe too, without wrapping it in a closure:
+
+```php
+$app->use(new SecurityHeadersMiddleware()); // see below
+```
+
+### Security Headers
+
+`SecurityHeadersMiddleware` fills in the standard hardening response headers — `X-Content-Type-Options`,
+`X-Frame-Options`, `Referrer-Policy`, and (HTTPS requests only) `Strict-Transport-Security` — enabled by
+default with sensible values; `Content-Security-Policy` is opt-in, since a wrong one-size-fits-all CSP
+would break real pages rather than just fail open. Register it once, via `use()`:
+
+```php
+use Waypoint\Http\SecurityHeadersMiddleware;
+use Waypoint\Options\SecurityHeaderOptions;
+
+$app->configure(function (SecurityHeaderOptions $opts) {
+    $opts->frameOptions = 'SAMEORIGIN';       // default: 'DENY'
+    $opts->cspEnabled = true;                 // default: false
+    $opts->csp = "default-src 'self'";        // required once cspEnabled is true
+});
+
+$app->use(new SecurityHeadersMiddleware());
+```
+
+Every header is only *filled in* (via `Response::hasHeader()`) — a controller (or another middleware)
+that already set one of these headers itself always wins, regardless of where this sits in the pipe.
+
+### CSRF Protection
+
+Stateless, double-submit-cookie CSRF protection for state-changing requests — no server-side session
+store: a token is a self-contained, HMAC-signed `{exp, nonce}` pair, verified against
+`CsrfOptions::$secret`. Configuring a secret is what opts an app into it at all — unconfigured (the
+default), every request passes through unchecked, so this never breaks an app that doesn't use it:
+
+```php
+use Waypoint\Options\CsrfOptions;
+
+$app->configure(function (CsrfOptions $opts) {
+    $opts->secret = $env->get('CSRF_SECRET'); // required to actually enable checking
+    $opts->cookieSecure = true;               // default -- HTTPS only; set false for local HTTP dev
+});
+```
+
+Once a secret is set, every `POST`/`PUT`/`PATCH`/`DELETE` request is checked automatically (`GET`/`HEAD`
+never carry a body/side effect worth protecting) — no middleware to register. A token is issued as a
+cookie (`CsrfOptions::$cookieName`, default `csrf_token`) on every rendered `View` (see
+[Views](#views)), and must be repeated back by the client either as a request header
+(`CsrfOptions::$headerName`, default `X-CSRF-Token` — the AJAX/`fetch()` path) or a body field
+(`CsrfOptions::$fieldName`, default `_csrf` — a classic no-JS `<form>`). A mismatch, missing token, or
+expired token throws `ForbiddenException` (403).
+
+Inside a view template, `$this->csrf` renders either half of that pattern:
+
+```php
+<form method="post">
+    <?= $this->csrf->field() ?>  <!-- hidden input, classic <form> path -->
+</form>
+```
+
+```js
+fetch('/orders', {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': /* read from document.cookie[csrfCookieName] */ '...' },
+    body: JSON.stringify(data),
+});
+```
+
+Opt a token-auth-only JSON API (or any route with no double-submit cookie to check) out entirely with
+`#[SkipCsrf]`, on the controller class or a single method:
+
+```php
+use Waypoint\Attributes\SkipCsrf;
+
+#[Controller('/api')]
+#[SkipCsrf] // every route below skips CSRF verification
+class ApiController
+{
 }
 ```
 
@@ -318,20 +530,55 @@ sending a blank/malformed header value.
 
 ## Exception Handling
 
-Waypoint registers default handlers for its own exception types out of the box:
+`Waypoint\Exceptions\HttpException` is the base class every one of Waypoint's own HTTP-facing exceptions
+extends (`ForbiddenException`, `UnauthorizedException`, `NotFoundException`, `ValidationException`), and
+the one your own domain exceptions should extend too. Its fields map directly onto
+[RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) ("Problem Details for HTTP APIs"):
 
-| Exception                | Status |
-|---------------------------|--------|
-| `ValidationException`     | 422 (body includes `details`, the per-field/per-index errors) |
-| `ForbiddenException`      | 403 |
-| `UnauthorizedException`   | 401 |
-| `NotFoundException`       | 404 |
-| Any other `Throwable`     | 500 (message hidden unless `Environment::isDev()`) |
+```php
+use Waypoint\Exceptions\HttpException;
 
-Register your own handler — for an exact exception class, or anything further up its
-class/interface hierarchy — with `useExceptionHandler()`. The most specific registered handler wins:
-exact class match first, then parent classes, then implemented interfaces, then the `Throwable`
-catch-all.
+class OutOfStockException extends HttpException
+{
+    public function __construct(string $detail)
+    {
+        parent::__construct(statusCode: 409, title: 'Conflict', detail: $detail);
+        // $type (default 'about:blank') and $instance are also constructor args, if you need them
+    }
+}
+```
+
+Waypoint's default handler (installed automatically, no setup) catches every `HttpException` and builds a
+`Content-Type: application/problem+json` response, status = `$statusCode`, body =
+`{type, title, status, detail?, instance?}`:
+
+```json
+{"type": "about:blank", "title": "Conflict", "status": 409, "detail": "'Sourdough Loaf' is out of stock."}
+```
+
+A subclass with extra structured data overrides `toProblemDetails()` to add its own members alongside the
+five standard ones — `ValidationException` does exactly this, adding `errors` (the per-field/per-index
+messages):
+
+| Exception                | Status | Extra body member |
+|---------------------------|--------|--------------------|
+| `ValidationException`     | 422    | `errors` (per-field/per-index messages) |
+| `ForbiddenException`      | 403    | — |
+| `UnauthorizedException`   | 401    | — |
+| `NotFoundException`       | 404    | — |
+| Any other `Throwable`     | 500    | — (message never exposed, not even in development — see below) |
+
+A non-`HttpException` `Throwable` (anything unexpected/unhandled) maps to a generic 500 Problem Details
+body with a fixed `"Internal Server Error"` title — **never** `$e->getMessage()` or a stack trace, in any
+environment: an unexpected exception's message can easily contain internal details (a file path, a query,
+a raw driver error) never meant to reach whoever triggered the crash, so `Environment::isDev()` alone
+isn't treated as a safe enough gate for that. It's still logged in full via the container's `Logger`. A
+project that wants more than the generic message needs its own explicit
+`useExceptionHandler(Throwable::class, ...)` override — an actual opt-in, not an implicit one.
+
+Register your own handler — for an exact exception class, or anything further up its class/interface
+hierarchy — with `useExceptionHandler()`. The most specific registered handler wins: exact class match
+first, then parent classes, then implemented interfaces, then the `Throwable` catch-all.
 
 ```php
 use Waypoint\Http\{Request, Response};
@@ -339,13 +586,18 @@ use Waypoint\Http\{Request, Response};
 $app->useExceptionHandler(MyDomainException::class, function (MyDomainException $e, Request $req, Response $res) {
     $res->status(409)
         ->withHeader('Content-Type', 'application/json')
-        ->write(json_encode(['error' => $e->getMessage()]))
-        ->send();
+        ->write(json_encode(['error' => $e->getMessage()]));
+    // no need to call ->send() -- see below
 });
 ```
 
 Calling `useExceptionHandler()` again for the same class overrides the previous handler — including
-the built-in defaults above.
+the built-in `HttpException`/`Throwable` defaults above.
+
+A handler only needs to build `$res` (status/headers/body) and return — `App::handleHttp()` sends the
+response exactly once, itself, after the whole middleware pipe has unwound. `Response::send()` stays
+idempotent for compatibility — a handler that calls it itself doesn't break anything — but it's no longer
+the recommended shape for a new handler.
 
 ---
 
@@ -554,6 +806,30 @@ $app->configure(function (OpenAPIOptions $opts) {
     $opts->version = '1.2.0';
     $opts->servers = [['url' => 'https://api.example.com']];
 });
+```
+
+---
+
+## Request / Correlation ID
+
+Every request gets a correlation id, available as `$req->id` in any controller/middleware that receives
+the `Request`: the incoming `X-Request-Id` header if the client/upstream sent one (`X-Correlation-Id` as a
+fallback header name — an upstream proxy's own, possibly non-UUID, id is exactly as valid a correlation id
+as one Waypoint would generate itself), otherwise a fresh UUID v4. No configuration or middleware
+required.
+
+The resolved id is mirrored back to the client as an `X-Request-ID` response header, and automatically
+stamped onto every `Logger` call made during that request, under the `request_id` context key — no need
+to pass it around by hand:
+
+```php
+#[Get('/{id}')]
+public function show(#[Param] string $id, Request $req): array
+{
+    $this->logger->info('Fetching widget', ['id' => $id]);
+    // logged with 'request_id' => $req->id automatically added to context
+    // ...
+}
 ```
 
 ---
@@ -767,6 +1043,18 @@ An unconfigured Options class still resolves — every setting below already sho
 | `maxAge` | `null` | How long (seconds) a browser may cache a preflight `OPTIONS` response. |
 | `allowCredentials` | `false` | Sends `Access-Control-Allow-Credentials: true` when `true`; otherwise the header is omitted. |
 
+### [CsrfOptions](#csrf-protection)
+
+| Setting | Default | Description |
+|---|---|---|
+| `secret` | *(required — uninitialized)* | HMAC signing key for issued tokens. Unconfigured (the default), CSRF checking is off entirely — every request passes through unchecked. |
+| `ttl` | `3600` | How long an issued token stays valid, in seconds; also the CSRF cookie's own Max-Age. |
+| `cookieName` | `'csrf_token'` | Name of the double-submit cookie the token is issued under. Deliberately not HttpOnly — client-side JS must be able to read it. |
+| `headerName` | `'X-CSRF-Token'` | Request header checked first for the submitted token (the AJAX/fetch path). |
+| `fieldName` | `'_csrf'` | Request body field checked when the header isn't present (the classic no-JS `<form>` path). |
+| `cookieSecure` | `true` | The CSRF cookie's own `Secure` attribute. Set `false` explicitly for a local HTTP-only dev environment. |
+| `cookieSameSite` | `'Lax'` | The CSRF cookie's own `SameSite` attribute. |
+
 ### [EnvironmentOptions](#environment-variables)
 
 | Setting | Default | Description |
@@ -826,12 +1114,15 @@ plain properties — see [Logging](#logging).
 | `directory` | `null` | Where view/layout `.php` templates (and their sibling `.css`/`.js`) live. |
 | `layout` | `'_Layout'` (no extension — matches nothing) | Default layout template; pass an explicit `.php` name, or every render falls back to bare view content. |
 
----
+### [SecurityHeaderOptions](#security-headers)
 
-## Requirements
-
-- PHP 8.4+
-- Composer
+| Setting | Default | Description |
+|---|---|---|
+| `contentTypeOptionsEnabled` / `contentTypeOptions` | `true` / `'nosniff'` | `X-Content-Type-Options`. |
+| `frameOptionsEnabled` / `frameOptions` | `true` / `'DENY'` | `X-Frame-Options`; set `'SAMEORIGIN'` to allow same-origin framing. |
+| `referrerPolicyEnabled` / `referrerPolicy` | `true` / `'strict-origin-when-cross-origin'` | `Referrer-Policy`. |
+| `hstsEnabled` / `hsts` | `true` / `'max-age=31536000; includeSubDomains'` | `Strict-Transport-Security` — only ever sent on a request that itself arrived over HTTPS, regardless of this flag. |
+| `cspEnabled` / `csp` | `false` / `null` | `Content-Security-Policy` — opt-in only; a wrong one-size-fits-all default would break real pages instead of just failing open. |
 
 ---
 
