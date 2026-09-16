@@ -22,6 +22,7 @@ class DocumentedController
     #[Put('/{id}')]
     #[Summary(text: 'Replace a widget')]
     #[Tags(tags: ['widgets-named-arg'])]
+    #[Throws(exception: NotFoundException::class, status: 404, description: 'Widget missing')]
     public function replace(#[Param] string $id, #[Body] CreateProductDTO $dto): array
     {
         return ['id' => $id];

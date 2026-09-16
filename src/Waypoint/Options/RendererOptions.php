@@ -26,13 +26,11 @@ class RendererOptions
      */
     public string $layout = '_Layout'{
         get => $this->layout;
-        set(?string $value) => $this->layout = $value;
+        set(string $value) => $this->layout = $value;
     }
 
     /**
-     * Undocumented function
-     *
-     * @param array $options
+     * @param array<string, mixed> $options
      */
     public function __construct(array $options = [])
     {
@@ -46,9 +44,7 @@ class RendererOptions
     }
 
     /**
-     * Undocumented function
-     *
-     * @return array
+     * @return array<string, string>
      */
     public function toArray(): array
     {

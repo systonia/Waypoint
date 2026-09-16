@@ -30,9 +30,7 @@ class OpenAPIOptions
 
     // Optional extras for future extension
     /**
-     * Undocumented variable
-     *
-     * @var array
+     * @var array<int, array<string, mixed>>
      */
     public array $servers = [];
 
@@ -53,7 +51,7 @@ class OpenAPIOptions
     /**
      * Undocumented variable
      *
-     * @var array<int, array<string, array>>
+     * @var array<int, array<string, array<int, string>>>
      */
     public array $security = [];
 
@@ -65,9 +63,7 @@ class OpenAPIOptions
     public ?array $externalDocs = null;
 
     /**
-     * Undocumented function
-     *
-     * @param array $options
+     * @param array<string, mixed> $options
      */
     public function __construct(array $options = [])
     {
@@ -79,9 +75,7 @@ class OpenAPIOptions
     }
 
     /**
-     * Undocumented function
-     *
-     * @return array
+     * @return array<string, mixed>
      */
     public function toArray(): array
     {
@@ -104,7 +98,10 @@ class OpenAPIOptions
         }
 
         if (!empty($this->securitySchemes)) {
-            $result['components']['securitySchemes'] = $this->securitySchemes;
+            // A single-level assignment (not $result['components']['securitySchemes'] = ...)
+            // on purpose: PHPStan can't track a doubly-nested offset being
+            // auto-vivified through an array<string, mixed>-typed $result.
+            $result['components'] = ['securitySchemes' => $this->securitySchemes];
         }
 
         if (!empty($this->security)) {

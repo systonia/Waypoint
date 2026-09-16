@@ -35,6 +35,30 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
         $this->assertContains('injecting:' . ExampleService::class, CallTracker::$calls);
     }
 
+    public function testMiddlewareBaseRunsBeforeThenNextThenAfterInOrder(): void
+    {
+        $output = $this->dispatch('GET', '/middleware/before-after');
+
+        $this->assertSame(
+            ['before-after:before', 'controller', 'before-after:after'],
+            CallTracker::$calls
+        );
+        $this->assertSame(['ok' => true], json_decode($output, true));
+    }
+
+    public function testMiddlewareBaseSubclassCanSetResponseHeadersFromBothBeforeAndAfter(): void
+    {
+        // Response::send() only runs once, in App::handleHttp(), after
+        // the entire chain (per-route #[Middleware(...)] included) has
+        // unwound -- so a header set from either hook actually reaches
+        // the client, not just before().
+        $this->dispatch('GET', '/middleware/before-after');
+        $headers = $this->sentHeaders();
+
+        $this->assertSame('yes', $headers['x-before'] ?? null);
+        $this->assertSame('yes', $headers['x-after'] ?? null);
+    }
+
     public function testShortCircuitingMiddlewarePreventsTheControllerFromRunning(): void
     {
         $output = $this->dispatch('GET', '/middleware/blocked');
@@ -49,6 +73,19 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
         // middleware wrapped around it.
         $output = $this->dispatch('GET', '/middleware/bad-middleware');
 
+        $this->assertSame(['ok' => true], json_decode($output, true));
+    }
+
+    public function testMiddlewareNotExtendingMiddlewareBaseIsSkippedAtCompileTime(): void
+    {
+        // MiddlewareBase is mandatory now: an existing class with a
+        // matching handle() signature but no MiddlewareBase parent must
+        // be rejected the same way a nonexistent class is -- the
+        // controller runs with no middleware wrapped around it, app boot
+        // doesn't crash.
+        $output = $this->dispatch('GET', '/middleware/not-middleware-base');
+
+        $this->assertSame(['controller'], CallTracker::$calls);
         $this->assertSame(['ok' => true], json_decode($output, true));
     }
 
@@ -80,5 +117,17 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
         $this->assertNotNull(
             Waypoint::create()->getRouter()->findRoute($routes, 'GET', '/middleware/union-param')
         );
+    }
+
+    /** @return array<string, string> */
+    private function sentHeaders(): array
+    {
+        $raw = function_exists('xdebug_get_headers') ? xdebug_get_headers() : headers_list();
+        $headers = [];
+        foreach ($raw as $line) {
+            [$name, $value] = array_map('trim', explode(':', $line, 2) + [1 => '']);
+            $headers[strtolower($name)] = $value;
+        }
+        return $headers;
     }
 }

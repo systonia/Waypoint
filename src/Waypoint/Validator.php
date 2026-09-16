@@ -14,8 +14,9 @@ class Validator
     /**
      * Validates all properties of a DTO with validation attributes.
      * @param object $dto
-     * @return array Errors: field => message
+     * @return array<string, string> Errors: field => message
      */
+    #[\NoDiscard('Ignoring the returned errors means validation never actually gets enforced.')]
     public function validate(object $dto): array
     {
         $errors = [];
@@ -24,11 +25,10 @@ class Validator
         foreach ($rc->getProperties(ReflectionProperty::IS_PUBLIC) as $prop) {
             $name = $prop->getName();
 
-            if (method_exists($prop, 'isInitialized') && !$prop->isInitialized($dto)) {
-                $value = null;
-            } else {
-                $value = $prop->getValue($dto);
-            }
+            // ReflectionProperty::isInitialized() has existed since PHP
+            // 7.4 -- always present given this framework's own >=8.5
+            // floor, so no method_exists() guard is needed around it.
+            $value = $prop->isInitialized($dto) ? $prop->getValue($dto) : null;
 
             #region #NotBlank
             foreach ($prop->getAttributes(NotBlank::class) as $attr) {
@@ -63,7 +63,7 @@ class Validator
             foreach ($prop->getAttributes(Regex::class) as $attr) {
                 /** @var Regex $inst */
                 $inst = $attr->newInstance();
-                if ($value !== null && !preg_match($inst->pattern, $value)) {
+                if (is_string($value) && !preg_match($inst->pattern, $value)) {
                     $errors[$name] = "This value does not match the required format.";
                 }
             }

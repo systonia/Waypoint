@@ -130,6 +130,70 @@ final class ResponseTest extends TestCase
         $this->assertContains('x-custom', $this->sentHeaderNames());
     }
 
+    public function testSendIsIdempotentAndDoesNotEchoTheBodyTwice(): void
+    {
+        $res = (new Response())->write('hello');
+
+        ob_start();
+        $res->send();
+        $res->send();
+        $output = ob_get_clean();
+
+        $this->assertSame('hello', $output);
+    }
+
+    public function testSendIsIdempotentEvenWhenAHeaderIsAddedBetweenCalls(): void
+    {
+        // A header added after the first send() was never actually sent
+        // to the client -- the first call is the one that counts, exactly
+        // like a real HTTP response can only be sent once.
+        $res = (new Response())->write('hello');
+
+        ob_start();
+        $res->send();
+        $res->withHeader('X-Too-Late', 'yes');
+        $res->send();
+        ob_end_clean();
+
+        $this->assertNull($this->sentHeaderValue('X-Too-Late'));
+    }
+
+    public function testHasHeaderIsFalseBeforeAnyHeaderIsSet(): void
+    {
+        $res = new Response();
+        $this->assertFalse($res->hasHeader('X-Custom'));
+    }
+
+    public function testHasHeaderIsTrueAfterWithHeader(): void
+    {
+        $res = (new Response())->withHeader('X-Custom', 'yes');
+        $this->assertTrue($res->hasHeader('X-Custom'));
+    }
+
+    public function testHasHeaderIsCaseInsensitive(): void
+    {
+        $res = (new Response())->withHeader('X-Custom', 'yes');
+        $this->assertTrue($res->hasHeader('x-custom'));
+        $this->assertTrue($res->hasHeader('X-CUSTOM'));
+    }
+
+    public function testWithRequestIdSendsItBackAsXRequestIdHeader(): void
+    {
+        $res = (new Response())->withRequestId('abc-123-correlation');
+
+        ob_start();
+        $res->send();
+        ob_end_clean();
+
+        $this->assertSame('abc-123-correlation', $this->sentHeaderValue('X-Request-ID'));
+    }
+
+    public function testWithRequestIdIsChainable(): void
+    {
+        $res = new Response();
+        $this->assertSame($res, $res->withRequestId('abc-123'));
+    }
+
     public function testWithCookieIsChainable(): void
     {
         $res = new Response();

@@ -102,4 +102,50 @@ final class RequestTest extends TestCase
         $req = Request::capture();
         $this->assertFalse($req->acceptPartial);
     }
+
+    public function testCaptureGeneratesAUuidV4IdWhenNoRequestIdHeaderIsSent(): void
+    {
+        $req = Request::capture();
+
+        $this->assertMatchesRegularExpression(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',
+            $req->id
+        );
+    }
+
+    public function testCaptureGeneratesADifferentIdOnEachCall(): void
+    {
+        $first = Request::capture();
+        $second = Request::capture();
+
+        $this->assertNotSame($first->id, $second->id);
+    }
+
+    public function testCaptureUsesTheIncomingXRequestIdHeaderVerbatim(): void
+    {
+        $_SERVER['HTTP_X_REQUEST_ID'] = 'upstream-supplied-id-not-a-uuid';
+
+        $req = Request::capture();
+
+        $this->assertSame('upstream-supplied-id-not-a-uuid', $req->id);
+    }
+
+    public function testCaptureFallsBackToTheXCorrelationIdHeaderWhenNoRequestIdIsSent(): void
+    {
+        $_SERVER['HTTP_X_CORRELATION_ID'] = 'correlation-abc-123';
+
+        $req = Request::capture();
+
+        $this->assertSame('correlation-abc-123', $req->id);
+    }
+
+    public function testCapturePrefersXRequestIdOverXCorrelationIdWhenBothAreSent(): void
+    {
+        $_SERVER['HTTP_X_REQUEST_ID'] = 'request-id-wins';
+        $_SERVER['HTTP_X_CORRELATION_ID'] = 'correlation-id-loses';
+
+        $req = Request::capture();
+
+        $this->assertSame('request-id-wins', $req->id);
+    }
 }

@@ -67,8 +67,8 @@ final class ArgumentBindingTest extends IntegrationTestCase
         ]);
 
         $decoded = json_decode($output, true);
-        $this->assertSame('Validation failed', $decoded['error']);
-        $this->assertArrayHasKey('1', $decoded['details']);
-        $this->assertArrayNotHasKey('0', $decoded['details']);
+        $this->assertSame('Validation failed', $decoded['title']);
+        $this->assertArrayHasKey('1', $decoded['errors']);
+        $this->assertArrayNotHasKey('0', $decoded['errors']);
     }
 }

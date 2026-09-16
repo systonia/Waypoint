@@ -8,14 +8,26 @@ enum Message: string
     /**
      * Undocumented function
      *
-     * @param array $vars
+     * @param array<array-key, mixed> $vars
      * @return string
      */
     public function format(array $vars = []): string
     {
         $result = $this->value;
         foreach ($vars as $key => $value) {
-            $result = str_replace('{' . $key . '}', (string) $value, $result);
+            // Every real interpolate() call in this codebase passes plain
+            // strings (see RouteCompiler's Message::X->interpolate(...)
+            // call sites) -- the Stringable/default arms only exist so an
+            // unusual future caller can't fatal or silently drop a
+            // placeholder.
+            $replacement = match (true) {
+                is_scalar($value) => (string) $value,
+                // @codeCoverageIgnoreStart
+                $value instanceof \Stringable => (string) $value,
+                default => '',
+                // @codeCoverageIgnoreEnd
+            };
+            $result = str_replace('{' . $key . '}', $replacement, $result);
         }
         return $result;
     }
@@ -23,7 +35,7 @@ enum Message: string
     /**
      * Optional: allow named params (PHP 8.1+)
      *
-     * @param [type] ...$vars
+     * @param mixed ...$vars
      * @return string
      */
     public function interpolate(...$vars): string
@@ -37,6 +49,7 @@ enum Message: string
     case NotFound = "Not Found";
     case Unauthorized = "Unauthorized";
     case ValidationFailed = "Validation failed";
+    case CsrfTokenInvalid = "Invalid or missing CSRF token";
     #endregion
 
     #region OpenAPI
@@ -44,6 +57,11 @@ enum Message: string
     case GeneratorPropertyHasNoType = 'OpenAPIGenerator: Property "{name}" in class "{rc}" has no type.';
     case GeneratorClassDoesNotExist = 'OpenAPIGenerator: generateModelSchema - class "{fqcn}" does not exist.';
     case GeneratorPropertyDoesNotExist2 = 'OpenAPIGenerator: Parameter type "{type}" does not exist in method {method}.';
+    #endregion
+
+    #region Route Versioning
+    case RouteUnversioned = 'RouteCompiler: {method} {path} has no #[Version] attribute -- served without a version prefix.';
+    case RouteInvalidSunsetDate = 'RouteCompiler: {method} {path} has an invalid #[Sunset] date "{date}" (expected YYYY-MM-DD) -- no Sunset header will be sent for it.';
     #endregion
 }
 // phpcs:enable Generic.Files.LineLength

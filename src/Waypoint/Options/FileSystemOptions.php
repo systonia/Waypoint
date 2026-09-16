@@ -93,7 +93,11 @@ class FileSystemOptions
         if ($this->isAbsolutePath($cleanDirectory)) {
             return rtrim($cleanDirectory, '/\\');
         } else {
-            return dirname(realpath($_SERVER['SCRIPT_FILENAME'])) . '/' . $cleanDirectory;
+            $scriptFilename = $_SERVER['SCRIPT_FILENAME'] ?? null;
+            $scriptFilename = is_string($scriptFilename) ? $scriptFilename : '';
+            $resolved = realpath($scriptFilename);
+            $base = $resolved !== false ? dirname($resolved) : getcwd();
+            return $base . '/' . $cleanDirectory;
         }
     }
 

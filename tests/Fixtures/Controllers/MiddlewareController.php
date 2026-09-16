@@ -3,7 +3,7 @@
 namespace Waypoint\Tests\Fixtures\Controllers;
 
 use Waypoint\Attributes\{Controller, Get, Middleware};
-use Waypoint\Tests\Fixtures\Middlewares\{AddHeaderMiddleware, InjectingMiddleware, ShortCircuitMiddleware};
+use Waypoint\Tests\Fixtures\Middlewares\{AddHeaderMiddleware, BeforeAfterMiddleware, InjectingMiddleware, NotAMiddlewareBase, ShortCircuitMiddleware};
 use Waypoint\Tests\Fixtures\Support\CallTracker;
 
 #[Controller('/middleware')]
@@ -14,6 +14,14 @@ class MiddlewareController
     #[Middleware(AddHeaderMiddleware::class)]
     #[Middleware(InjectingMiddleware::class)]
     public function stacked(): array
+    {
+        CallTracker::record('controller');
+        return ['ok' => true];
+    }
+
+    #[Get('/before-after')]
+    #[Middleware(BeforeAfterMiddleware::class)]
+    public function beforeAfter(): array
     {
         CallTracker::record('controller');
         return ['ok' => true];
@@ -33,6 +41,17 @@ class MiddlewareController
     #[Middleware(['Totally\\Fake\\MiddlewareClass', 'handle'])]
     public function badMiddleware(): array
     {
+        return ['ok' => true];
+    }
+
+    // A real, existing class -- just not a MiddlewareBase subclass. Must
+    // be rejected at compile time exactly like the nonexistent class
+    // above, now that MiddlewareBase is mandatory.
+    #[Get('/not-middleware-base')]
+    #[Middleware(NotAMiddlewareBase::class)]
+    public function notMiddlewareBase(): array
+    {
+        CallTracker::record('controller');
         return ['ok' => true];
     }
 

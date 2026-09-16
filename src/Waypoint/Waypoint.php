@@ -2,6 +2,7 @@
 
 namespace Waypoint;
 
+use RuntimeException;
 use Stringable;
 
 class Waypoint {
@@ -38,15 +39,35 @@ class Waypoint {
 
     public static function getRouter(): Router
     {
+        // @codeCoverageIgnoreStart
+        // Every real call path goes through create() first (App::attach(),
+        // Waypoint::getConfig(), or a test's own setUp()); this only turns
+        // a theoretical "called before create()" misuse into a clear
+        // exception instead of a fatal null method call.
+        if (self::$instance === null) {
+            throw new RuntimeException('Waypoint::getRouter() called before Waypoint::create().');
+        }
+        // @codeCoverageIgnoreEnd
         return self::$instance->getRouter();
     }
 
     public static function getContainer(): Container
     {
+        // @codeCoverageIgnoreStart
+        // Same reasoning as getRouter() above.
+        if (self::$instance === null) {
+            throw new RuntimeException('Waypoint::getContainer() called before Waypoint::create().');
+        }
+        // @codeCoverageIgnoreEnd
         return self::$instance->getContainer();
     }
 
-    public static function getConfig(string $className): mixed
+    /**
+     * @template T of object
+     * @param class-string<T> $className
+     * @return T
+     */
+    public static function getConfig(string $className): object
     {
         return self::getContainer()->get($className);
     }

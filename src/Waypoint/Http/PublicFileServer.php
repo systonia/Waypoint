@@ -34,11 +34,13 @@ final class PublicFileServer
         }
 
         $publicPath = $this->options->getPublicDirectory();
+        $realPublicPath = realpath($publicPath);
         $filePath = realpath($publicPath . $path);
 
         if (
             !$filePath
-            || !str_starts_with($filePath, realpath($publicPath))
+            || !$realPublicPath
+            || !str_starts_with($filePath, $realPublicPath)
             || !is_file($filePath)
         ) {
             return false;
@@ -47,10 +49,20 @@ final class PublicFileServer
         $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
         $mime = self::MIME_MAP[$ext] ?? (mime_content_type($filePath) ?: 'application/octet-stream');
 
+        $content = @file_get_contents($filePath);
+        // @codeCoverageIgnoreStart
+        // Only reachable via a race (deleted/permissions changed between
+        // is_file() above and file_get_contents()) that can't be reliably
+        // reproduced cross platform -- same guard as
+        // FileSystem::readViewAssetFile().
+        if ($content === false) {
+            return false;
+        }
+        // @codeCoverageIgnoreEnd
+
         $res->withHeader('Content-Type', $mime)
             ->withHeader('Content-Length', (string) filesize($filePath))
-            ->write(file_get_contents($filePath))
-            ->send();
+            ->write($content);
 
         return true;
     }

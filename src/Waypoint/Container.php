@@ -14,6 +14,7 @@ use Waypoint\Exceptions\{ContainerException, NotFoundException};
  */
 class Container implements ContainerInterface
 {
+    /** @var array<class-string, object> */
     private array $services = [];
 
     public function set(object $service): void
@@ -21,9 +22,19 @@ class Container implements ContainerInterface
         $this->services[get_class($service)] = $service;
     }
 
+    /**
+     * @template T of object
+     * @param class-string<T> $id
+     * @return T
+     */
     public function get(string $id)
     {
-        if (isset($this->services[$id])) {
+        // The `instanceof $id` check is always true here in practice --
+        // set() only ever keys an entry by that instance's own class -- but
+        // it's also what lets PHPStan narrow $this->services[$id] (plain
+        // `object`, since a heterogeneous array can't correlate its own
+        // keys to per-entry value types) to T.
+        if (isset($this->services[$id]) && $this->services[$id] instanceof $id) {
             return $this->services[$id];
         }
         if ($this->isAutoInstantiable($id)) {
@@ -38,6 +49,7 @@ class Container implements ContainerInterface
         throw new NotFoundException("Service '$id' not found");
     }
 
+    /** @param class-string $class */
     public function has(string $class): bool
     {
         return isset($this->services[$class]) || $this->isAutoInstantiable($class);
@@ -50,12 +62,16 @@ class Container implements ContainerInterface
      * on demand. Lets a caller tell "already configured" apart from
      * "constructible with defaults".
      */
+    /** @param class-string $class */
     public function isRegistered(string $class): bool
     {
         return isset($this->services[$class]);
     }
 
-    /** True if $class exists and has no required constructor parameters. */
+    /**
+     * True if $class exists and has no required constructor parameters.
+     * @param class-string $class
+     */
     private function isAutoInstantiable(string $class): bool
     {
         if (!class_exists($class)) {
@@ -65,6 +81,7 @@ class Container implements ContainerInterface
         return !$constructor || $constructor->getNumberOfRequiredParameters() === 0;
     }
 
+    /** @return array<class-string, object> */
     public function all(): array
     {
         return $this->services;

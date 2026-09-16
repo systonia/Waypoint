@@ -12,18 +12,21 @@ class JWT
     /**
      * Undocumented function
      *
-     * @param array $payload
+     * @param array<string, mixed> $payload
      * @param integer|null $ttl
      * @return string
      */
+    #[\NoDiscard('The generated token is the entire point of calling encode() -- discarding it is always a bug.')]
     public static function encode(array $payload, ?int $ttl = null): string
     {
         $opts = Waypoint::getConfig(JWTOptions::class);
         $header = ['alg' => $opts->alg, 'typ' => 'JWT'];
         $payload['exp'] = time() + ($ttl ?? $opts->ttl);
 
-        $h = rtrim(strtr(base64_encode(json_encode($header)), '+/', '-_'), '=');
-        $p = rtrim(strtr(base64_encode(json_encode($payload)), '+/', '-_'), '=');
+        $encodedHeader = json_encode($header);
+        $encodedPayload = json_encode($payload);
+        $h = rtrim(strtr(base64_encode($encodedHeader !== false ? $encodedHeader : '{}'), '+/', '-_'), '=');
+        $p = rtrim(strtr(base64_encode($encodedPayload !== false ? $encodedPayload : '{}'), '+/', '-_'), '=');
         $sig = hash_hmac('sha256', "$h.$p", $opts->secret, true);
         $s = rtrim(strtr(base64_encode($sig), '+/', '-_'), '=');
         return "$h.$p.$s";
@@ -33,8 +36,9 @@ class JWT
      * Undocumented function
      *
      * @param string $jwt
-     * @return array|null
+     * @return array<string, mixed>|null
      */
+    #[\NoDiscard('Ignoring the result (payload, or null for an invalid/expired token) silently skips checking whether the token actually verified.')]
     public static function decode(string $jwt): ?array
     {
         $opts = Waypoint::getConfig(JWTOptions::class);
@@ -47,8 +51,24 @@ class JWT
         if (!hash_equals($validSig, $s)) {
             return null;
         }
-        $payload = json_decode(base64_decode(strtr($p, '-_', '+/')), true);
-        if (!$payload || (isset($payload['exp']) && $payload['exp'] < time())) {
+        $decoded = json_decode(base64_decode(strtr($p, '-_', '+/')), true);
+        if (!is_array($decoded)) {
+            // @codeCoverageIgnoreStart
+            // Every real token encode() itself produces has a JSON-object
+            // payload; reaching here needs a validly-*signed* token whose
+            // payload segment was swapped for something that isn't one,
+            // which isn't practically forgeable without the secret.
+            return null;
+            // @codeCoverageIgnoreEnd
+        }
+        $payload = [];
+        foreach ($decoded as $key => $value) {
+            if (is_string($key)) {
+                $payload[$key] = $value;
+            }
+        }
+        $exp = $payload['exp'] ?? null;
+        if (is_int($exp) && $exp < time()) {
             return null;
         }
         return $payload;
@@ -58,9 +78,10 @@ class JWT
      * Parses the JWT from the given HTTP headers (according to configured header and token type).
      * Returns payload or null.
      *
-     * @param array $headers
-     * @return array|null
+     * @param array<string, string|string[]> $headers
+     * @return array<string, mixed>|null
      */
+    #[\NoDiscard('Same reason as decode() -- ignoring the result silently skips checking whether the request was actually authenticated.')]
     public static function fromRequestHeaders(array $headers): ?array
     {
         $opts = Waypoint::getConfig(JWTOptions::class);

@@ -93,6 +93,8 @@ final class FileSystem
      * App::attach() (for 'services') and Router (for the route plans
      * themselves) reuse this one read instead of each `require`-ing the
      * same file independently.
+     *
+     * @return array<string, mixed>|null
      */
     public function loadCachedRouteData(): ?array
     {
@@ -100,7 +102,32 @@ final class FileSystem
             return null;
         }
         $data = @require $this->getRouteFile();
-        return is_array($data) ? $data : null;
+        return is_array($data) ? self::toStringKeyedArray($data) : null;
+    }
+
+    /**
+     * Narrows an arbitrary decoded/`require`d value to a string-keyed
+     * array, dropping any non-string key -- every routes.php/attributes
+     * cache file this class reads back is one this same class wrote (via
+     * var_export()), but PHPStan has no way to trust a `require`d file's
+     * shape statically.
+     *
+     * @return array<string, mixed>
+     */
+    private static function toStringKeyedArray(mixed $value): array
+    {
+        if (!is_array($value)) {
+            // @codeCoverageIgnoreStart
+            return [];
+            // @codeCoverageIgnoreEnd
+        }
+        $result = [];
+        foreach ($value as $key => $item) {
+            if (is_string($key)) {
+                $result[$key] = $item;
+            }
+        }
+        return $result;
     }
 
     /**
@@ -114,11 +141,15 @@ final class FileSystem
     public function loadCachedServices(): ?array
     {
         $data = $this->loadCachedRouteData();
-        return is_array($data['services'] ?? null) ? $data['services'] : null;
+        $services = $data['services'] ?? null;
+        if (!is_array($services)) {
+            return null;
+        }
+        return array_values(array_filter($services, 'is_string'));
     }
 
     /**
-     * @param array $controllers
+     * @param class-string[] $controllers
      * @param array<string, int> $extraMeta Additional {path => mtime}
      *  entries to require an exact match on too, alongside the controllers'
      *  own -- e.g. ViewAssets::discoverMeta()'s view .css/.js mtimes, so
@@ -133,8 +164,11 @@ final class FileSystem
         $metaFile = $this->getMetaFile();
         $attributesFile = $this->getAttributesFile();
 
+        // getRouteFile()/getMetaFile()/getAttributesFile() are always
+        // strings (their own return type), so only existence needs
+        // checking here.
         foreach ([$routeFile, $metaFile, $attributesFile] as $file) {
-            if (!is_string($file) || !is_file($file)) {
+            if (!is_file($file)) {
                 return false;
             }
         }
@@ -179,8 +213,8 @@ final class FileSystem
 
     /**
      * @param Router $router
-     * @param array $controllers
-     * @param array $serviceClasses
+     * @param class-string[] $controllers
+     * @param class-string[] $serviceClasses
      * @param array<string, int> $extraMeta See isAvailable()'s $extraMeta --
      *  the same view-asset mtimes that decided a rebuild was needed here
      *  get persisted here too, so the next request's isAvailable() call has
@@ -286,9 +320,7 @@ final class FileSystem
     }
 
     /**
-     * Undocumented function
-     *
-     * @param array $controllers
+     * @param class-string[] $controllers
      * @return void
      */
     public function storeAttributes(array $controllers): void
@@ -305,9 +337,7 @@ final class FileSystem
     }
 
     /**
-     * Undocumented function
-     *
-     * @return array
+     * @return array<class-string, mixed> See RouteCompiler::exportAllAttributes() for the shape.
      */
     public function loadAttributes(): array
     {
@@ -316,7 +346,21 @@ final class FileSystem
             return [];
         }
 
-        return require $file;
+        $data = require $file;
+        if (!is_array($data)) {
+            // @codeCoverageIgnoreStart
+            // storeAttributes() always writes `return <array>;` via
+            // var_export() -- this only guards a hand-corrupted cache file.
+            return [];
+            // @codeCoverageIgnoreEnd
+        }
+        $result = [];
+        foreach ($data as $key => $item) {
+            if (is_string($key) && class_exists($key)) {
+                $result[$key] = $item;
+            }
+        }
+        return $result;
     }
 
     /**
@@ -332,6 +376,6 @@ final class FileSystem
             return;
         }
         $data = require $routeFile;
-        $router->importPlans($data);
+        $router->importPlans(is_array($data) ? self::toStringKeyedArray($data) : []);
     }
 }

@@ -120,6 +120,40 @@ final class OpenAPIGeneratorTest extends IntegrationTestCase
         $this->assertSame('Widget missing', $operation['responses']['404']['description']);
     }
 
+    public function testThrowsAttributeUsesTheSharedProblemDetailsSchema(): void
+    {
+        $spec = $this->generate();
+        $operation = $spec['paths']['/documented/{id}']['get'];
+
+        $this->assertSame(
+            ['$ref' => '#/components/schemas/ProblemDetails'],
+            $operation['responses']['404']['content']['application/problem+json']['schema']
+        );
+        $this->assertArrayHasKey('ProblemDetails', $spec['components']['schemas']);
+        $this->assertSame(
+            ['type', 'title', 'status'],
+            $spec['components']['schemas']['ProblemDetails']['required']
+        );
+    }
+
+    public function testTheSharedProblemDetailsSchemaIsRegisteredOnlyOnceAcrossMultipleThrowsUsages(): void
+    {
+        // DocumentedController::show() AND ::replace() both carry
+        // #[Throws(NotFoundException::class, ...)] -- this exercises
+        // OpenAPIGenerator::ensureProblemDetailsSchema()'s early return for
+        // an already-registered schema, not just its registration path.
+        $spec = $this->generate();
+
+        $this->assertSame(
+            ['$ref' => '#/components/schemas/ProblemDetails'],
+            $spec['paths']['/documented/{id}']['put']['responses']['404']['content']['application/problem+json']['schema']
+        );
+        $this->assertCount(1, array_filter(
+            array_keys($spec['components']['schemas']),
+            fn(string $name) => $name === 'ProblemDetails'
+        ));
+    }
+
     public function testEveryOperationHasADefaultSuccessResponse(): void
     {
         $operation = $this->generate()['paths']['/documented']['post'];

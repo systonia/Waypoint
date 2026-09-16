@@ -11,6 +11,6 @@ class WhoAmIController
     #[Get]
     public function show(Request $req): array
     {
-        return ['jwt' => $req->jwt];
+        return ['jwt' => $req->jwt, 'id' => $req->id];
     }
 }

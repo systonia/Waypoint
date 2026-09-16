@@ -24,9 +24,7 @@ use Psr\Log\LogLevel;
 class LoggerOptions
 {
     /**
-     * Each entry: ['logger'=>LoggerInterface, 'levels'=>array (assoc), 'name'=>string|null]
-     *
-     * @var array
+     * @var array<int, array{logger: LoggerInterface, levels: array<string, bool>, name: string|null}>
      */
     private array $loggers = [];
 
@@ -45,7 +43,7 @@ class LoggerOptions
     public ?string $name = null;
 
     /**
-     * @param array $levels
+     * @param string[] $levels
      * @param string|null $name
      */
     public function __construct(array $levels = [], ?string $name = null)
@@ -58,11 +56,15 @@ class LoggerOptions
      * Add one or more loggers (LoggerInterface), with flexible options:
      * - options can be LoggerOptions, string (level), array (levels), or assoc array.
      *
-     * @param LoggerInterface|LoggerInterface[] $logger
-     * @param LoggerOptions|string|array|null $options
+     * @param LoggerInterface|array<int, mixed> $logger A single logger, or
+     *  a plain array of them -- element type left as `mixed`, since
+     *  nothing actually constrains an array's element types; any element
+     *  that isn't really a LoggerInterface is silently skipped below (the
+     *  instanceof check), not assumed away.
+     * @param LoggerOptions|string|array<int|string, mixed>|null $options
      * @return self
      */
-    public function add($logger, $options = null): self
+    public function add(LoggerInterface|array $logger, $options = null): self
     {
         $loggers = is_array($logger) ? $logger : [$logger];
 
@@ -73,12 +75,12 @@ class LoggerOptions
             $opts = new self([$options]);
         } elseif (is_array($options) && array_keys($options) === range(0, count($options) - 1)) {
             // Numeric array = list of levels
-            $opts = new self($options);
+            $opts = new self(self::toStringList($options));
         } elseif (is_array($options)) {
             // Assoc array
-            $levels = $options['levels'] ?? [];
+            $levels = self::toStringList($options['levels'] ?? []);
             $name = $options['name'] ?? null;
-            $opts = new self($levels, $name);
+            $opts = new self($levels, is_string($name) ? $name : null);
         } else {
             $opts = new self();
         }
@@ -114,6 +116,25 @@ class LoggerOptions
     }
 
     /**
+     * Narrows an arbitrary value to a list of strings, dropping any
+     * non-string entry -- $options is fundamentally untyped in add() (see
+     * its own docblock), but $levels is always meant to be PSR-3 level
+     * strings.
+     *
+     * @return string[]
+     */
+    private static function toStringList(mixed $value): array
+    {
+        if (!is_array($value)) {
+            // @codeCoverageIgnoreStart
+            // No real or tested caller passes a non-array 'levels'.
+            return [];
+            // @codeCoverageIgnoreEnd
+        }
+        return array_values(array_filter($value, 'is_string'));
+    }
+
+    /**
      * Add a Monolog logger for a channel and handler, with level filtering.
      *
      * @param string $channel
@@ -137,7 +158,7 @@ class LoggerOptions
      * Return all registered loggers. If none, a NullLogger accepting every
      * level, so Logger::log() always has something to dispatch to.
      *
-     * @return array
+     * @return array<int, array{logger: LoggerInterface, levels: array<string, bool>, name: string|null}>
      */
     public function getLoggers(): array
     {

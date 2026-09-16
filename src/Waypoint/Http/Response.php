@@ -27,9 +27,7 @@ class Response
     private bool $gzipDisabled = false;
 
     /**
-     * Undocumented variable
-     *
-     * @var array
+     * @var array<string, string>
      */
     private array $headers = [];
 
@@ -50,8 +48,31 @@ class Response
      */
     private array $cookies = [];
 
-    public function __construct(private CompressionOptions $compressionOptions = new CompressionOptions())
-    {
+    /**
+     * True once send() has actually run -- makes send() idempotent (see
+     * its own doc). App::handleHttp() is the only place that calls it for
+     * a real request, exactly once, but a custom exception handler
+     * registered via App::useExceptionHandler() (a public extension
+     * point) is free to call it itself too, the way every handler here
+     * did before this became automatic; without this flag, that would
+     * double-send -- echoing the body twice, since send() doesn't clear
+     * it -- once from the handler's own call and once more from
+     * App::handleHttp()'s.
+     *
+     * @var bool
+     */
+    private bool $sent = false;
+
+    public function __construct(
+        // private (not final private -- PHPStan rejects that combination
+        // outright, since a private property has no override surface for
+        // final to protect in the first place): a subclass could still
+        // declare its own $compressionOptions, which would just shadow
+        // this one rather than "override" it in any way that matters --
+        // every method here always reads/writes this exact private slot
+        // regardless.
+        private CompressionOptions $compressionOptions = new CompressionOptions()
+    ) {
     }
 
     /**
@@ -76,6 +97,40 @@ class Response
     {
         $this->headers[$name] = $value;
         return $this;
+    }
+
+    /**
+     * True if a header named $name (case-insensitively -- HTTP header
+     * names are case-insensitive, the same reasoning as
+     * JWT::fromRequestHeaders()'s/Csrf::submittedToken()'s own lookups)
+     * has already been queued via withHeader(), regardless of casing.
+     * Lets a middleware that runs after the controller (e.g.
+     * SecurityHeadersMiddleware::after()) only fill in a header the
+     * controller hasn't already set, never overwrite it.
+     */
+    public function hasHeader(string $name): bool
+    {
+        foreach ($this->headers as $existingName => $value) {
+            if (strcasecmp($existingName, $name) === 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Mirrors the triggering Request's id (Request::$id) back to the
+     * client as X-Request-ID, so it can correlate this response with the
+     * request it made -- the same id Logger::log() automatically attaches
+     * to every log line for the request's duration (see RequestContext).
+     * Called once, right after construction, by whatever created this
+     * Response from a Request (App::handleHttp() in production) -- plain
+     * withHeader() underneath, so it costs nothing to skip for a Response
+     * built without an originating Request (as most unit tests do).
+     */
+    public function withRequestId(string $id): self
+    {
+        return $this->withHeader('X-Request-ID', $id);
     }
 
     /**
@@ -197,12 +252,21 @@ class Response
     }
 
     /**
-     * Send headers and body to the client.
+     * Send headers and body to the client. Idempotent -- a second call
+     * does nothing (see $sent's own doc for why that matters), so it's
+     * always safe to call directly even though App::handleHttp() also
+     * calls it once, automatically, after the full middleware chain has
+     * run.
      *
      * @return void
      */
     public function send(): void
     {
+        if ($this->sent) {
+            return;
+        }
+        $this->sent = true;
+
         $body = $this->maybeCompress($this->body);
 
         if (!headers_sent()) {
@@ -248,12 +312,19 @@ class Response
      */
     private function maybeCompress(string $body): string
     {
+        // $_SERVER values are typed mixed (PHPStan has no way to know what
+        // a given SAPI actually put there) -- a real header value is
+        // always a string in practice, but this narrows explicitly rather
+        // than assuming it.
+        $acceptEncoding = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? '';
+        $acceptEncoding = is_string($acceptEncoding) ? $acceptEncoding : '';
+
         if (
             $this->gzipDisabled
             || !$this->compressionOptions->enabled
             || strlen($body) < $this->compressionOptions->minBytes
             || isset($this->headers['Content-Encoding'])
-            || !str_contains($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '', 'gzip')
+            || !str_contains($acceptEncoding, 'gzip')
         ) {
             return $body;
         }

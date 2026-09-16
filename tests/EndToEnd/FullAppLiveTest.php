@@ -68,7 +68,7 @@ final class FullAppLiveTest extends LiveServerTestCase
 
         $decoded = json_decode($response['body'], true);
         $this->assertSame(422, $response['status']);
-        $this->assertSame('Validation failed', $decoded['error']);
+        $this->assertSame('Validation failed', $decoded['title']);
     }
 
     public function testCorsPreflightHeadersAsActuallyTransmitted(): void
@@ -99,21 +99,35 @@ final class FullAppLiveTest extends LiveServerTestCase
         $this->assertNull(json_decode($response['body'], true)['jwt']);
     }
 
+    /** @param array<string, mixed> $expectedProblem */
     #[DataProvider('guardedExceptionProvider')]
-    public function testExceptionsMapToRealHttpStatusCodes(string $path, int $expectedStatus, string $expectedError): void
+    public function testExceptionsMapToRealHttpStatusCodes(string $path, int $expectedStatus, array $expectedProblem): void
     {
         $response = $this->request('GET', $path);
 
         $this->assertSame($expectedStatus, $response['status']);
-        $this->assertSame($expectedError, json_decode($response['body'], true)['error']);
+        $this->assertSame($expectedProblem, json_decode($response['body'], true));
     }
 
+    /** @return array<string, array{string, int, array<string, mixed>}> */
     public static function guardedExceptionProvider(): array
     {
         return [
-            'forbidden' => ['/guarded/forbidden', 403, 'Forbidden'],
-            'unauthorized' => ['/guarded/unauthorized', 401, 'Unauthorized'],
-            'not found (custom message)' => ['/guarded/missing', 404, 'Widget not found'],
+            'forbidden' => [
+                '/guarded/forbidden',
+                403,
+                ['type' => 'about:blank', 'title' => 'Forbidden', 'status' => 403],
+            ],
+            'unauthorized' => [
+                '/guarded/unauthorized',
+                401,
+                ['type' => 'about:blank', 'title' => 'Unauthorized', 'status' => 401],
+            ],
+            'not found (custom message)' => [
+                '/guarded/missing',
+                404,
+                ['type' => 'about:blank', 'title' => 'Not Found', 'status' => 404, 'detail' => 'Widget not found'],
+            ],
         ];
     }
 
