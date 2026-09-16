@@ -50,6 +50,22 @@ class Response
         return false;
     }
 
+    /** The value queued for $name (case-insensitive), or null -- for an after() middleware or Plugin\ResponseHook that must inspect what the controller produced. */
+    public function getHeader(string $name): ?string
+    {
+        foreach ($this->headers as $existing => $value) {
+            if (strcasecmp($existing, $name) === 0) {
+                return $value;
+            }
+        }
+        return null;
+    }
+
+    public function getStatus(): int
+    {
+        return $this->status;
+    }
+
     /** Echoes Request::$id back as X-Request-ID. */
     public function withRequestId(string $id): self
     {

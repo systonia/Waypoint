@@ -1011,13 +1011,14 @@ declares what it adds and does nothing else:
 Rules: `requires()` names plugins that must come first; two plugins with the same `name()` or the
 same view helper are a boot error; plugins never reach into each other or into the core's internals.
 The core also exposes `Container::bind(Interface::class, $service)` and `Waypoint\Validation\Messages`
-(validator message translation) for plugins to hook into.
+(translates the validator's English messages, which double as catalog keys) for plugins to hook into.
 
 Available plugins:
 
 | Package | Adds |
 |---|---|
-| `systonia/waypoint-i18n` | Message catalogs, `$this->t()`, per-request locale, translated validation errors. |
+| `systonia/waypoint-i18n` | `$this->t('Source text')` with JSON catalogs kept by CLI tasks, per-request locale, translated validation errors. |
+| `systonia/waypoint-flash` | Flash messages across a redirect, shown once, with and without JavaScript; the reference for the client plugin API. |
 
 ---
 

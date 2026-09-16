@@ -473,4 +473,14 @@ final class ResponseTest extends TestCase
         $this->assertSame('identity', $this->sentHeaderValue('Content-Encoding'));
         $this->assertSame($body, $output);
     }
+
+    public function testGetHeaderIsCaseInsensitiveAndGetStatusReflectsStatus(): void
+    {
+        $res = (new Response())->withHeader('Content-Type', 'text/html')->status(404);
+
+        $this->assertSame('text/html', $res->getHeader('content-type'));
+        $this->assertNull($res->getHeader('X-Missing'));
+        $this->assertSame(404, $res->getStatus());
+        $this->assertSame(200, (new Response())->getStatus());
+    }
 }

@@ -111,7 +111,9 @@ final class TestRequest
         $_SERVER['REQUEST_URI'] = $this->uri;
         parse_str((string) parse_url($this->uri, PHP_URL_QUERY), $_GET);
         $_POST = $this->body;
-        $_COOKIE = [...$_COOKIE, ...$this->cookies]; // a test may also have set $_COOKIE itself
+        // Cookies a test set in $_COOKIE itself stay for every request; the builder's own apply to this one only.
+        $testCookies = $_COOKIE;
+        $_COOKIE = [...$testCookies, ...$this->cookies];
         foreach (array_keys($_SERVER) as $key) {
             if (str_starts_with($key, 'HTTP_')) {
                 unset($_SERVER[$key]);
@@ -126,6 +128,7 @@ final class TestRequest
         ob_start();
         Waypoint::create()->handleHttp($this->rawBody);
         $body = (string) ob_get_clean();
+        $_COOKIE = $testCookies;
 
         $raw = Arr::stringList(function_exists('xdebug_get_headers') ? xdebug_get_headers() : headers_list());
         $status = http_response_code();
