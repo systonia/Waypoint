@@ -6,10 +6,11 @@ use RuntimeException;
 use Waypoint\Attributes\Inject;
 use Waypoint\Enums\RouteType;
 use Waypoint\Http\{PublicFileServer, Redirect, Request, Response, ResultRenderer, View};
-use Waypoint\Options\{FileSystemOptions, RendererOptions};
+use Waypoint\OpenAPI\OpenAPIEndpoint;
+use Waypoint\Options\{CsrfOptions, FileSystemOptions, RendererOptions};
+use Waypoint\Plugin\{ArgumentBinder, ClientAsset, Endpoint, Guard, PluginRegistry, Renderer, ResponseHook, RouteAttributeCompiler};
 use Waypoint\Routing\{ArgumentResolver, PropertyInjector, RouteGuard};
 use Waypoint\Support\Arr;
-use Waypoint\UI\WaypointController;
 
 /**
  * Matches a request against the compiled route plans (RouteCompiler, cached
@@ -39,6 +40,12 @@ class Router
     /** @var array<string, array{css: ?string, js: ?string}> */
     private array $viewAssetsByName = [];
 
+    /** waypoint.js's content-hashed filename under {assetsPath}/, compiled like any view asset; null only for a cache from an older Waypoint. */
+    private ?string $waypointJsFile = null;
+
+    /** @var list<string> Content-hashed filenames of plugin assets (Plugin\ClientAsset), in plugin order. */
+    private array $pluginAssetFiles = [];
+
     private ?Container $container;
     private FileSystemOptions $fileSystemOptions;
     private FileSystem $fileSystem;
@@ -46,22 +53,38 @@ class Router
     private PublicFileServer $publicFileServer;
     private PropertyInjector $injector;
     private RouteGuard $guard;
+    private PluginRegistry $plugins;
+    private ArgumentResolver $arguments;
 
-    /** Memoized resolveWaypointJsPath(); false = not resolved yet. */
-    private string|null|false $waypointJsPath = false;
+    /** @var list<Endpoint> OpenAPI first, then plugin endpoints in registration order. */
+    private array $endpoints;
+
+    /** @var array<string, Guard> */
+    private array $guards;
+
+    /** @var array<string, ResponseHook> */
+    private array $responseHooks;
+
+    /** @var array<string, Renderer> */
+    private array $renderers;
+
+    /** @var array<string, callable> */
+    private array $viewHelpers;
 
     /**
      * @param class-string[] $controllers
      * @param class-string[] $serviceClasses Persisted into the cache so trust mode can skip discovery.
      * @param array<string, mixed>|null $preloadedCache Already-read routes.php data (App::attach() in trust mode), so it isn't `require`d twice.
      * @param FileSystemOptions|null $fileSystemOptions Falls back to the container's, then to defaults (caching off).
+     * @param PluginRegistry|null $plugins The app's registered plugins (App::plugin()); none when built directly.
      */
     public function __construct(
         array $controllers,
         array $serviceClasses = [],
         ?Container $container = null,
         ?array $preloadedCache = null,
-        ?FileSystemOptions $fileSystemOptions = null
+        ?FileSystemOptions $fileSystemOptions = null,
+        ?PluginRegistry $plugins = null
     ) {
         $this->container = $container;
         $this->fileSystemOptions = $fileSystemOptions ?? $container?->get(FileSystemOptions::class) ?? new FileSystemOptions();
@@ -70,6 +93,16 @@ class Router
         $this->publicFileServer = new PublicFileServer($this->fileSystemOptions);
         $this->injector = new PropertyInjector($container, $this);
         $this->guard = new RouteGuard($container);
+        $this->plugins = $plugins ?? new PluginRegistry();
+        $this->arguments = new ArgumentResolver($this->plugins->hooks(ArgumentBinder::class));
+        $this->endpoints = [
+            ...($container !== null ? [new OpenAPIEndpoint($this, $container)] : []),
+            ...array_values($this->plugins->hooks(Endpoint::class)),
+        ];
+        $this->guards = $this->plugins->hooks(Guard::class);
+        $this->responseHooks = $this->plugins->hooks(ResponseHook::class);
+        $this->renderers = $this->plugins->hooks(Renderer::class);
+        $this->viewHelpers = $this->plugins->viewHelpers();
 
         if ($preloadedCache !== null) {
             $this->importPlans($preloadedCache);
@@ -84,7 +117,7 @@ class Router
         }
 
         $viewsDir = $container?->get(RendererOptions::class)->directory;
-        $viewAssetMeta = $viewsDir !== null ? ViewAssets::discoverMeta($viewsDir) : [];
+        $viewAssetMeta = ($viewsDir !== null ? ViewAssets::discoverMeta($viewsDir) : []) + $this->pluginMeta();
         if ($this->fileSystem->isAvailable($controllers, $viewAssetMeta)) {
             $this->fileSystem->loadToRouter($this);
             return;
@@ -99,7 +132,8 @@ class Router
      */
     private function compile(array $controllers, array $serviceClasses, ?string $viewsDir): void
     {
-        $plans = (new RouteCompiler())->compile($controllers);
+        $compiler = new RouteCompiler($this->plugins->hooks(RouteAttributeCompiler::class), $this->plugins->hooks(ArgumentBinder::class));
+        $plans = $compiler->compile($controllers);
         foreach ($plans['staticRoutes'] as $routes) {
             foreach ($routes as $plan) {
                 $this->addCompiledRoute($plan, RouteType::Static);
@@ -116,9 +150,47 @@ class Router
 
         $assets = $viewsDir !== null ? ViewAssets::compile($viewsDir) : ['views' => [], 'files' => [], 'meta' => []];
         $this->viewAssetsByName = $assets['views'];
+
+        // The client bundle rides the same pipeline: content-hashed filename, served from the cache
+        // directory with immutable caching. FileSystem tracks its mtime, so a framework upgrade rebuilds.
+        $bundle = file_get_contents(ViewAssets::WAYPOINT_JS);
+        if ($bundle !== false) {
+            $this->waypointJsFile = 'waypoint.' . substr(md5($bundle), 0, 12) . '.js';
+            $assets['files'][$this->waypointJsFile] = ['content' => $bundle, 'mime' => 'application/javascript; charset=utf-8'];
+        }
+        // Plugin CSS/JS ride along the same way; their source mtimes are in pluginMeta().
+        $this->pluginAssetFiles = [];
+        foreach ($this->plugins->hooks(ClientAsset::class) as $name => $hook) {
+            foreach ($hook->assets() as $logical => $source) {
+                $content = file_get_contents($source);
+                if ($content === false) {
+                    continue;
+                }
+                $ext = str_ends_with($logical, '.css') ? 'css' : 'js';
+                $filename = "$name." . basename($logical, ".$ext") . '.' . substr(md5($content), 0, 12) . ".$ext";
+                $assets['files'][$filename] = ['content' => $content, 'mime' => $ext === 'css' ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8'];
+                $this->pluginAssetFiles[] = $filename;
+            }
+        }
+        $assets['meta'] += $this->pluginMeta();
         // File contents go to disk; routes.php only keeps {filename => mime}.
         $this->viewAssetFiles = $this->fileSystem->storeViewAssetFiles($assets['files']);
         $this->fileSystem->storeFromRouter($this, $controllers, $serviceClasses, $assets['meta']);
+    }
+
+    /**
+     * Plugin cache inputs plus the source mtime of every plugin asset -- editing either rebuilds the cache.
+     * @return array<string, int>
+     */
+    private function pluginMeta(): array
+    {
+        $meta = $this->plugins->cacheInputs();
+        foreach ($this->plugins->hooks(ClientAsset::class) as $hook) {
+            foreach ($hook->assets() as $source) {
+                $meta[$source] = filemtime($source) ?: 0;
+            }
+        }
+        return $meta;
     }
 
     // -- Plans --
@@ -126,7 +198,6 @@ class Router
     /** @param RoutePlan|TaskPlan $plan */
     public function addCompiledRoute(array $plan, RouteType $type = RouteType::Unset): void
     {
-        $this->waypointJsPath = false;
         switch ($type) {
             case RouteType::Task:
                 if (!isset($plan['fullName'])) {
@@ -162,7 +233,9 @@ class Router
      *     dynamicRoutes: array<string, list<array<string, mixed>>>,
      *     tasks: array<string, mixed>,
      *     viewAssetFiles: array<string, string>,
-     *     viewAssetsByName: array<string, array{css: ?string, js: ?string}>
+     *     viewAssetsByName: array<string, array{css: ?string, js: ?string}>,
+     *     waypointJsFile: ?string,
+     *     pluginAssetFiles: list<string>
      * }
      */
     public function exportPlans(): array
@@ -173,6 +246,8 @@ class Router
             'tasks' => $this->tasks,
             'viewAssetFiles' => $this->viewAssetFiles,
             'viewAssetsByName' => $this->viewAssetsByName,
+            'waypointJsFile' => $this->waypointJsFile,
+            'pluginAssetFiles' => $this->pluginAssetFiles,
         ];
     }
 
@@ -182,7 +257,6 @@ class Router
      */
     public function importPlans(array $data): void
     {
-        $this->waypointJsPath = false;
         $this->staticRoutes = [];
         foreach (Arr::stringKeyed($data['staticRoutes'] ?? null) as $method => $byPath) {
             foreach (Arr::stringKeyed($byPath) as $path => $plan) {
@@ -197,6 +271,9 @@ class Router
         }
         $this->tasks = Arr::stringKeyed($data['tasks'] ?? null);
         $this->viewAssetFiles = Arr::stringMap($data['viewAssetFiles'] ?? null);
+        $waypointJsFile = $data['waypointJsFile'] ?? null;
+        $this->waypointJsFile = is_string($waypointJsFile) ? $waypointJsFile : null;
+        $this->pluginAssetFiles = Arr::stringList($data['pluginAssetFiles'] ?? null);
         $this->viewAssetsByName = [];
         foreach (Arr::stringKeyed($data['viewAssetsByName'] ?? null) as $name => $entry) {
             $entry = Arr::stringKeyed($entry);
@@ -215,6 +292,12 @@ class Router
         if ($this->publicFileServer->serve($path, $res) || $this->tryServeViewAsset($path, $res)) {
             return;
         }
+        $method = strtoupper($httpMethod);
+        foreach ($this->endpoints as $endpoint) {
+            if ($endpoint->serve($method, $path, $req, $res)) {
+                return;
+            }
+        }
 
         [$route, $params] = $this->matchRoute($httpMethod, $path);
         if ($route === null) {
@@ -224,6 +307,10 @@ class Router
 
         $this->applyRouteHeaders($route, $res);
         $this->guard->check($route, $httpMethod, $req);
+        $pluginData = Arr::stringKeyed($route['plugins'] ?? null);
+        foreach ($this->guards as $name => $guard) {
+            $guard->check(Arr::stringKeyed($pluginData[$name] ?? null), $req, $res);
+        }
 
         $controllerRef = $route['controller'] ?? null;
         if (!is_string($controllerRef) || !class_exists($controllerRef)) {
@@ -237,6 +324,10 @@ class Router
         $this->injector->injectPlanned($controller, $route['propInject'] ?? null, $req, $res);
 
         $this->buildRouteHandler($route, $controller, $params)($req, $res);
+
+        foreach ($this->responseHooks as $name => $hook) {
+            $hook->after(Arr::stringKeyed($pluginData[$name] ?? null), $req, $res);
+        }
     }
 
     /**
@@ -274,7 +365,7 @@ class Router
                 throw new RuntimeException('buildRouteHandler(): route plan is missing a string \'method\'.');
                 // @codeCoverageIgnoreEnd
             }
-            $args = ArgumentResolver::resolve(Arr::listOfStringKeyed($route['argPlan'] ?? null), $req, $res, $params);
+            $args = $this->arguments->resolve(Arr::listOfStringKeyed($route['argPlan'] ?? null), $req, $res, $params);
             $this->renderResult($controller->{$method}(...$args), $req, $res, $route['formatter'] ?? null);
         };
 
@@ -363,6 +454,12 @@ class Router
             $res->status($result->status)->withHeader('Location', $result->location);
             return;
         }
+        foreach ($this->renderers as $renderer) {
+            if ($renderer->supports($result)) {
+                $renderer->render($result, $req, $res);
+                return;
+            }
+        }
         $spec = Arr::stringKeyed($formatter);
         $type = $spec['type'] ?? 'json';
         $options = $spec['options'] ?? null;
@@ -378,8 +475,13 @@ class Router
         $this->container?->get(Csrf::class)->issueFor($req, $res);
 
         $this->injector->injectReflected($view);
+        $view->setHelpers($this->viewHelpers);
         $view->setAssetsPath($this->fileSystemOptions->assetsPath);
-        $view->setWaypointJsPath($this->resolveWaypointJsPath());
+        $view->setPluginAssetUrls(array_map(fn(string $file): string => "{$this->fileSystemOptions->assetsPath}/$file", $this->pluginAssetFiles));
+        $view->setWaypointJsPath(
+            $this->waypointJsFile !== null ? "{$this->fileSystemOptions->assetsPath}/{$this->waypointJsFile}" : null,
+            $this->waypointJsAttributes()
+        );
 
         $assets = $this->getViewAssets($view->getViewName());
         $view->setAssets($assets); // the layout renders the tags itself on a full page load
@@ -398,19 +500,24 @@ class Router
         $res->withHeader('Content-Type', 'text/html')->write($view->render());
     }
 
-    /** The compiled path of WaypointController's route (View::waypointJsTag()), or null if it isn't attached. Memoized. */
-    private function resolveWaypointJsPath(): ?string
+    /**
+     * The data-* attributes waypoint.js reads off its <script> tag: the CSRF cookie/header names,
+     * only when CsrfOptions was changed from the client's own defaults. The client must know them
+     * to mirror the cookie into the header on every fetch() -- the one thing the server can't do for it.
+     *
+     * @return array<string, string>
+     */
+    private function waypointJsAttributes(): array
     {
-        if ($this->waypointJsPath === false) {
-            $this->waypointJsPath = null;
-            foreach ($this->staticRoutes['GET'] ?? [] as $path => $plan) {
-                if (($plan['controller'] ?? null) === WaypointController::class) {
-                    $this->waypointJsPath = $path;
-                    break;
-                }
-            }
+        if ($this->container === null) {
+            return [];
         }
-        return $this->waypointJsPath;
+        $csrf = $this->container->get(CsrfOptions::class);
+        $defaults = new CsrfOptions();
+        return array_filter([
+            'data-csrf-cookie' => $csrf->cookieName !== $defaults->cookieName ? $csrf->cookieName : null,
+            'data-csrf-header' => $csrf->headerName !== $defaults->headerName ? $csrf->headerName : null,
+        ], fn(?string $v): bool => $v !== null);
     }
 
     /**

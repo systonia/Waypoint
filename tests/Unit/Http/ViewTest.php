@@ -251,6 +251,17 @@ final class ViewTest extends TestCase
         $this->assertSame('<script src="/waypoint.js"></script>' . "\n", $view->waypointJsTag());
     }
 
+    public function testWaypointJsTagRendersEscapedDataAttributes(): void
+    {
+        $view = new View('HomePage');
+        $view->setWaypointJsPath('/waypoint.js', ['data-csrf-header' => 'X-My-Token', 'data-csrf-cookie' => 'a"b']);
+
+        $this->assertSame(
+            '<script src="/waypoint.js" data-csrf-header="X-My-Token" data-csrf-cookie="a&quot;b"></script>' . "\n",
+            $view->waypointJsTag()
+        );
+    }
+
     public function testWaypointJsTagIsEmptyAgainWhenExplicitlyResetToNull(): void
     {
         $view = new View('HomePage');

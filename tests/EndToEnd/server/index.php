@@ -11,7 +11,7 @@
 require __DIR__ . '/../../../vendor/autoload.php';
 
 use Waypoint\Waypoint;
-use Waypoint\Options\{JWTOptions, RendererOptions, FileSystemOptions, CorsOptions};
+use Waypoint\Options\{JWTOptions, RendererOptions, FileSystemOptions, CorsOptions, OpenAPIOptions};
 use Waypoint\Tests\Fixtures\Controllers\{
     CustomersController,
     OrdersController,
@@ -22,7 +22,6 @@ use Waypoint\Tests\Fixtures\Controllers\{
     ArgBindingController,
 };
 use Waypoint\Tests\Fixtures\Managers\MaintenanceManager;
-use Waypoint\OpenAPI\OpenAPIController;
 
 $app = Waypoint::create();
 
@@ -37,6 +36,10 @@ $app->configure(function (JWTOptions $opts) {
 $app->configure(function (RendererOptions $opts) {
     $opts->directory = __DIR__ . '/../../Fixtures/Views';
     $opts->layout = '_Layout.php';
+});
+
+$app->configure(function (OpenAPIOptions $opts) {
+    $opts->enabled = true;
 });
 
 $app->configure(function (CorsOptions $opts) {
@@ -55,7 +58,6 @@ $app->attach([
     MiddlewareController::class,
     ArgBindingController::class,
     MaintenanceManager::class,
-    OpenAPIController::class,
 ]);
 
 $app->run();

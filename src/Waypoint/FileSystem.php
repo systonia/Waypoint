@@ -106,7 +106,8 @@ final class FileSystem
     }
 
     /**
-     * $extraMeta plus each controller's source file mtime, or null if a controller's file is gone.
+     * Everything the compiled cache depends on: $extraMeta, the framework's own client bundle, and each
+     * controller's source file mtime -- or null if a controller's file is gone.
      * @param class-string[] $controllers
      * @param array<string, int> $extraMeta
      * @return array<string, int>|null
@@ -114,6 +115,7 @@ final class FileSystem
     private function controllerMeta(array $controllers, array $extraMeta): ?array
     {
         $meta = $extraMeta;
+        $meta[ViewAssets::WAYPOINT_JS] = filemtime(ViewAssets::WAYPOINT_JS) ?: 0;
         foreach ($controllers as $controller) {
             if (!class_exists($controller)) {
                 continue;

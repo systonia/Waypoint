@@ -23,9 +23,10 @@ class JWTOptions
     public ?string $cookieName = null;
 
     /**
-     * Where an UnauthorizedException sends a real browser navigation (Sec-Fetch-Mode: navigate) as a
-     * 302 instead of 401 JSON. Null (default): always 401 -- right for an API with no login page. A
-     * fetch()/XHR call gets the 401 either way.
+     * Where an UnauthorizedException sends a page navigation -- a real browser navigation
+     * (Sec-Fetch-Mode: navigate) or a waypoint.js partial one (X-Waypoint-Accept: partial) -- as a
+     * 302 instead of 401 JSON. Null (default): always 401, right for an API with no login page. Any
+     * other fetch()/XHR call gets the 401 either way.
      */
     public ?string $loginRedirectUrl = null;
 }

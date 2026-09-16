@@ -3,8 +3,7 @@
 namespace Waypoint\Tests\Integration;
 
 use Waypoint\Waypoint;
-use Waypoint\UI\WaypointController;
-use Waypoint\Options\{RendererOptions, FileSystemOptions};
+use Waypoint\Options\{CsrfOptions, RendererOptions, FileSystemOptions};
 use Waypoint\Tests\Fixtures\Controllers\{CustomersController, OrdersController, ProductsController};
 
 final class RouterDispatchTest extends IntegrationTestCase
@@ -197,60 +196,41 @@ final class RouterDispatchTest extends IntegrationTestCase
         }
     }
 
-    public function testWaypointJsIs404WhenTheControllerIsNotAttached(): void
+    public function testViewsWaypointJsTagPointsAtTheCompiledBundle(): void
     {
-        // setUp() never attaches WaypointController -- optional, exactly
-        // like OpenAPIController, so nothing serves this route by default.
-        $output = $this->dispatch('GET', '/waypoint.js');
-
-        $this->assertSame(['error' => 'Not found'], json_decode($output, true));
-    }
-
-    public function testWaypointJsIsServedWhenTheControllerIsAttached(): void
-    {
-        $tempDir = sys_get_temp_dir() . '/waypoint-test-' . bin2hex(random_bytes(6));
-        try {
-            $app = Waypoint::create();
-            $app->configure(function (FileSystemOptions $fs) use ($tempDir) {
-                $fs->cacheDirectory = $tempDir;
-            });
-            $app->attach([WaypointController::class]);
-
-            $output = $this->dispatch('GET', '/waypoint.js');
-
-            $this->assertSame(
-                file_get_contents(dirname((new \ReflectionClass(WaypointController::class))->getFileName()) . '/waypoint.js'),
-                $output
-            );
-            $this->assertStringStartsWith('application/javascript', $this->sentHeaders()['content-type'] ?? '');
-        } finally {
-            $this->removeDirectory($tempDir);
-        }
-    }
-
-    public function testViewsWaypointJsTagIsEmptyWhenTheControllerIsNotAttached(): void
-    {
-        // The default setUp() app (CustomersController etc, no
-        // WaypointController) -- _Layout.php's own waypointJsTag() call
-        // must render nothing. (The fixture layout's other <script> tag,
-        // from a body-scripts section, is unrelated and still present.)
         $output = $this->dispatch('GET', '/customers');
 
-        $this->assertStringNotContainsString('src="/waypoint.js"', $output);
+        $this->assertMatchesRegularExpression('#<script src="/assets/waypoint\.[0-9a-f]{12}\.js"></script>#', $output);
     }
 
-    public function testViewsWaypointJsTagPointsAtTheRealRouteWhenTheControllerIsAttached(): void
+    public function testWaypointJsIsServedFromTheAssetsRouteWithImmutableCaching(): void
+    {
+        $page = $this->dispatch('GET', '/customers');
+        preg_match('#src="(/assets/waypoint\.[0-9a-f]{12}\.js)"#', $page, $m);
+
+        $output = $this->dispatch('GET', $m[1]);
+
+        $this->assertSame(file_get_contents(dirname((new \ReflectionClass(Waypoint::class))->getFileName()) . '/UI/waypoint.js'), $output);
+        $this->assertStringStartsWith('application/javascript', $this->sentHeaders()['content-type'] ?? '');
+        $this->assertSame('public, max-age=31536000, immutable', $this->sentHeaders()['cache-control'] ?? null);
+    }
+
+    public function testViewsWaypointJsTagCarriesNonDefaultCsrfNames(): void
     {
         $app = Waypoint::create();
         $app->configure(function (RendererOptions $opts) {
             $opts->directory = __DIR__ . '/../Fixtures/Views';
             $opts->layout = '_Layout.php';
         });
-        $app->attach([CustomersController::class, WaypointController::class]);
+        $app->configure(function (CsrfOptions $opts) {
+            $opts->cookieName = 'my_token';
+        });
+        $app->attach([CustomersController::class]);
 
         $output = $this->dispatch('GET', '/customers');
 
-        $this->assertStringContainsString('<script src="/waypoint.js"></script>', $output);
+        // Only the value that differs from waypoint.js's own default is spelled out.
+        $this->assertMatchesRegularExpression('#<script src="/assets/waypoint\.[0-9a-f]{12}\.js" data-csrf-cookie="my_token"></script>#', $output);
     }
 
     private function removeDirectory(string $dir): void
@@ -268,14 +248,4 @@ final class RouterDispatchTest extends IntegrationTestCase
         rmdir($dir);
     }
 
-    private function sentHeaders(): array
-    {
-        $raw = function_exists('xdebug_get_headers') ? xdebug_get_headers() : headers_list();
-        $headers = [];
-        foreach ($raw as $line) {
-            [$name, $value] = array_map('trim', explode(':', $line, 2) + [1 => '']);
-            $headers[strtolower($name)] = $value;
-        }
-        return $headers;
-    }
 }

@@ -10,6 +10,7 @@ use Throwable;
 use Waypoint\Exceptions\{HttpException, UnauthorizedException};
 use Waypoint\Http\{Request, Response};
 use Waypoint\Options\{CompressionOptions, CorsOptions, FileSystemOptions, JWTOptions};
+use Waypoint\Plugin\{Plugin, PluginRegistry};
 use Waypoint\Routing\{PropertyInjector, ServiceDiscovery};
 
 /**
@@ -23,6 +24,7 @@ class App
     private Router $router;
     private Container $container;
     private PropertyInjector $injector;
+    private PluginRegistry $plugins;
 
     /** @var callable[] */
     private array $middlewares = [];
@@ -34,7 +36,17 @@ class App
     {
         $this->container = new Container();
         $this->injector = new PropertyInjector($this->container);
+        $this->plugins = new PluginRegistry();
         $this->registerDefaultExceptionHandlers();
+    }
+
+    /** Registers a plugin (see Waypoint\Plugin\Plugin); must happen before attach(). Order matters for hooks. */
+    public function plugin(Plugin $plugin): void
+    {
+        if (isset($this->router)) {
+            throw new InvalidArgumentException('plugin() must be called before attach().');
+        }
+        $this->plugins->add($plugin);
     }
 
     /**
@@ -46,6 +58,12 @@ class App
      */
     public function attach(array $controllers): void
     {
+        $this->plugins->boot($this->container);
+        foreach ($this->plugins->middlewares() as $middleware) {
+            $this->use($middleware);
+        }
+        $controllers = [...$controllers, ...$this->plugins->classes()];
+
         $fileSystemOptions = $this->container->get(FileSystemOptions::class);
         $trusted = $fileSystemOptions->cacheDirectory !== null && !$fileSystemOptions->cacheValidate;
         $cachedData = $trusted ? (new FileSystem($fileSystemOptions))->loadCachedRouteData() : null;
@@ -56,7 +74,7 @@ class App
             : ServiceDiscovery::discover($controllers);
 
         $this->initDependencyInjection($allClasses);
-        $this->router = new Router($controllers, $allClasses, $this->container, $cachedData, $fileSystemOptions);
+        $this->router = new Router($controllers, $allClasses, $this->container, $cachedData, $fileSystemOptions, $this->plugins);
     }
 
     /**
@@ -172,10 +190,14 @@ class App
         return 0;
     }
 
-    /** Handles the request in the superglobals: middleware pipe around dispatch(), then the single send(). Public so tests and unusual SAPIs can drive it directly. */
-    public function handleHttp(): void
+    /**
+     * Handles the request in the superglobals: middleware pipe around dispatch(), then the single send().
+     * Public so tests and unusual SAPIs can drive it directly.
+     * @param string|null $rawBody Overrides php://input (the Testing kit's JSON requests).
+     */
+    public function handleHttp(?string $rawBody = null): void
     {
-        $req = Request::capture();
+        $req = Request::capture($rawBody);
         $res = (new Response($this->container->get(CompressionOptions::class)))->withRequestId($req->id);
         $this->container->get(RequestContext::class)->setRequestId($req->id);
 
@@ -226,8 +248,9 @@ class App
             }
         });
 
-        // 401: a real browser navigation is redirected to JWTOptions::$loginRedirectUrl (if set);
-        // a fetch()/XHR call, or a non-browser client, gets the 401 body it can act on.
+        // 401: a page navigation -- a real browser navigation, or a waypoint.js partial one, which
+        // follows the redirect like a browser would -- goes to JWTOptions::$loginRedirectUrl (if set);
+        // any other fetch()/XHR call, or a non-browser client, gets the 401 body it can act on.
         $this->useExceptionHandler(UnauthorizedException::class, function (Throwable $e, Request $req, Response $res): void {
             if (!$e instanceof UnauthorizedException) {
                 // @codeCoverageIgnoreStart
@@ -235,7 +258,7 @@ class App
                 // @codeCoverageIgnoreEnd
             }
             $loginRedirectUrl = $this->container->get(JWTOptions::class)->loginRedirectUrl;
-            if ($loginRedirectUrl !== null && self::isBrowserNavigation($req)) {
+            if ($loginRedirectUrl !== null && ($req->acceptPartial || self::isBrowserNavigation($req))) {
                 $res->status(302)->withHeader('Location', $loginRedirectUrl);
                 return;
             }

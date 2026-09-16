@@ -4,17 +4,23 @@ namespace Waypoint\Routing;
 
 use Waypoint\Exceptions\ValidationException;
 use Waypoint\Http\{Request, Response};
+use Waypoint\Plugin\ArgumentBinder;
 use Waypoint\Validator;
 
 /** Turns a compiled argPlan (see RouteCompiler::buildArgPlan()) into the actual argument list for a route method call. */
 final class ArgumentResolver
 {
+    /** @param array<string, ArgumentBinder> $binders plugin name => binder, for 'plugin' entries */
+    public function __construct(private array $binders = [])
+    {
+    }
+
     /**
      * @param list<array<string, mixed>> $argPlan
      * @param array<string, string> $params Route placeholder values.
      * @return list<mixed>
      */
-    public static function resolve(array $argPlan, Request $req, Response $res, array $params): array
+    public function resolve(array $argPlan, Request $req, Response $res, array $params): array
     {
         $args = [];
         foreach ($argPlan as $arg) {
@@ -28,10 +34,23 @@ final class ArgumentResolver
                 'Body' => self::body($arg, $req),
                 'BodyCollection' => self::bodyCollection($arg, $req),
                 'Scalar' => self::scalar($arg, $name, $req, $params),
+                'plugin' => $this->plugin($arg, $req, $res, $params),
                 default => null,
             };
         }
         return $args;
+    }
+
+    /**
+     * @param array<string, mixed> $arg
+     * @param array<string, string> $params
+     */
+    private function plugin(array $arg, Request $req, Response $res, array $params): mixed
+    {
+        $plugin = $arg['plugin'] ?? null;
+        $binder = is_string($plugin) ? ($this->binders[$plugin] ?? null) : null;
+        // A cache compiled with a plugin that is no longer registered binds null, like any unknown parameter.
+        return $binder?->resolve($arg, $req, $res, $params);
     }
 
     /** @param array<string, mixed> $arg */

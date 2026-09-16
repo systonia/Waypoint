@@ -28,6 +28,11 @@ few lines of `configure()` away, rather than left to every app to reimplement. A
 under real load: attribute discovery compiles to a cache with an opt-in "trust mode" for production,
 benchmarked well over an order of magnitude faster than uncached reflection-based discovery.
 
+The core stays small on purpose. Everything beyond routing, DI, views, security and the OpenAPI
+generator — translations, LDAP, sessions, rate limiting, exports — is a separate package that plugs
+into fixed hooks (see [Plugins](#plugins)), and a shipped [testing kit](#testing) drives real requests
+through your app or plugin from PHPUnit.
+
 ### Feature highlights
 
 - Attribute-based routing and controllers (`#[Get]`/`#[Post]`/`#[Put]`/`#[Patch]`/`#[Delete]`)
@@ -46,13 +51,18 @@ benchmarked well over an order of magnitude faster than uncached reflection-base
 - Request/correlation ID tracking (`X-Request-Id`/`X-Correlation-Id`), automatically stamped onto every
   log line for the duration of that request
 - JWT authentication (`useJwt()`), with a required (never-defaulted) signing secret
-- An HTML-rendering MVC view layer, with layouts, sections, and automatic scoped CSS/JS per view
+- An HTML-rendering MVC view layer, with layouts, sections, views in subdirectories, automatic scoped
+  CSS/JS per view, `Redirect` results, and the bundled `waypoint.js` client for partial navigation
 - Static file serving from a configured public directory
 - Gzip response compression, size-thresholded, with an opt-out `#[NoGzip]` attribute per controller/route
 - PSR-3 compatible logging (plug in any PSR-3 logger, or use `LoggerOptions::addMono()` for Monolog)
 - CLI task runner (`#[Manager]`/`#[Task]`), for the same app to serve HTTP and run background jobs
-- A complete OpenAPI 3.1.0 generator, driven by a compiled attribute cache rather than live reflection
+- A complete OpenAPI 3.1.0 generator (`OpenAPIOptions::$enabled`), driven by a compiled attribute cache
+  rather than live reflection
 - Optional route/DI compilation caching with an opt-in "trust mode" for production deploys
+- A plugin system with fixed hooks (endpoints, route attributes, guards, argument binders, renderers,
+  view helpers, client assets), so features ship as packages instead of growing the core
+- A testing kit (`Waypoint\Testing`) with a request builder and fluent response assertions
 
 ---
 
@@ -76,6 +86,8 @@ benchmarked well over an order of magnitude faster than uncached reflection-base
 - [Request / Correlation ID](#request--correlation-id)
 - [Logging](#logging)
 - [CLI Tasks](#cli-tasks)
+- [Plugins](#plugins)
+- [Testing](#testing)
 - [Environment Variables](#environment-variables)
 - [Route/DI Compilation Caching & Production Performance](#routedi-compilation-caching--production-performance)
 - [Options Reference](#options-reference)
@@ -117,10 +129,7 @@ use Waypoint\Waypoint;
 use App\Controllers\HelloController;
 
 $app = Waypoint::create();
-$app->attach([
-    HelloController::class,
-    Waypoint\OpenAPI\OpenAPIController::class, // optional: mounts /openapi/spec.json, swagger.html
-]);
+$app->attach([HelloController::class]);
 
 $app->run();
 ```
@@ -245,7 +254,8 @@ class CreateProductDTO
 A failing DTO throws `ValidationException`, which the default exception handler turns into a `422`
 RFC 9457 Problem Details response, with per-field errors under `errors`:
 `{"type": "about:blank", "title": "Validation failed", "status": 422, "detail": "Validation failed", "errors": {"sku": "..."}}`
-— see [Exception Handling](#exception-handling).
+— see [Exception Handling](#exception-handling). The messages are English by default; a plugin can bind
+`Waypoint\Validation\Messages` to translate them (the `waypoint-i18n` plugin does, see [Plugins](#plugins)).
 
 ### Hydrating DTOs (`FromArray`)
 
@@ -480,7 +490,7 @@ Inside a view template, `$this->csrf` renders the classic no-JS `<form>` half of
 ```
 
 The AJAX/`fetch()` half needs no app code at all if you're loading
-[`waypoint.js`](#views) (see `<script src="/waypoint.js">` in [Views](#views)): it patches `fetch()`
+[`waypoint.js`](#views) (see `$this->waypointJsTag()` in [Views](#views)): it patches `fetch()`
 itself so every same-origin `POST`/`PUT`/`PATCH`/`DELETE` call automatically carries the header, reading
 the token straight from the cookie. A plain `fetch()` call needs to know nothing about CSRF:
 
@@ -491,11 +501,8 @@ fetch('/orders', { method: 'POST', body: JSON.stringify(data) }); // X-CSRF-Toke
 Not using `waypoint.js`? Read the cookie and attach the header yourself the same way it does —
 `Waypoint.csrf.token()` is also there directly, for a non-`fetch()` use (a WebSocket handshake, a
 manually-built `XMLHttpRequest`). If `CsrfOptions` itself was reconfigured away from its default cookie/
-header names, point `waypoint.js` at the new ones via data attributes on its own `<script>` tag:
-
-```html
-<script src="/waypoint.js" data-csrf-cookie="my_token" data-csrf-header="X-My-Token"></script>
-```
+header names, `$this->waypointJsTag()` passes the new names to `waypoint.js` automatically as
+`data-csrf-cookie`/`data-csrf-header` on the `<script>` tag — nothing to do in the template.
 
 Opt a token-auth-only JSON API (or any route with no double-submit cookie to check) out entirely with
 `#[SkipCsrf]`, on the controller class or a single method:
@@ -653,6 +660,13 @@ array, e.g. `$model['product']`), and `$this` is the `View` instance itself:
   element that content should be scoped to; the matching CSS is automatically wrapped in a
   `[data-view="..."]` nesting selector, so plain rules in `ProductDetail.css` only ever apply where that
   attribute is present.
+
+The client half, `waypoint.js` (partial navigation via `wp-target`, form enhancement, automatic CSRF
+headers), ships inside the package and is compiled into the same asset pipeline as view CSS/JS: served at
+`{assetsPath}/waypoint.{hash}.js` with immutable caching, rebuilt when the framework is upgraded. The
+layout emits the tag with `<?= $this->waypointJsTag() ?>`; when `CsrfOptions` was changed from its
+defaults the tag also carries `data-csrf-cookie`/`data-csrf-header` for the client, so nothing is
+duplicated in the template.
 
 A view or layout's sibling `.css`/`.js` is discovered automatically (same basename, same directory,
 either role) — nothing to register. Views can live in subdirectories: `views/Admin/Users.php` is
@@ -823,9 +837,17 @@ public function logout(Response $res): array
 
 ## OpenAPI
 
-Mount `Waypoint\OpenAPI\OpenAPIController` in your `attach()` call to get:
+Switch the endpoint on via `OpenAPIOptions` (nothing to attach):
+
+```php
+$app->configure(function (OpenAPIOptions $opts) {
+    $opts->enabled = true;
+    $opts->path = '/openapi'; // default
+});
+```
 
 - `GET /openapi/spec.json` — the generated OpenAPI 3.1.0 document
+- `GET /openapi/spec.{version}.json` — one `#[Version]`'s document (404 for an unknown version)
 - `GET /openapi/swagger.html` — bundled Swagger UI
 
 The generator is driven entirely by a compiled attribute cache (see
@@ -953,6 +975,96 @@ php index.php users:sync
 
 ---
 
+## Plugins
+
+Anything beyond the core (translations, LDAP, sessions, rate limiting, ...) is a separate Composer
+package registered with one line before `attach()`:
+
+```php
+$app->plugin(new Waypoint\I18n\I18nPlugin());
+$app->configure(function (Waypoint\I18n\I18nOptions $opts) { ... });
+$app->attach([...]);
+```
+
+A plugin is one class implementing `Waypoint\Plugin\Plugin` (extend `PluginBase` for the defaults). It
+declares what it adds and does nothing else:
+
+| Declares | Effect |
+|---|---|
+| `classes()` | Controllers and `#[Manager]` classes attached alongside the app's own. |
+| `middlewares()` | App-level middlewares, added at `attach()`. |
+| `boot(Container)` | Runs once at `attach()`: bind services, read its Options class. |
+| `cacheInputs()` | `{path => mtime}` of files whose change must rebuild the route cache. |
+| `hooks()` | Objects implementing any of the hook interfaces below. |
+
+| Hook (`Waypoint\Plugin\...`) | When | Typical use |
+|---|---|---|
+| `Endpoint` | Before routing, after static files. | Health, metrics, an SSO callback. |
+| `RouteAttributeCompiler` | At compile time, per route; result cached under the plugin's name. | A `#[RateLimit]` attribute. |
+| `Guard` | Per request before the controller, after auth/CSRF; gets that route's compiled data (`[]` if none). | Enforce the attribute. |
+| `ResponseHook` | After the result was rendered. | Audit, metrics, idempotency store. |
+| `ArgumentBinder` | Own parameter attributes/types for controller methods, asked after the core attributes and before the implicit scalar binding. | `#[File]`, a table request. |
+| `Renderer` | Own return types, asked after `View`/`Redirect`. | Exports, PDFs. |
+| `ViewHelper` | Methods templates can call as `$this->name()`. | `$this->t('key')`. |
+| `ClientAsset` | CSS/JS files shipped by the plugin, served content-hashed; render with `$this->pluginAssetTags()`. | A table component. |
+
+Rules: `requires()` names plugins that must come first; two plugins with the same `name()` or the
+same view helper are a boot error; plugins never reach into each other or into the core's internals.
+The core also exposes `Container::bind(Interface::class, $service)` and `Waypoint\Validation\Messages`
+(validator message translation) for plugins to hook into.
+
+Available plugins:
+
+| Package | Adds |
+|---|---|
+| `systonia/waypoint-i18n` | Message catalogs, `$this->t()`, per-request locale, translated validation errors. |
+
+---
+
+## Testing
+
+`Waypoint\Testing\TestCase` (needs `phpunit/phpunit` as a dev dependency) drives a real request through
+the app the way a SAPI would, with a fresh `Waypoint` and clean superglobals per test:
+
+```php
+use Waypoint\Testing\TestCase;
+
+final class LoginTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $app = $this->app();          // Waypoint::create()
+        $app->configure(...);
+        $app->attach([PagesController::class]);
+    }
+
+    public function testWrongPasswordStaysOnTheLoginPage(): void
+    {
+        $this->post('/login', ['email' => 'a@b.de', 'password' => 'wrong'])
+            ->assertOk()
+            ->assertSee('Invalid email or password');
+    }
+
+    public function testDashboardNeedsALogin(): void
+    {
+        $this->request('GET', '/dashboard')->asNavigation()->send()->assertRedirect('/login');
+        $this->request('GET', '/dashboard')->withJwt(['sub' => '1'])->send()->assertOk();
+    }
+}
+```
+
+- Requests: `get()`, `post()` (form fields), `json()` (raw JSON body), or `request()` for the builder:
+  `withHeader()`, `withCookie()`, `withJwt($payload)`, `withCsrf()` (a valid cookie + header pair),
+  `asPartial()` (what waypoint.js sends), `asNavigation()` (what a browser sends), then `send()`.
+- Responses: `status()`, `header()`, `cookie()`, `body()`, `json('errors.email')`, and fluent
+  `assertStatus/Ok/Redirect/Header/HeaderMissing/ContentType/Cookie/See/DontSee/Body/Json/JsonPath`.
+- `tempDir()` gives a directory that is removed after the test, e.g. for `FileSystemOptions::$cacheDirectory`.
+
+The framework's own suite and every plugin run on this kit.
+
+---
+
 ## Environment Variables
 
 `Waypoint\Environment` reads env vars/`.env`/JSON config files through whatever `EnvironmentOptions` the
@@ -1045,6 +1157,13 @@ router and the DI container setup) instead of re-deriving it via Reflection, and
 freshness check — this is the single largest throughput lever available: benchmarked well over an
 order of magnitude faster than uncached Reflection-based discovery under repeated requests.
 
+The cache directory holds `routes.php` (route and task plans, the service list, plugin route data),
+`attributes.php` (every controller attribute, for the OpenAPI generator), `meta.php` (the mtimes the
+cache was built from) and `assets/` (content-hashed view CSS/JS, `waypoint.js`, plugin assets). With
+`cacheValidate = true` the cache is rebuilt as soon as any controller file, view asset, plugin
+`cacheInputs()` entry or the client bundle changes, or a controller is added or removed; in trust mode
+you clear the directory on deploy.
+
 **Also enable OPcache** (`opcache.enable=1`, and `opcache.enable_cli=1` if you're benchmarking or
 running under `php -S`) in any environment where you care about request latency — across every PHP
 framework we benchmarked Waypoint against (Symfony, Laravel, Slim), OPcache being off was consistently
@@ -1125,7 +1244,7 @@ Configuration mainly happens through `load(?string $dir = null)`, not a plain pr
 | `tokenType` | `'Bearer'` | Expected prefix on the `Authorization` header value. |
 | `header` | `'Authorization'` | Request header the token is read from. |
 | `cookieName` | `null` (disabled) | Cookie name to additionally read the token from when the header didn't produce one — lets a signed-in session survive a plain page load, not just fetch()/XHR calls. |
-| `loginRedirectUrl` | `null` (disabled) | Where an `UnauthorizedException` (e.g. `#[Authenticated]` with no/expired JWT) sends a real browser navigation (`Sec-Fetch-Mode: navigate`) as a `302` instead of `401` JSON. A `fetch()`/XHR call still gets the `401` either way. |
+| `loginRedirectUrl` | `null` (disabled) | Where an `UnauthorizedException` (e.g. `#[Authenticated]` with no/expired JWT) sends a page navigation — a real browser navigation (`Sec-Fetch-Mode: navigate`) or a `waypoint.js` partial one (`X-Waypoint-Accept: partial`) — as a `302` instead of `401` JSON. Any other `fetch()`/XHR call still gets the `401`. |
 
 ### [LoggerOptions](#logging)
 
@@ -1141,6 +1260,8 @@ plain properties — see [Logging](#logging).
 
 | Setting | Default | Description |
 |---|---|---|
+| `enabled` | `false` | Serve `spec.json`/`spec.{version}.json`/`swagger.html` at all. |
+| `path` | `'/openapi'` | URL prefix the endpoint lives under. |
 | `title` | `'API Documentation'` | OpenAPI `info.title`. |
 | `version` | `'1.0.0'` | OpenAPI `info.version`. |
 | `description` | `'Generated API documentation'` | OpenAPI `info.description`. |
@@ -1172,6 +1293,18 @@ plain properties — see [Logging](#logging).
 ## Contributing
 
 Contributions welcome! Please open issues or pull requests on GitHub.
+
+Before opening a pull request:
+
+```bash
+composer test            # PHPUnit
+composer stan            # PHPStan level 10
+composer coverage:text   # 100% line coverage is the bar
+```
+
+The client (`waypoint.js`) is built from the separate `waypoint-ui` repository; a change there is
+`npm run build`, which writes the bundle into `src/Waypoint/UI/waypoint.js` — commit that file with
+the change. New features that go beyond the core belong in a plugin package (see [Plugins](#plugins)).
 
 ---
 

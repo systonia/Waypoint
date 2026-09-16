@@ -21,11 +21,8 @@ final class ResultRenderer
     }
 
     /**
-
      * A string naming an existing file is read from disk; any other scalar is written as-is; anything else as JSON.
-
      * @param array<string, mixed> $options
-
      */
     private function renderFile(mixed $result, Response $res, array $options): void
     {

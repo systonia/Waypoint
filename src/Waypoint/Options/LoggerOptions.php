@@ -59,11 +59,8 @@ class LoggerOptions
     }
 
     /**
-
      * Adds a Monolog logger for $channel with $handler, if Monolog is installed.
-
      * @param string[] $levels
-
      */
     public function addMono(string $channel, mixed $handler, array $levels = []): self
     {

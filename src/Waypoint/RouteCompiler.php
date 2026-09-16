@@ -11,6 +11,7 @@ use ReflectionMethod;
 use ReflectionParameter;
 use Waypoint\Enums\Message;
 use Waypoint\Http\{MiddlewareBase, Request, Response};
+use Waypoint\Plugin\{ArgumentBinder, RouteAttributeCompiler};
 use Waypoint\Routing\PropertyInjector;
 use Waypoint\Attributes\{
     Authenticated, Body, Controller, FileFormatter, Inject, JSONFormatter, Manager, Middleware, NoGzip,
@@ -26,6 +27,14 @@ use Waypoint\Attributes\{
 final class RouteCompiler
 {
     private const FORMATTERS = [FileFormatter::class, SimpleXmlFormatter::class, JSONFormatter::class];
+
+    /**
+     * @param array<string, RouteAttributeCompiler> $attributeCompilers plugin name => compiler; each result lands in plan['plugins'][name]
+     * @param array<string, ArgumentBinder> $binders plugin name => binder, asked after the core attributes and before the implicit scalar binding
+     */
+    public function __construct(private array $attributeCompilers = [], private array $binders = [])
+    {
+    }
 
     /**
      * @param class-string[] $classes
@@ -108,6 +117,7 @@ final class RouteCompiler
                 'role' => $role,
                 'permissions' => $permissions,
                 'throws' => [],
+                'plugins' => $this->compilePluginData($rc, $method),
             ];
 
             if ($dynamic) {
@@ -143,6 +153,23 @@ final class RouteCompiler
                 'throws' => [],
             ];
         }
+    }
+
+    /**
+     * Each plugin's RouteAttributeCompiler output under its own name; plugins that stored nothing are omitted.
+     * @param ReflectionClass<object> $rc
+     * @return array<string, array<string, mixed>>
+     */
+    private function compilePluginData(ReflectionClass $rc, ReflectionMethod $method): array
+    {
+        $data = [];
+        foreach ($this->attributeCompilers as $name => $compiler) {
+            $compiled = $compiler->compile($rc, $method);
+            if ($compiled !== []) {
+                $data[$name] = $compiled;
+            }
+        }
+        return $data;
     }
 
     /**
@@ -276,11 +303,8 @@ final class RouteCompiler
     }
 
     /**
-
      * Wrapped so PHPStan doesn't narrow the caller's $class to class-string<MiddlewareBase>, which ReflectionClass<object> would then refuse.
-
      * @param class-string $class
-
      */
     private static function extendsMiddlewareBase(string $class): bool
     {
@@ -298,6 +322,7 @@ final class RouteCompiler
             $type = PropertyInjector::namedType($param);
             $body = self::attribute($param, Body::class);
             $of = $body?->of;
+            $plugin = $this->pluginArgPlan($param);
 
             $argPlan[] = match (true) {
                 $type === Request::class => ['inject' => 'Request'],
@@ -306,11 +331,27 @@ final class RouteCompiler
                 $body !== null && in_array($type, ['array', 'iterable'], true) && $of !== null && class_exists($of) => ['inject' => 'BodyCollection', 'class' => $of, 'validate' => true],
                 ($query = self::attribute($param, Query::class)) !== null => ['inject' => 'Query', 'name' => $query->name ?? $param->getName()],
                 ($route = self::attribute($param, Param::class)) !== null => ['inject' => 'Route', 'name' => $route->name ?? $param->getName()],
+                $plugin !== null => $plugin,
                 in_array($type, ['string', 'int', 'float', 'bool'], true) => ['inject' => 'Scalar', 'name' => $param->getName(), 'type' => $type],
                 default => ['inject' => 'Unknown'],
             };
         }
         return $argPlan;
+    }
+
+    /**
+     * The first plugin binder that claims $param, tagged with its name for ArgumentResolver.
+     * @return array<string, mixed>|null
+     */
+    private function pluginArgPlan(ReflectionParameter $param): ?array
+    {
+        foreach ($this->binders as $name => $binder) {
+            $plan = $binder->plan($param);
+            if ($plan !== null) {
+                return ['inject' => 'plugin', 'plugin' => $name] + $plan;
+            }
+        }
+        return null;
     }
 
     /**

@@ -26,11 +26,8 @@ enum Message: string
     }
 
     /**
-
      * format() with named arguments: Message::X->interpolate(method: $m, path: $p).
-
      * @param mixed ...$vars
-
      */
     public function interpolate(...$vars): string
     {

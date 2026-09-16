@@ -164,6 +164,19 @@ final class AuthorizationTest extends IntegrationTestCase
         $this->assertSame('/login', $this->sentHeaders()['location'] ?? null);
     }
 
+    public function testUnauthenticatedPartialNavigationRedirectsLikeABrowserNavigation(): void
+    {
+        Waypoint::create()->configure(function (JWTOptions $opts) {
+            $opts->loginRedirectUrl = '/login';
+        });
+
+        // A waypoint.js wp-target navigation: fetch() follows the 302 and swaps the login page in.
+        $this->dispatch('GET', '/authz/authenticated', ['X-Waypoint-Accept' => 'partial', 'Sec-Fetch-Mode' => 'same-origin']);
+
+        $this->assertSame(302, http_response_code());
+        $this->assertSame('/login', $this->sentHeaders()['location'] ?? null);
+    }
+
     public function testUnauthenticatedFetchCallStillGetsPlainJsonEvenWithLoginRedirectUrlConfigured(): void
     {
         Waypoint::create()->configure(function (JWTOptions $opts) {
@@ -212,15 +225,4 @@ final class AuthorizationTest extends IntegrationTestCase
         $this->assertSame(['ok' => true], json_decode($output, true));
     }
 
-    /** @return array<string, string> */
-    private function sentHeaders(): array
-    {
-        $raw = function_exists('xdebug_get_headers') ? xdebug_get_headers() : headers_list();
-        $headers = [];
-        foreach ($raw as $line) {
-            [$name, $value] = array_map('trim', explode(':', $line, 2) + [1 => '']);
-            $headers[strtolower($name)] = $value;
-        }
-        return $headers;
-    }
 }

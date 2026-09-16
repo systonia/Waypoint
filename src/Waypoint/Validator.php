@@ -5,6 +5,7 @@ namespace Waypoint;
 use ReflectionClass;
 use ReflectionProperty;
 use Waypoint\Attributes\{NotBlank, Email, Length, Regex};
+use Waypoint\Validation\Messages;
 
 /**
  * Validates a DTO's public properties against #[NotBlank]/#[Email]/#[Length]/
@@ -27,10 +28,10 @@ class Validator
 
             foreach ($rules as $rule) {
                 $message = match (true) {
-                    $rule instanceof NotBlank => self::isBlank($value) ? 'This value should not be blank.' : null,
-                    $rule instanceof Email => $value !== null && !filter_var($value, FILTER_VALIDATE_EMAIL) ? 'This value is not a valid email address.' : null,
-                    $rule instanceof Length => self::lengthError($value, $rule),
-                    $rule instanceof Regex => is_string($value) && !preg_match($rule->pattern, $value) ? 'This value does not match the required format.' : null,
+                    $rule instanceof NotBlank => self::isBlank($value) ? $this->message('This value should not be blank.') : null,
+                    $rule instanceof Email => $value !== null && !filter_var($value, FILTER_VALIDATE_EMAIL) ? $this->message('This value is not a valid email address.') : null,
+                    $rule instanceof Length => $this->lengthError($value, $rule),
+                    $rule instanceof Regex => is_string($value) && !preg_match($rule->pattern, $value) ? $this->message('This value does not match the required format.') : null,
                 };
                 if ($message !== null) {
                     $errors[$name] = $message;
@@ -68,13 +69,29 @@ class Validator
         return $value === null || (is_string($value) && trim($value) === '') || (is_array($value) && $value === []);
     }
 
-    private static function lengthError(mixed $value, Length $rule): ?string
+    private function lengthError(mixed $value, Length $rule): ?string
     {
         $len = is_string($value) ? mb_strlen($value) : 0;
         return match (true) {
-            $len < $rule->min => "This value is too short. Minimum length is {$rule->min}.",
-            $len > $rule->max => "This value is too long. Maximum length is {$rule->max}.",
+            $len < $rule->min => $this->message('This value is too short. Minimum length is {min}.', ['min' => $rule->min]),
+            $len > $rule->max => $this->message('This value is too long. Maximum length is {max}.', ['max' => $rule->max]),
             default => null,
         };
+    }
+
+    /**
+     * Through the container-bound Messages (a plugin, e.g. i18n) when there is one, else the English text with its placeholders filled in.
+     * @param array<string, scalar> $params
+     */
+    private function message(string $text, array $params = []): string
+    {
+        $container = Waypoint::getInstance()?->getContainer();
+        if ($container !== null && $container->isRegistered(Messages::class)) {
+            return $container->get(Messages::class)->translate($text, $params);
+        }
+        foreach ($params as $name => $value) {
+            $text = str_replace('{' . $name . '}', (string) $value, $text);
+        }
+        return $text;
     }
 }

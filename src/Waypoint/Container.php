@@ -19,6 +19,18 @@ class Container implements ContainerInterface
     }
 
     /**
+     * Registers $service under an interface (or parent class) name, so get(Interface::class) resolves it.
+     * @param class-string $id
+     */
+    public function bind(string $id, object $service): void
+    {
+        if (!$service instanceof $id) {
+            throw new ContainerException("Cannot bind '$id': " . get_class($service) . ' does not implement it.');
+        }
+        $this->services[$id] = $service;
+    }
+
+    /**
      * @template T of object
      * @param class-string<T> $id
      * @return T
@@ -48,11 +60,8 @@ class Container implements ContainerInterface
     }
 
     /**
-
      * True only if $class was already constructed (unlike has(), which is also true for "could be").
-
      * @param class-string $class
-
      */
     public function isRegistered(string $class): bool
     {

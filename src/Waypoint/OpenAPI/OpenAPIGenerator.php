@@ -222,11 +222,8 @@ class OpenAPIGenerator
     }
 
     /**
-
      * A positional-or-named constructor argument, narrowed to string.
-
      * @param array<int|string, mixed> $args
-
      */
     private static function stringArg(array $args, int $position, string $name): ?string
     {

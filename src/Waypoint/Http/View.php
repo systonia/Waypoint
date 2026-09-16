@@ -2,6 +2,7 @@
 
 namespace Waypoint\Http;
 
+use BadMethodCallException;
 use InvalidArgumentException;
 use RuntimeException;
 use Waypoint\{Csrf, Environment, Waypoint};
@@ -42,14 +43,23 @@ class View
     /** URL prefix assets are served under; Router overwrites it with FileSystemOptions::$assetsPath. */
     protected string $assetsPath = '/assets';
 
-    /** Compiled path of WaypointController's route, or null when it isn't attached (then waypointJsTag() renders nothing). */
+    /** URL of the compiled waypoint.js asset, set by Router::renderView(); null only for a View rendered outside a Router. */
     protected ?string $waypointJsPath = null;
+
+    /** @var array<string, string> data-* attributes waypoint.js reads off its own <script> tag (see Router::renderView()). */
+    protected array $waypointJsAttributes = [];
 
     /** The layout's basename without .php, set by render() (null for a partial render). */
     protected ?string $layoutName = null;
 
     /** @var array{css: ?string, js: ?string} The layout's own compiled assets (every views/*.php file gets the same sibling lookup). */
     protected array $layoutAssets = ['css' => null, 'js' => null];
+
+    /** @var array<string, callable> Plugin view helpers (Plugin\ViewHelper), reachable as $this->name(...) via __call(). */
+    protected array $helpers = [];
+
+    /** @var list<string> URLs of plugin CSS/JS (Plugin\ClientAsset), set by Router::renderView(). */
+    protected array $pluginAssetUrls = [];
 
     /**
      * @param string $view Path under RendererOptions::$directory without .php, '/'-separated ("Admin/Users").
@@ -83,9 +93,49 @@ class View
         $this->assetsPath = $assetsPath;
     }
 
-    public function setWaypointJsPath(?string $waypointJsPath): void
+    /** @param array<string, string> $attributes Extra attributes for the tag, e.g. ['data-csrf-cookie' => 'my_token']. */
+    public function setWaypointJsPath(?string $waypointJsPath, array $attributes = []): void
     {
         $this->waypointJsPath = $waypointJsPath;
+        $this->waypointJsAttributes = $attributes;
+    }
+
+    /** @param array<string, callable> $helpers */
+    public function setHelpers(array $helpers): void
+    {
+        $this->helpers = $helpers;
+    }
+
+    /** @param list<string> $urls */
+    public function setPluginAssetUrls(array $urls): void
+    {
+        $this->pluginAssetUrls = $urls;
+    }
+
+    /**
+     * `$this->t('key')` and any other helper a plugin registered.
+     * @param list<mixed> $arguments
+     */
+    public function __call(string $name, array $arguments): mixed
+    {
+        $helper = $this->helpers[$name] ?? null;
+        if ($helper === null) {
+            throw new BadMethodCallException("View helper '{$name}' is not provided by any registered plugin.");
+        }
+        return $helper(...$arguments);
+    }
+
+    /** `<link>`/`<script>` tags for every plugin-shipped asset -- place after waypointJsTag(). */
+    public function pluginAssetTags(): string
+    {
+        $tags = '';
+        foreach ($this->pluginAssetUrls as $url) {
+            $escaped = htmlspecialchars($url, ENT_QUOTES);
+            $tags .= str_ends_with($url, '.css')
+                ? "<link rel=\"stylesheet\" href=\"$escaped\">\n"
+                : "<script src=\"$escaped\"></script>\n";
+        }
+        return $tags;
     }
 
     /** `<link>`/`<script>` tags for this view's own CSS/JS -- for the layout's `<head>`. */
@@ -100,21 +150,26 @@ class View
         return $this->renderAssetTags($this->layoutAssets);
     }
 
-    /** `<script>` tag for the bundled waypoint.js client, or '' when WaypointController isn't attached. */
+    /**
+     * `<script>` tag for the bundled waypoint.js client (content-hashed, served like any view asset).
+     * Carries the CSRF cookie/header names as data attributes when CsrfOptions differs from the
+     * client's defaults, so the layout never repeats what the options already say.
+     */
     public function waypointJsTag(): string
     {
         if ($this->waypointJsPath === null) {
             return '';
         }
-        return '<script src="' . htmlspecialchars($this->waypointJsPath, ENT_QUOTES) . "\"></script>\n";
+        $tag = '<script src="' . htmlspecialchars($this->waypointJsPath, ENT_QUOTES) . '"';
+        foreach ($this->waypointJsAttributes as $name => $value) {
+            $tag .= ' ' . htmlspecialchars($name, ENT_QUOTES) . '="' . htmlspecialchars($value, ENT_QUOTES) . '"';
+        }
+        return $tag . "></script>\n";
     }
 
     /**
-
      * data-wp-asset must match what waypoint.js marks its own injected tags with, or a later swap would inject a duplicate.
-
      * @param array{css: ?string, js: ?string} $assets
-
      */
     private function renderAssetTags(array $assets): string
     {

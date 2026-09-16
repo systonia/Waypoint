@@ -3,7 +3,7 @@
 namespace Waypoint\Tests\Integration;
 
 use Waypoint\Waypoint;
-use Waypoint\OpenAPI\OpenAPIController;
+use Waypoint\Options\OpenAPIOptions;
 use Waypoint\Tests\Fixtures\Controllers\{UsersV1Controller, UsersV2Controller};
 
 final class OpenAPIVersioningControllerTest extends IntegrationTestCase
@@ -11,7 +11,11 @@ final class OpenAPIVersioningControllerTest extends IntegrationTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Waypoint::create()->attach([OpenAPIController::class, UsersV1Controller::class, UsersV2Controller::class]);
+        $app = Waypoint::create();
+        $app->configure(function (OpenAPIOptions $opts) {
+            $opts->enabled = true;
+        });
+        $app->attach([UsersV1Controller::class, UsersV2Controller::class]);
     }
 
     public function testSpecVersionRouteServesThatVersionsDocument(): void

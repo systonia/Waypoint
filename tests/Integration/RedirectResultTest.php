@@ -69,15 +69,4 @@ final class RedirectResultTest extends IntegrationTestCase
         $this->assertArrayNotHasKey('content-type', $this->sentHeaders());
     }
 
-    /** @return array<string, string> */
-    private function sentHeaders(): array
-    {
-        $raw = function_exists('xdebug_get_headers') ? xdebug_get_headers() : headers_list();
-        $headers = [];
-        foreach ($raw as $line) {
-            [$name, $value] = array_map('trim', explode(':', $line, 2) + [1 => '']);
-            $headers[strtolower($name)] = $value;
-        }
-        return $headers;
-    }
 }

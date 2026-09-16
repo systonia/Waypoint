@@ -11,7 +11,7 @@ use InvalidArgumentException;
  * Location; cookies/headers already queued on the Response are kept.
  * A plain result, not an exception: a redirect is a normal outcome, and
  * `View|Redirect` on the signature says so. Auth failures that should
- * redirect a browser go through UnauthorizedException + JWTOptions::$loginRedirectUrl.
+ * redirect to the login page go through UnauthorizedException + JWTOptions::$loginRedirectUrl.
  */
 final class Redirect
 {

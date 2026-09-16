@@ -41,11 +41,8 @@ final class SchemaBuilder
     }
 
     /**
-
      * Registers $fqcn's schema (once) and returns its "#/components/schemas/..." reference.
-
      * @param class-string $fqcn
-
      */
     public function refFor(string $fqcn): string
     {
@@ -58,11 +55,8 @@ final class SchemaBuilder
     }
 
     /**
-
      * #[Schema(name: ...)] or the short class name.
-
      * @param class-string $fqcn
-
      */
     public function nameFor(string $fqcn): string
     {
@@ -152,11 +146,8 @@ final class SchemaBuilder
     }
 
     /**
-
      * Merges #[Property(...)]'s description/format/example/deprecated.
-
      * @param array<string, mixed> $schema
-
      */
     private function applyPropertyAnnotation(ReflectionProperty $prop, array &$schema): void
     {
@@ -175,11 +166,8 @@ final class SchemaBuilder
     }
 
     /**
-
      * Schema for a path/query parameter: unknown/untyped is a string, a class or interface adds no constraint.
-
      * @return array<string, mixed>|stdClass
-
      */
     public static function parameterSchema(?string $type): array|stdClass
     {

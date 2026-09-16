@@ -4,10 +4,19 @@ namespace Waypoint\Options;
 
 use Waypoint\FromArray;
 
-/** The document-level parts of the generated OpenAPI spec: info, servers, tags, security. */
+/** Turns the OpenAPI endpoint on and configures the document-level parts of the spec: info, servers, tags, security. */
 class OpenAPIOptions
 {
     use FromArray;
+
+    /** Serve the spec and Swagger UI at all (see Waypoint\OpenAPI\OpenAPIEndpoint). Off by default. */
+    public bool $enabled = false;
+
+    /** URL prefix the endpoint lives under, e.g. '/openapi' -> /openapi/spec.json; normalized to a leading and no trailing slash. */
+    public string $path = '/openapi' {
+        get => $this->path;
+        set(string $value) => $this->path = '/' . trim($value, '/');
+    }
 
     public string $title = 'API Documentation';
     public string $version = '1.0.0';

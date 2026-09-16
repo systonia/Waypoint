@@ -51,7 +51,8 @@
     "phpstan/phpstan": "^2.2"
   },
   "suggest": {
-    "monolog/monolog": "Powerful logging with handlers, channels, and JSON output."
+    "monolog/monolog": "Powerful logging with handlers, channels, and JSON output.",
+    "phpunit/phpunit": "Required by the Waypoint\\Testing kit for app and plugin tests."
   },
   "minimum-stability": "stable",
   "prefer-stable": true

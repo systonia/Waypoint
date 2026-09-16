@@ -8,7 +8,7 @@ use Waypoint\Tests\Fixtures\Controllers\{CustomersController, UsersV1Controller,
 
 /**
  * The multi-file spec.json (combined, "latest version wins" per group) /
- * spec.vX.json (exact version) split -- OpenAPIController is the one that
+ * spec.vX.json (exact version) split -- OpenAPIEndpoint is the one that
  * actually serves these as separate HTTP routes (see
  * OpenAPIVersioningControllerTest); this exercises OpenAPIGenerator's own
  * generate($version)/hasVersion() directly.

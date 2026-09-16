@@ -67,11 +67,8 @@ class HttpException extends Exception
     }
 
     /**
-
      * The RFC 9457 members as a json_encode()-ready array; a subclass adds its own extension members (ValidationException's 'errors').
-
      * @return array<string, mixed>
-
      */
     public function toProblemDetails(): array
     {

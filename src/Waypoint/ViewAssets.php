@@ -13,6 +13,9 @@ final class ViewAssets
 {
     private const EXTENSIONS = ['css', 'js'];
 
+    /** The bundled client (built by the Waypoint-UI project, shipped inside this package); compiled into the same pipeline by Router. */
+    public const WAYPOINT_JS = __DIR__ . '/UI/waypoint.js';
+
     /**
      * Every view file under $viewsDir as its View name: the path relative to $viewsDir, no .php,
      * '/'-separated on every platform ("Home", "Admin/Users"). The same string keys compile()'s
