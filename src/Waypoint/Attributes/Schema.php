@@ -4,24 +4,11 @@ namespace Waypoint\Attributes;
 
 use Attribute;
 
-/**
- *
- */
+/** Overrides the OpenAPI component schema name for a DTO class (default: its short class name). */
 #[Attribute(Attribute::TARGET_CLASS)]
 class Schema
 {
-    /**
-     * Undocumented function
-     *
-     * @param string|null $name
-     */
-    public function __construct(
-        /**
-         * Undocumented variable
-         *
-         * @var string|null
-         */
-        public ?string $name = null
-    ) {
+    public function __construct(public ?string $name = null)
+    {
     }
 }

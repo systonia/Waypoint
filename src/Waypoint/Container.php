@@ -4,14 +4,10 @@ namespace Waypoint;
 
 use ReflectionClass;
 use Throwable;
-
 use Psr\Container\ContainerInterface;
-
 use Waypoint\Exceptions\{ContainerException, NotFoundException};
 
-/**
- * Undocumented class
- */
+/** A class-name-keyed singleton registry; a class with no required constructor arguments is constructed on first get(). */
 class Container implements ContainerInterface
 {
     /** @var array<class-string, object> */
@@ -29,11 +25,7 @@ class Container implements ContainerInterface
      */
     public function get(string $id)
     {
-        // The `instanceof $id` check is always true here in practice --
-        // set() only ever keys an entry by that instance's own class -- but
-        // it's also what lets PHPStan narrow $this->services[$id] (plain
-        // `object`, since a heterogeneous array can't correlate its own
-        // keys to per-entry value types) to T.
+        // The instanceof is what narrows the heterogeneous map entry to T for PHPStan.
         if (isset($this->services[$id]) && $this->services[$id] instanceof $id) {
             return $this->services[$id];
         }
@@ -56,22 +48,18 @@ class Container implements ContainerInterface
     }
 
     /**
-     * True only if $class has already been constructed and registered (via
-     * set(), or a prior get() auto-instantiation) -- unlike has(), this
-     * doesn't return true just because $class *could* be auto-instantiated
-     * on demand. Lets a caller tell "already configured" apart from
-     * "constructible with defaults".
+
+     * True only if $class was already constructed (unlike has(), which is also true for "could be").
+
+     * @param class-string $class
+
      */
-    /** @param class-string $class */
     public function isRegistered(string $class): bool
     {
         return isset($this->services[$class]);
     }
 
-    /**
-     * True if $class exists and has no required constructor parameters.
-     * @param class-string $class
-     */
+    /** @param class-string $class */
     private function isAutoInstantiable(string $class): bool
     {
         if (!class_exists($class)) {
@@ -87,4 +75,3 @@ class Container implements ContainerInterface
         return $this->services;
     }
 }
-

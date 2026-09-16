@@ -3,36 +3,21 @@
 namespace Waypoint;
 
 use ReflectionClass;
-
-use Waypoint\Router;
 use Waypoint\Options\FileSystemOptions;
+use Waypoint\Support\Arr;
 
 /**
- * Reads/writes the compiled route/DI/attribute cache, and resolves the
- * public static-file directory -- both driven by a FileSystemOptions
- * instance (see App::configure(FileSystemOptions)) rather than any state
- * of its own.
+ * The on-disk compilation cache under FileSystemOptions::$cacheDirectory:
+ * routes.php (plans + service list), meta.php (source mtimes that produced
+ * it), attributes.php (RouteCompiler::exportAllAttributes() for OpenAPI),
+ * and assets/ (content-hashed view CSS/JS, kept out of routes.php so the
+ * `require`d file stays small).
  */
 final class FileSystem
 {
-    /**
-     *
-     */
     private const ROUTES_FILE = 'routes.php';
-
-    /**
-     *
-     */
     private const META_FILE = 'meta.php';
-
-    /**
-     *
-     */
     private const ATTRIBUTES_FILE = 'attributes.php';
-
-    /**
-     *
-     */
     private const ASSETS_DIR = 'assets';
 
     public function __construct(private FileSystemOptions $options = new FileSystemOptions())
@@ -44,56 +29,29 @@ final class FileSystem
         return $this->options->getCacheDirectory() . '/' . self::ROUTES_FILE;
     }
 
-    /**
-     * Undocumented function
-     *
-     * @return string
-     */
     public function getMetaFile(): string
     {
         return $this->options->getCacheDirectory() . '/' . self::META_FILE;
     }
 
-    /**
-     * Undocumented function
-     *
-     * @return string
-     */
     public function getAttributesFile(): string
     {
         return $this->options->getCacheDirectory() . '/' . self::ATTRIBUTES_FILE;
     }
 
-    /**
-     * Where compiled view/layout asset files (ViewAssets::compile()'s
-     * content-hashed .css/.js) are written -- a subdirectory rather than
-     * routes.php itself, so the compiled route/DI cache stays a small,
-     * quick-to-require PHP array instead of embedding every view's full
-     * CSS/JS text as string literals in it.
-     */
     public function getAssetsDirectory(): string
     {
         return $this->options->getCacheDirectory() . '/' . self::ASSETS_DIR;
     }
 
-    /**
-     * Cheap existence-only check for trust mode ($options->cacheValidate =
-     * false): a single stat call, versus isAvailable()'s full
-     * reflect-and-compare pass over every controller.
-     */
+    /** Trust mode's whole check: one stat call. */
     public function hasCachedRoutes(): bool
     {
         return is_file($this->getRouteFile());
     }
 
     /**
-     * Reads routes.php once and returns its full decoded contents
-     * (staticRoutes/dynamicRoutes/tasks/services), or null if there's no
-     * usable cache yet. Trust mode's single source of truth -- both
-     * App::attach() (for 'services') and Router (for the route plans
-     * themselves) reuse this one read instead of each `require`-ing the
-     * same file independently.
-     *
+     * The decoded routes.php (plans + 'services'), or null without a cache.
      * @return array<string, mixed>|null
      */
     public function loadCachedRouteData(): ?array
@@ -102,109 +60,45 @@ final class FileSystem
             return null;
         }
         $data = @require $this->getRouteFile();
-        return is_array($data) ? self::toStringKeyedArray($data) : null;
+        return is_array($data) ? Arr::stringKeyed($data) : null;
     }
 
     /**
-     * Narrows an arbitrary decoded/`require`d value to a string-keyed
-     * array, dropping any non-string key -- every routes.php/attributes
-     * cache file this class reads back is one this same class wrote (via
-     * var_export()), but PHPStan has no way to trust a `require`d file's
-     * shape statically.
-     *
-     * @return array<string, mixed>
-     */
-    private static function toStringKeyedArray(mixed $value): array
-    {
-        if (!is_array($value)) {
-            // @codeCoverageIgnoreStart
-            return [];
-            // @codeCoverageIgnoreEnd
-        }
-        $result = [];
-        foreach ($value as $key => $item) {
-            if (is_string($key)) {
-                $result[$key] = $item;
-            }
-        }
-        return $result;
-    }
-
-    /**
-     * Reads back the controller/service class list that was compiled into
-     * the cached routes.php (stored by storeFromRouter() under 'services'),
-     * for trust mode to reuse instead of re-discovering it via Reflection.
-     * Returns null if there's no usable cache yet.
-     *
+     * The class list compiled into routes.php, or null without a cache.
      * @return string[]|null
      */
     public function loadCachedServices(): ?array
     {
-        $data = $this->loadCachedRouteData();
-        $services = $data['services'] ?? null;
-        if (!is_array($services)) {
-            return null;
-        }
-        return array_values(array_filter($services, 'is_string'));
+        $services = $this->loadCachedRouteData()['services'] ?? null;
+        return is_array($services) ? Arr::stringList($services) : null;
     }
 
     /**
+     * True if the cache exists and was built from exactly the current sources: every controller
+     * file (by mtime) plus $extraMeta (view .css/.js mtimes), no more and no fewer -- a cache built
+     * for a larger controller set must not keep serving a removed controller's routes.
+     *
      * @param class-string[] $controllers
-     * @param array<string, int> $extraMeta Additional {path => mtime}
-     *  entries to require an exact match on too, alongside the controllers'
-     *  own -- e.g. ViewAssets::discoverMeta()'s view .css/.js mtimes, so
-     *  editing one invalidates the cache the same way editing a controller
-     *  does, without isAvailable() needing to know anything about views
-     *  itself.
-     * @return boolean
+     * @param array<string, int> $extraMeta path => mtime
      */
     public function isAvailable(array $controllers, array $extraMeta = []): bool
     {
-        $routeFile = $this->getRouteFile();
-        $metaFile = $this->getMetaFile();
-        $attributesFile = $this->getAttributesFile();
-
-        // getRouteFile()/getMetaFile()/getAttributesFile() are always
-        // strings (their own return type), so only existence needs
-        // checking here.
-        foreach ([$routeFile, $metaFile, $attributesFile] as $file) {
+        foreach ([$this->getRouteFile(), $this->getMetaFile(), $this->getAttributesFile()] as $file) {
             if (!is_file($file)) {
                 return false;
             }
         }
-
-        $storedMeta = @require $metaFile;
-        if (!is_array($storedMeta)) {
+        $stored = @require $this->getMetaFile();
+        if (!is_array($stored)) {
             return false;
         }
 
-        $currentMeta = $extraMeta;
-        foreach ($controllers as $controller) {
-            if (!class_exists($controller)) {
-                continue;
-            }
-
-            $rc = new ReflectionClass($controller);
-            $file = $rc->getFileName();
-
-            if (!$file || !file_exists($file)) {
-                return false;
-            }
-
-            $currentMeta[$file] = filemtime($file);
-        }
-
-        // Require an exact match, not just that every *current* controller
-        // is present: otherwise a cache built for a larger controller set
-        // (e.g. one that later had a controller removed) would incorrectly
-        // validate for the smaller set and silently keep serving the
-        // removed controller's routes/tasks from the stale cache.
-        if (count($currentMeta) !== count($storedMeta)) {
+        $current = $this->controllerMeta($controllers, $extraMeta);
+        if ($current === null || count($current) !== count($stored)) {
             return false;
         }
-
-        foreach ($currentMeta as $file => $mtime) {
-            if (!isset($storedMeta[$file]) || $storedMeta[$file] !== $mtime) {
+        foreach ($current as $file => $mtime) {
+            if (($stored[$file] ?? null) !== $mtime) {
                 return false;
             }
         }
@@ -212,170 +106,125 @@ final class FileSystem
     }
 
     /**
-     * @param Router $router
+     * $extraMeta plus each controller's source file mtime, or null if a controller's file is gone.
+     * @param class-string[] $controllers
+     * @param array<string, int> $extraMeta
+     * @return array<string, int>|null
+     */
+    private function controllerMeta(array $controllers, array $extraMeta): ?array
+    {
+        $meta = $extraMeta;
+        foreach ($controllers as $controller) {
+            if (!class_exists($controller)) {
+                continue;
+            }
+            $file = (new ReflectionClass($controller))->getFileName();
+            if (!$file || !file_exists($file)) {
+                return null;
+            }
+            $mtime = filemtime($file);
+            if ($mtime === false) {
+                // @codeCoverageIgnoreStart
+                // only a delete race after file_exists().
+                return null;
+                // @codeCoverageIgnoreEnd
+            }
+            $meta[$file] = $mtime;
+        }
+        return $meta;
+    }
+
+    /**
+     * Writes routes.php, meta.php and attributes.php from the Router's current plans.
      * @param class-string[] $controllers
      * @param class-string[] $serviceClasses
-     * @param array<string, int> $extraMeta See isAvailable()'s $extraMeta --
-     *  the same view-asset mtimes that decided a rebuild was needed here
-     *  get persisted here too, so the next request's isAvailable() call has
-     *  something to compare against.
-     * @return void
+     * @param array<string, int> $extraMeta The same view-asset mtimes isAvailable() will compare against next time.
      */
     public function storeFromRouter(Router $router, array $controllers, array $serviceClasses, array $extraMeta = []): void
     {
-        $dir = $this->options->getCacheDirectory();
-        if (!is_dir($dir)) {
-            mkdir($dir, 0777, true);
-        }
         $data = $router->exportPlans();
         $data['services'] = $serviceClasses;
-
-        $header = "<?php\n// AUTO-GENERATED FILE - DO NOT EDIT\n\n";
-        file_put_contents($dir . '/' . self::ROUTES_FILE, $header . 'return ' . var_export($data, true) . ';');
-
-        $meta = $extraMeta;
-        foreach ($controllers as $controller) {
-            if (!class_exists($controller))
-                continue;
-            $rc = new ReflectionClass($controller);
-            $file = $rc->getFileName();
-            if ($file && file_exists($file)) {
-                $meta[$file] = filemtime($file);
-            }
-        }
-        file_put_contents($dir . '/' . self::META_FILE, $header . 'return ' . var_export($meta, true) . ';');
-
+        $this->writePhpArray(self::ROUTES_FILE, $data);
+        $this->writePhpArray(self::META_FILE, $this->controllerMeta($controllers, $extraMeta) ?? $extraMeta);
         $this->storeAttributes($controllers);
     }
 
-    /**
-     * Writes each {filename => {content, mime}} entry (from
-     * ViewAssets::compile()) to getAssetsDirectory()/{filename}, and
-     * returns the same set stripped down to {filename => mime} -- that's
-     * what actually gets persisted into routes.php by storeFromRouter(),
-     * so the cache file itself never embeds any view's CSS/JS text.
-     *
-     * Filenames are content hashes (see ViewAssets::compile()), so they're
-     * immutable once written: an existing file is trusted as-is rather
-     * than rewritten, and a stale/orphaned file left behind by an edited
-     * view is never cleaned up here -- the same "you own clearing/rebuilding
-     * this directory" tradeoff trust mode already makes for the rest of
-     * this cache.
-     *
-     * @param array<string, array{content: string, mime: string}> $files
-     * @return array<string, string> {filename => mime}
-     */
-    public function storeViewAssetFiles(array $files): array
-    {
-        if ($files === []) {
-            return [];
-        }
-
-        $dir = $this->getAssetsDirectory();
-        if (!is_dir($dir)) {
-            mkdir($dir, 0777, true);
-        }
-
-        $stripped = [];
-        foreach ($files as $filename => $asset) {
-            $path = $dir . '/' . $filename;
-            if (!is_file($path)) {
-                file_put_contents($path, $asset['content']);
-            }
-            $stripped[$filename] = $asset['mime'];
-        }
-
-        return $stripped;
-    }
-
-    /**
-     * Reads back one view/layout asset file written by
-     * storeViewAssetFiles(), or null if it doesn't exist -- e.g. the cache
-     * directory was cleared between storing the {filename => mime}
-     * manifest and serving it. $filename is trusted to already be a known
-     * key from that manifest (see Router::tryServeViewAsset(), which looks
-     * it up there first) -- never a path built from unvalidated request
-     * input, so no separate traversal guard is needed here.
-     */
-    public function readViewAssetFile(string $filename): ?string
-    {
-        $path = $this->getAssetsDirectory() . '/' . $filename;
-        if (!is_file($path)) {
-            return null;
-        }
-
-        $content = @file_get_contents($path);
-        // @codeCoverageIgnoreStart
-        // Only reachable via a race (deleted/permissions changed between
-        // is_file() and file_get_contents()) that can't be reliably
-        // reproduced cross platform, especially under Windows ACLs -- same
-        // guard as extendWithEnvFile()/extendWithJsonFile() in
-        // EnvironmentOptions.
-        if ($content === false) {
-            return null;
-        }
-        // @codeCoverageIgnoreEnd
-
-        return $content;
-    }
-
-    /**
-     * @param class-string[] $controllers
-     * @return void
-     */
+    /** @param class-string[] $controllers */
     public function storeAttributes(array $controllers): void
     {
-        $dir = $this->options->getCacheDirectory();
-        if (!is_dir($dir)) {
-            mkdir($dir, 0777, true);
-        }
-
-        $attributes = RouteCompiler::exportAllAttributes($controllers);
-
-        $header = "<?php\n// AUTO-GENERATED FILE - DO NOT EDIT\n\n";
-        file_put_contents($dir . '/' . self::ATTRIBUTES_FILE, $header . 'return ' . var_export($attributes, true) . ';');
+        $this->writePhpArray(self::ATTRIBUTES_FILE, RouteCompiler::exportAllAttributes($controllers));
     }
 
-    /**
-     * @return array<class-string, mixed> See RouteCompiler::exportAllAttributes() for the shape.
-     */
+    /** @return array<class-string, mixed> See RouteCompiler::exportAllAttributes() for the shape. */
     public function loadAttributes(): array
     {
         $file = $this->getAttributesFile();
-        if (!file_exists($file)) {
-            return [];
-        }
-
-        $data = require $file;
-        if (!is_array($data)) {
-            // @codeCoverageIgnoreStart
-            // storeAttributes() always writes `return <array>;` via
-            // var_export() -- this only guards a hand-corrupted cache file.
-            return [];
-            // @codeCoverageIgnoreEnd
-        }
+        $data = file_exists($file) ? require $file : [];
         $result = [];
-        foreach ($data as $key => $item) {
-            if (is_string($key) && class_exists($key)) {
+        foreach (Arr::stringKeyed($data) as $key => $item) {
+            if (class_exists($key)) {
                 $result[$key] = $item;
             }
         }
         return $result;
     }
 
-    /**
-     * Undocumented function
-     *
-     * @param Router $router
-     * @return void
-     */
     public function loadToRouter(Router $router): void
     {
-        $routeFile = $this->getRouteFile();
-        if (!file_exists($routeFile)) {
-            return;
+        $data = $this->loadCachedRouteData();
+        if ($data !== null) {
+            $router->importPlans($data);
         }
-        $data = require $routeFile;
-        $router->importPlans(is_array($data) ? self::toStringKeyedArray($data) : []);
+    }
+
+    /**
+     * Writes each compiled asset to assets/{filename} and returns {filename => mime} for routes.php.
+     * Filenames are content hashes, so an existing file is never rewritten -- and a stale one is
+     * never cleaned up here (clearing the cache directory is the deployment's job).
+     *
+     * @param array<string, array{content: string, mime: string}> $files
+     * @return array<string, string>
+     */
+    public function storeViewAssetFiles(array $files): array
+    {
+        if ($files === []) {
+            return [];
+        }
+        $dir = $this->getAssetsDirectory();
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+        $mimes = [];
+        foreach ($files as $filename => $asset) {
+            if (!is_file("$dir/$filename")) {
+                file_put_contents("$dir/$filename", $asset['content']);
+            }
+            $mimes[$filename] = $asset['mime'];
+        }
+        return $mimes;
+    }
+
+    /** One stored asset's content, or null if it's gone (e.g. the cache directory was cleared). $filename is a manifest key, never raw request input. */
+    public function readViewAssetFile(string $filename): ?string
+    {
+        $path = $this->getAssetsDirectory() . '/' . $filename;
+        if (!is_file($path)) {
+            return null;
+        }
+        $content = @file_get_contents($path);
+        // @codeCoverageIgnoreStart
+        // only a delete/permission race between is_file() and the read.
+        return $content === false ? null : $content;
+        // @codeCoverageIgnoreEnd
+    }
+
+    /** @param array<array-key, mixed> $data */
+    private function writePhpArray(string $filename, array $data): void
+    {
+        $dir = $this->options->getCacheDirectory();
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+        file_put_contents("$dir/$filename", "<?php\n// AUTO-GENERATED FILE - DO NOT EDIT\n\nreturn " . var_export($data, true) . ';');
     }
 }

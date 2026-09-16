@@ -17,7 +17,4 @@ use Attribute;
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD)]
 class SkipCsrf
 {
-    public function __construct()
-    {
-    }
 }

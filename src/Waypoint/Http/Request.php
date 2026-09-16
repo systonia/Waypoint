@@ -2,139 +2,62 @@
 
 namespace Waypoint\Http;
 
-/**
- * Undocumented class
- */
+use Waypoint\Support\Arr;
+
+/** The incoming HTTP request, captured once from the superglobals by App::handleHttp(). */
 class Request
 {
-    /**
-     * Undocumented variable
-     *
-     * @var string
-     */
     public string $method;
-
-    /**
-     * Undocumented variable
-     *
-     * @var string
-     */
     public string $path;
 
-    /**
-     * @var array<string, string>
-     */
+    /** @var array<string, string> Header names normalized to "X-Some-Header" casing. */
     public array $headers = [];
 
-    /**
-     * @var array<string, mixed>
-     */
+    /** @var array<string, mixed> */
     public array $query = [];
 
-    /**
-     * Keyed by string for a JSON object/form body, or by int for a JSON
-     * list body (see #[Body(of: ...)] array-typed parameters, which bind a
-     * top-level list) -- both are real, intentionally supported shapes.
-     *
-     * @var array<array-key, mixed>
-     */
+    /** @var array<array-key, mixed> A JSON object/form body (string keys) or a JSON list body (int keys, see #[Body(of: ...)]). */
     public array $body = [];
 
-    /**
-     * Undocumented variable
-     *
-     * @var mixed
-     */
+    /** The decoded JWT payload, set by useJwt() when the request carried a valid token. */
     public mixed $jwt = null;
 
-    /**
-     * The constructed #[Body] DTO for this request, if the matched route
-     * has one -- set by Router::buildMethodArguments() right after
-     * building it (before validation runs, so this is still set even if
-     * the DTO then fails validation), null otherwise. Same idea as $jwt
-     * above: routing/dispatch resolves it once, downstream code (e.g. an
-     * $app->use() middleware's after(), which runs once dispatch has
-     * already completed) reads it back rather than re-deriving it.
-     * Always null in a before() hook -- routing hasn't run yet there.
-     *
-     * @var object|null
-     */
+    /** The #[Body] DTO the matched route built (set before validation runs, so present even when validation fails); null until routing has run. */
     public ?object $bodyDto = null;
 
-    /**
-     * True if the client accepts a partial response (AJAX navigation)
-     *
-     * @var bool
-     */
+    /** True when the client sent `X-Waypoint-Accept: partial` (a waypoint.js navigation): render the view without its layout. */
     public bool $acceptPartial = false;
 
-    /**
-     * Correlation id for this request: the incoming X-Request-Id header if
-     * the client/upstream sent one (X-Correlation-Id as a fallback name),
-     * otherwise a freshly generated UUID v4. Set once in capture() and
-     * never modified afterwards (not declared `readonly` only because
-     * __construct() is private and parameterless like every other
-     * property here -- PHPStan requires a readonly property to be
-     * assigned from the constructor itself, not a separate factory
-     * method) -- Response::withRequestId() sends the same value back as
-     * X-Request-ID, and Logger::log() (via RequestContext) stamps it onto
-     * every log line for the duration of this request, so no call site
-     * has to pass it around by hand.
-     *
-     * @var string
-     */
+    /** Correlation id: the incoming X-Request-Id (or X-Correlation-Id), else a fresh UUID v4. Echoed back as X-Request-ID and stamped onto log lines. */
     public string $id;
 
-    /**
-     * Undocumented function
-     */
     private function __construct()
     {
     }
 
-    /**
-     * Capture the current HTTP request from globals.
-     *
-     * @param string|null $rawBody Override for the raw request body instead
-     *  of reading php://input -- mainly so tests can exercise JSON body
-     *  parsing, since php://input is always empty under a CLI test runner.
-     * @return self
-     */
+    /** @param string|null $rawBody Overrides php://input (which is always empty under a CLI test runner). */
     public static function capture(?string $rawBody = null): self
     {
         $req = new self();
 
-        // $_SERVER values are typed mixed by PHPStan (it can't know what a
-        // given SAPI actually put there) -- narrow explicitly rather than
-        // assuming string, the same pattern as Response::maybeCompress().
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         $req->method = is_string($method) ? $method : 'GET';
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
-        $uri = is_string($uri) ? $uri : '/';
-        $req->path = parse_url($uri, PHP_URL_PATH) ?: '/';
+        $req->path = parse_url(is_string($uri) ? $uri : '/', PHP_URL_PATH) ?: '/';
 
-        // Headers (SAPI-agnostic)
         foreach ($_SERVER as $key => $value) {
             if (is_string($key) && is_string($value) && str_starts_with($key, 'HTTP_')) {
-                $name = str_replace(
-                    ' ',
-                    '-',
-                    ucwords(strtolower(str_replace('_', ' ', substr($key, 5))))
-                );
+                $name = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($key, 5)))));
                 $req->headers[$name] = $value;
             }
         }
 
         $req->id = self::resolveRequestId($req->headers);
+        $req->acceptPartial = strcasecmp($req->headers['X-Waypoint-Accept'] ?? '', 'partial') === 0;
+        $req->query = Arr::stringKeyed($_GET);
 
-        $req->query = self::toStringKeyedArray($_GET);
-
-        // Parse JSON or form data, prefer JSON if present -- $data can be a
-        // JSON object (string keys) or a JSON list (int keys), both valid
-        // (see $body's own docblock), so unlike $query/$headers above this
-        // isn't filtered down to string keys only.
+        // JSON wins over form data when both could apply.
         $raw = $rawBody ?? file_get_contents('php://input');
-        $req->body = [];
         if ($raw && is_array($data = json_decode($raw, true))) {
             $req->body = $data;
         } elseif ($_POST) {
@@ -144,107 +67,39 @@ class Request
         return $req;
     }
 
-    /**
-     * X-Request-Id if the client/upstream sent one, else X-Correlation-Id
-     * as a fallback name, taken verbatim with no format validation -- an
-     * upstream proxy's own (possibly non-UUID) id is exactly as valid a
-     * correlation id as one we'd generate ourselves. Only when neither
-     * header is present does this generate a fresh UUID v4.
-     *
-     * @param array<string, string> $headers Already-normalized (see the
-     *  loop above), so both names are checked in their exact normalized
-     *  casing.
-     */
+    /** @param array<string, string> $headers */
     private static function resolveRequestId(array $headers): string
     {
         foreach (['X-Request-Id', 'X-Correlation-Id'] as $name) {
-            $value = $headers[$name] ?? '';
-            if ($value !== '') {
-                return $value;
+            if (($headers[$name] ?? '') !== '') {
+                return $headers[$name];
             }
         }
         return self::generateUuidV4();
     }
 
-    /** A random RFC 4122 version-4 UUID, e.g. "b3f1c2a0-....-....-....-............". */
     private static function generateUuidV4(): string
     {
         $bytes = random_bytes(16);
-        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40); // version 4
-        $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80); // variant 10xx
-
+        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+        $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
         $hex = bin2hex($bytes);
-        return sprintf(
-            '%s-%s-%s-%s-%s',
-            substr($hex, 0, 8),
-            substr($hex, 8, 4),
-            substr($hex, 12, 4),
-            substr($hex, 16, 4),
-            substr($hex, 20, 12)
-        );
+        return sprintf('%s-%s-%s-%s-%s', substr($hex, 0, 8), substr($hex, 8, 4), substr($hex, 12, 4), substr($hex, 16, 4), substr($hex, 20, 12));
     }
 
-    /**
-     * Narrows an arbitrary decoded/superglobal value to a string-keyed
-     * array, dropping any non-string key -- $_GET/$_POST/json_decode()
-     * are all typed with unknown key types by PHPStan even though a real
-     * HTTP request's keys are always strings.
-     *
-     * @return array<string, mixed>
-     */
-    private static function toStringKeyedArray(mixed $value): array
-    {
-        if (!is_array($value)) {
-            // @codeCoverageIgnoreStart
-            // The only real caller passes $_GET, which PHP itself
-            // guarantees is always an array.
-            return [];
-            // @codeCoverageIgnoreEnd
-        }
-        $result = [];
-        foreach ($value as $key => $item) {
-            if (is_string($key)) {
-                $result[$key] = $item;
-            }
-        }
-        return $result;
-    }
-
-    /**
-     * Undocumented function
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function query(string $key, $default = null): mixed
+    public function query(string $key, mixed $default = null): mixed
     {
         return $this->query[$key] ?? $default;
     }
 
-    /**
-     * Undocumented function
-     *
-     * @param string|null $key
-     * @param mixed $default
-     * @return ($key is null ? array<array-key, mixed> : mixed)
-     */
-    public function body(?string $key = null, $default = null): mixed
+    /** @return ($key is null ? array<array-key, mixed> : mixed) */
+    public function body(?string $key = null, mixed $default = null): mixed
     {
-        if ($key === null) {
-            return $this->body;
-        }
-        return $this->body[$key] ?? $default;
+        return $key === null ? $this->body : ($this->body[$key] ?? $default);
     }
 
-    /**
-     * Undocumented function
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function input(string $key, $default = null): mixed
+    /** Alias of body($key, $default). */
+    public function input(string $key, mixed $default = null): mixed
     {
         return $this->body($key, $default);
     }

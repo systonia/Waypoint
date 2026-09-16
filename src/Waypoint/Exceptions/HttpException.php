@@ -6,21 +6,10 @@ use Exception;
 use Throwable;
 
 /**
- * Base class for every exception that should map to a structured
- * RFC 9457 ("Problem Details for HTTP APIs") error response -- see
- * App::registerDefaultExceptionHandlers()'s HttpException::class handler,
- * which builds an application/problem+json response directly from these
- * fields for any subclass not caught by a more specific
- * useExceptionHandler() registration first.
- *
- * Deliberately still extends the plain \Exception, not some new
- * interface: getMessage()/getCode() keep meaning exactly what they
- * already did in this codebase everywhere else (a human-readable summary
- * and the intended HTTP status respectively -- getCode() and
- * getStatusCode() below are always the same value). $detail/$title/
- * $statusCode are that same information, just also available under their
- * RFC 9457 names/shape, so the default handler never has to parse
- * getMessage() to build one.
+ * Base of every exception that maps to an RFC 9457 Problem Details response
+ * (see App's default handlers). getMessage()/getCode() keep their usual
+ * meaning (a summary, the HTTP status); $title/$detail/$statusCode are the
+ * same information under their RFC names.
  */
 class HttpException extends Exception
 {
@@ -31,27 +20,10 @@ class HttpException extends Exception
     private ?string $instance;
 
     /**
-     * @param int $statusCode The HTTP status this exception maps to --
-     *  becomes both the response's actual status and RFC 9457 'status'.
-     * @param string $title A short, human-readable summary of *this kind*
-     *  of problem (RFC 9457: "SHOULD NOT change from occurrence to
-     *  occurrence"), e.g. "Not Found" -- not the specific reason for one
-     *  particular request; that's $detail.
-     * @param string|null $detail The specific explanation for *this*
-     *  occurrence, e.g. "Widget with id 42 not found". Optional -- a
-     *  generic problem (e.g. a bare 403) often has nothing more specific
-     *  to say than $title already does, and RFC 9457 treats 'detail' as
-     *  genuinely optional for exactly that reason.
-     * @param string $type A URI reference identifying the problem type,
-     *  ideally one a client could dereference for documentation.
-     *  'about:blank' (RFC 9457's own default) when this problem has no
-     *  more specific type of its own -- meaning "$title/$statusCode
-     *  already say everything there is to say about it".
-     * @param string|null $instance A URI reference to *this specific*
-     *  occurrence (e.g. the request path). Left null unless a caller sets
-     *  one -- App's default handler doesn't fill this in automatically
-     *  (see its own doc for why).
-     * @param Throwable|null $previous
+     * @param string $title What kind of problem this is ("Not Found"), stable across occurrences.
+     * @param string|null $detail The specific reason for this occurrence, if any.
+     * @param string $type A URI reference identifying the problem type; 'about:blank' when $title says it all.
+     * @param string|null $instance A URI reference to this occurrence (e.g. the request path).
      */
     public function __construct(
         int $statusCode,
@@ -95,15 +67,11 @@ class HttpException extends Exception
     }
 
     /**
-     * The RFC 9457 Problem Details members for this exception, as a plain
-     * array ready for json_encode() -- App's default HttpException
-     * handler calls this directly to build the response body. A subclass
-     * carrying extra structured data of its own (e.g.
-     * ValidationException's field-level errors) overrides this to add
-     * its own extension members alongside the five standard ones, which
-     * RFC 9457 explicitly allows.
-     *
+
+     * The RFC 9457 members as a json_encode()-ready array; a subclass adds its own extension members (ValidationException's 'errors').
+
      * @return array<string, mixed>
+
      */
     public function toProblemDetails(): array
     {

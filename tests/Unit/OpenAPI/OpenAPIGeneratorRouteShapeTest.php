@@ -6,7 +6,8 @@ use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use RuntimeException;
 use Waypoint\{Waypoint, Router};
-use Waypoint\OpenAPI\OpenAPIGenerator;
+use Waypoint\Logger;
+use Waypoint\OpenAPI\{OpenAPIGenerator, SchemaBuilder};
 
 /**
  * Router::getRoutes() only ever produces one route shape in practice (a
@@ -86,11 +87,8 @@ final class OpenAPIGeneratorRouteShapeTest extends TestCase
     {
         // Every internal call site already checks class_exists() before
         // calling this, so the only way to reach its own guard is directly.
-        $generator = $this->generatorWithRoutes([]);
-        $method = new ReflectionMethod($generator, 'generateModelSchema');
-
         $this->expectException(RuntimeException::class);
-        $method->invoke($generator, 'Totally\\Fake\\ClassName');
+        (new SchemaBuilder(new Logger()))->generateModelSchema('Totally\\Fake\\ClassName');
     }
 
     public function testCompareVersionsReturnsZeroForTwoEqualVersions(): void

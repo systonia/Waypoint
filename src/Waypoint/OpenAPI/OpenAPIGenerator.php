@@ -2,83 +2,56 @@
 
 namespace Waypoint\OpenAPI;
 
-use RuntimeException;
-use ReflectionClass;
-use ReflectionNamedType;
 use Deprecated;
 use stdClass;
-
-use Waypoint\{Router, FileSystem, Logger, Waypoint};
-use Waypoint\Options\{OpenAPIOptions, FileSystemOptions};
+use Waypoint\{FileSystem, Logger, Router, Waypoint};
+use Waypoint\Attributes\{Body, Ignore, Param, Query, Summary, Tags, Throws};
 use Waypoint\Enums\Message;
-use Waypoint\Attributes\{Ignore, Throws, Summary, Tags, Param, Query, Body, Schema, Property};
+use Waypoint\Options\{FileSystemOptions, OpenAPIOptions};
+use Waypoint\Support\Arr;
 
 /**
- * OpenAPI Generator (cache-driven, zero-reflection hot path)
+ * Builds an OpenAPI 3.1 document from the Router's route list and the
+ * attribute cache RouteCompiler::exportAllAttributes() wrote -- no
+ * controller reflection at request time; only DTO classes are reflected,
+ * by SchemaBuilder.
  */
 class OpenAPIGenerator
 {
-    private Router $router;
     private Logger $logger;
+    private SchemaBuilder $schemas;
 
     /** @var array<class-string, mixed> See RouteCompiler::exportAllAttributes() for the shape. */
     private array $attributeCache;
 
-    /** @var array<string, bool> Schema name => already generated, guarding against infinite recursion on a self-/mutually-referencing model. */
-    private array $processedModels = [];
-
-    /** @var array{schemas: array<string, mixed>, securitySchemes: array<string, mixed>|stdClass} */
-    private array $components = [
-        'schemas' => [],
-        'securitySchemes' => [],
-    ];
-
-    public function __construct(Router $router)
+    public function __construct(private Router $router)
     {
-        $this->router = $router;
         $this->logger = new Logger();
+        $this->schemas = new SchemaBuilder($this->logger);
         $this->attributeCache = (new FileSystem(Waypoint::getConfig(FileSystemOptions::class)))->loadAttributes();
-
-        if (empty($this->components['securitySchemes'])) {
-            $this->components['securitySchemes'] = new \stdClass();
-        }
     }
 
     /**
-     * @param string|null $version Omitted (or null): the combined
-     *  "current" spec -- every unversioned route, plus, for each
-     *  #[Version]-bearing route that has more than one version sharing the
-     *  same underlying path (see selectEligibleRoutes()), only its
-     *  highest/newest version. Given an exact version string (e.g. 'v1'):
-     *  only that version's own routes, for spec.vX.json. See
-     *  OpenAPIController.
-     *
+     * @param string|null $version Null: every unversioned route plus, per (method, path) group, only the
+     *  newest #[Version]. A version string: only that version's routes (spec.vX.json).
      * @return array<string, mixed>
      */
     public function generate(?string $version = null): array
     {
-        // 'info' is required by the OpenAPI spec; OpenAPIOptions already
-        // builds it (plus servers/tags/security/externalDocs) from whatever
-        // the app configured via App::configure(OpenAPIOptions), so pull
-        // that in instead of leaving these as permanently-empty stubs.
         $options = Waypoint::getConfig(OpenAPIOptions::class)->toArray();
+        $paths = $this->buildPaths($version);
 
-        // toArray() nests configured security schemes under
-        // components.securitySchemes, but $this->components (schemas built
-        // from #[Body] DTOs, plus its own securitySchemes default) is what
-        // actually gets returned below -- without this, configuring
-        // OpenAPIOptions::$securitySchemes had no effect at all.
-        $components = $options['components'] ?? null;
-        $securitySchemes = is_array($components) ? ($components['securitySchemes'] ?? null) : null;
-        if (is_array($securitySchemes) && !empty($securitySchemes)) {
-            $this->components['securitySchemes'] = $this->toStringKeyedArray($securitySchemes);
-        }
+        $components = Arr::stringKeyed($options['components'] ?? null);
+        $securitySchemes = Arr::stringKeyed($components['securitySchemes'] ?? null);
 
         return array_filter([
             'openapi' => '3.1.0',
             'info' => $options['info'],
-            'paths' => $this->buildPaths($version),
-            'components' => $this->components,
+            'paths' => $paths,
+            'components' => [
+                'schemas' => $this->schemas->schemas(),
+                'securitySchemes' => $securitySchemes !== [] ? $securitySchemes : new stdClass(),
+            ],
             'servers' => $options['servers'] ?? null,
             'security' => $options['security'] ?? null,
             'tags' => $options['tags'] ?? null,
@@ -86,143 +59,92 @@ class OpenAPIGenerator
         ], fn($value) => $value !== null);
     }
 
-    /** True if at least one compiled route carries the given #[Version] -- OpenAPIController uses this to 404 a spec.vX.json for a version that doesn't exist rather than silently returning an empty spec. */
+    /** True if any compiled route carries #[Version($version)] -- so a spec.vX.json for an unknown version can 404. */
     public function hasVersion(string $version): bool
     {
         foreach ($this->router->getRoutes() as $route) {
-            if (($route->version ?? null) === $version) {
+            if (self::routeField($route, 'version') === $version) {
                 return true;
             }
         }
         return false;
     }
 
-    /**
-     * Reads one field off a route -- Router::getRoutes()' RouteSummary in
-     * practice, but see this class's own tolerance for other shapes (e.g.
-     * OpenAPIGeneratorRouteShapeTest's stubbed array-shaped routes).
-     */
+    /** A route is a RouteSummary object in practice; a plain array is tolerated (see OpenAPIGeneratorRouteShapeTest). */
     private static function routeField(mixed $route, string $field): mixed
     {
         if (is_object($route)) {
             return $route->{$field} ?? null;
         }
-        if (is_array($route)) {
-            return $route[$field] ?? null;
-        }
-        // @codeCoverageIgnoreStart
-        // Router::getRoutes() only ever produces objects, and even
-        // OpenAPIGeneratorRouteShapeTest's stubbed routes are always
-        // either objects or arrays.
-        return null;
-        // @codeCoverageIgnoreEnd
+        return is_array($route) ? ($route[$field] ?? null) : null;
     }
 
     /** @return array<string, mixed> */
     protected function buildPaths(?string $version = null): array
     {
         $paths = [];
-
         foreach ($this->selectEligibleRoutes($this->router->getRoutes(), $version) as $route) {
             $handlerSpec = $this->getHandlerSpec($route);
-            if (!$handlerSpec) {
+            $method = self::routeField($route, 'method');
+            $rawPath = self::routeField($route, 'rawPath');
+            if ($handlerSpec === null || !is_string($method) || !is_string($rawPath) || $method === '' || $rawPath === '') {
                 continue;
             }
-
             [$controllerClass, $methodName] = $handlerSpec;
 
-            $methodRef = self::routeField($route, 'method');
-            $rawPath = self::routeField($route, 'rawPath');
-            if (!is_string($methodRef) || !is_string($rawPath) || $methodRef === '' || $rawPath === '') {
+            $classAttrs = self::attrList($this->classCacheEntry($controllerClass)['__class'] ?? null);
+            $methodAttrs = self::attrList($this->methodCacheEntry($controllerClass, $methodName)['__method'] ?? null);
+            if (self::findAttr([...$classAttrs, ...$methodAttrs], Ignore::class) !== null) {
                 continue;
             }
 
-            // Use attribute cache instead of reflection
-            $classAttrs = $this->attrList($this->classCacheEntry($controllerClass)['__class'] ?? null);
-            $methodAttrs = $this->attrList($this->methodCacheEntry($controllerClass, $methodName)['__method'] ?? null);
-
-            if ($this->isIgnored($classAttrs, $methodAttrs)) {
-                continue;
-            }
-
-            $httpMethod = strtolower($methodRef);
-
-            $operation = $this->buildOperation($controllerClass, $methodName, $methodAttrs, $classAttrs);
-
-            $paths[$rawPath][$httpMethod] = $operation;
+            $paths[$rawPath][strtolower($method)] = $this->buildOperation($controllerClass, $methodName, $methodAttrs, $classAttrs);
         }
 
         ksort($paths);
-
-        $httpOrder = ['get', 'post', 'put', 'patch', 'delete'];
-        foreach ($paths as &$methods) {
-            uksort($methods, function ($a, $b) use ($httpOrder) {
-                $posA = array_search($a, $httpOrder);
-                $posB = array_search($b, $httpOrder);
-                $posA = $posA === false ? PHP_INT_MAX : $posA;
-                $posB = $posB === false ? PHP_INT_MAX : $posB;
-                return $posA <=> $posB;
-            });
+        $order = array_flip(['get', 'post', 'put', 'patch', 'delete']);
+        foreach ($paths as &$operations) {
+            uksort($operations, fn(string $a, string $b): int => ($order[$a] ?? PHP_INT_MAX) <=> ($order[$b] ?? PHP_INT_MAX));
         }
         return $paths;
     }
 
     /**
-     * @param array<int, mixed> $routes Router::getRoutes()' output -- in
-     *  practice always a list of plain objects, but typed as loosely as
-     *  Router::getRoutes() itself declares (not narrowed to object[]),
-     *  since buildPaths()/getHandlerSpec() deliberately also tolerate an
-     *  array-shaped route (see their own doc); property access below is
-     *  always through `??`, so an array-shaped $route just falls into the
-     *  $unversioned bucket rather than erroring.
-     * @param string|null $version See generate()'s own $version doc --
-     *  exact-match filter when given, "latest version per group" dedup
-     *  when null.
-     * @return array<int, mixed>
+     * @param array<int, mixed> $routes
+     * @return array<int, mixed> Exact-version filter when $version is given; otherwise every
+     *  unversioned route plus the newest version of each (method, unversionedPath) group.
      */
     protected function selectEligibleRoutes(array $routes, ?string $version): array
     {
         if ($version !== null) {
-            return array_values(array_filter(
-                $routes,
-                fn($route) => self::routeField($route, 'version') === $version
-            ));
+            return array_values(array_filter($routes, fn($route) => self::routeField($route, 'version') === $version));
         }
 
         $unversioned = [];
-        $latestByGroup = []; // "$method $unversionedPath" => the route object currently winning that group
-
+        $latestByGroup = [];
         foreach ($routes as $route) {
             $routeVersion = self::routeField($route, 'version');
             if (!is_string($routeVersion)) {
                 $unversioned[] = $route;
                 continue;
             }
-
-            // Groups two routes as "the same route, different versions"
-            // purely by (HTTP method, pre-version-prefix path) -- their
-            // actual rawPath differs (that's the whole point of URI
-            // versioning), so rawPath itself can never be the group key.
             $method = self::routeField($route, 'method');
-            $unversionedPath = self::routeField($route, 'unversionedPath') ?? self::routeField($route, 'rawPath');
-            $key = (is_string($method) ? $method : '') . ' ' . (is_string($unversionedPath) ? $unversionedPath : '');
-            $incumbent = $latestByGroup[$key] ?? null;
-            $incumbentVersion = $incumbent !== null ? self::routeField($incumbent, 'version') : null;
-            if ($incumbent === null || (is_string($incumbentVersion) && $this->compareVersions($routeVersion, $incumbentVersion) > 0)) {
+            $groupPath = self::routeField($route, 'unversionedPath') ?? self::routeField($route, 'rawPath');
+            $key = (is_string($method) ? $method : '') . ' ' . (is_string($groupPath) ? $groupPath : '');
+            $incumbentVersion = isset($latestByGroup[$key]) ? self::routeField($latestByGroup[$key], 'version') : null;
+            if (!is_string($incumbentVersion) || $this->compareVersions($routeVersion, $incumbentVersion) > 0) {
                 $latestByGroup[$key] = $route;
             }
         }
-
         return array_merge($unversioned, array_values($latestByGroup));
     }
 
-    /** <=> for two version strings, comparing them semantically (v1 < v2 < v10) rather than lexicographically ('10' < '2' as plain strings). */
+    /** <=> on the numeric runs of two version strings, so v10 > v2. */
     protected function compareVersions(string $a, string $b): int
     {
         $partsA = $this->versionSortKey($a);
         $partsB = $this->versionSortKey($b);
-
-        foreach (range(0, max(count($partsA), count($partsB)) - 1) as $i) {
+        for ($i = 0, $n = max(count($partsA), count($partsB)); $i < $n; $i++) {
             $cmp = ($partsA[$i] ?? 0) <=> ($partsB[$i] ?? 0);
             if ($cmp !== 0) {
                 return $cmp;
@@ -231,10 +153,7 @@ class OpenAPIGenerator
         return 0;
     }
 
-    /**
-     * Every run of digits in $version, as ints -- 'v2' -> [2], 'v10' -> [10], 'v1.2' -> [1, 2].
-     * @return int[]
-     */
+    /** @return int[] 'v1.2' -> [1, 2]; no digits -> [0]. */
     protected function versionSortKey(string $version): array
     {
         preg_match_all('/\d+/', $version, $matches);
@@ -242,651 +161,191 @@ class OpenAPIGenerator
     }
 
     /**
-     * [controller-class-name, method-name] -- the class name is not
-     * verified to actually exist here (see extractParameters()/buildPaths()'s
-     * own attributeCache[...] lookups, which already degrade to "no
-     * attributes" for one that doesn't); that's what lets
-     * OpenAPIGeneratorRouteShapeTest exercise this purely off a stubbed
-     * Router without real controller classes.
+     * [controllerClass, methodName] from a route's handlerSpec -- a plain pair, or one nested under
+     * 'spec'. The class isn't verified to exist: a missing attribute-cache entry just means "no attributes".
      *
      * @return array{0: string, 1: string}|null
      */
     protected function getHandlerSpec(mixed $route): ?array
     {
-        // Handles both object and array representations
-        $handlerSpec = is_object($route) ? ($route->handlerSpec ?? null) : null;
-        if (is_object($route) && is_array($handlerSpec)) {
-            if (isset($handlerSpec[0], $handlerSpec[1])) {
-                return self::toHandlerSpecPair($handlerSpec);
-            } elseif (isset($handlerSpec['spec'])) {
-                return self::toHandlerSpecPair($handlerSpec['spec']);
-            }
-        } elseif (is_array($route)) {
-            $nested = $route['handlerSpec'] ?? null;
-            $spec = is_array($nested) ? ($nested['spec'] ?? null) : null;
-            if ($spec !== null) {
-                return self::toHandlerSpecPair($spec);
+        $spec = self::routeField($route, 'handlerSpec');
+        if (is_array($spec) && isset($spec['spec'])) {
+            $spec = $spec['spec'];
+        }
+        if (!is_array($spec) || !isset($spec[0], $spec[1]) || !is_string($spec[0]) || !is_string($spec[1])) {
+            return null;
+        }
+        return [$spec[0], $spec[1]];
+    }
+
+    /** @return array<string, mixed> */
+    private function classCacheEntry(string $controllerClass): array
+    {
+        return Arr::stringKeyed($this->attributeCache[$controllerClass] ?? null);
+    }
+
+    /** @return array<string, mixed> */
+    private function methodCacheEntry(string $controllerClass, string $methodName): array
+    {
+        $methods = Arr::stringKeyed($this->classCacheEntry($controllerClass)['methods'] ?? null);
+        return Arr::stringKeyed($methods[$methodName] ?? null);
+    }
+
+    /**
+     * A cached attribute list narrowed to {name, args} entries.
+     * @return list<array{name: string, args: array<int|string, mixed>}>
+     */
+    private static function attrList(mixed $value): array
+    {
+        $result = [];
+        foreach (Arr::listOfStringKeyed($value) as $item) {
+            $name = $item['name'] ?? '';
+            $args = $item['args'] ?? [];
+            $result[] = ['name' => is_string($name) ? $name : '', 'args' => is_array($args) ? $args : []];
+        }
+        return $result;
+    }
+
+    /**
+     * The args of the first attribute named $class, or null if absent.
+     * @param list<array{name: string, args: array<int|string, mixed>}> $attrs
+     * @return array<int|string, mixed>|null
+     */
+    private static function findAttr(array $attrs, string $class): ?array
+    {
+        foreach ($attrs as $attr) {
+            if ($attr['name'] === $class) {
+                return $attr['args'];
             }
         }
         return null;
     }
 
     /**
-     * Narrows a raw [class, method] pair (from an attribute cache entry or
-     * a route's handlerSpec -- both fundamentally untyped) to the precise
-     * shape callers need, or null if it doesn't actually look like one.
-     *
-     * @return array{0: string, 1: string}|null
+
+     * A positional-or-named constructor argument, narrowed to string.
+
+     * @param array<int|string, mixed> $args
+
      */
-    private static function toHandlerSpecPair(mixed $spec): ?array
+    private static function stringArg(array $args, int $position, string $name): ?string
     {
-        if (!is_array($spec) || !isset($spec[0], $spec[1])) {
-            // @codeCoverageIgnoreStart
-            // getHandlerSpec()'s own isset($handlerSpec[0], $handlerSpec[1])
-            // check already filters this out before calling here in the
-            // direct-pair case; only the nested-'spec' case reaches this
-            // helper without that pre-check, and every test/real route
-            // that takes that path already provides a well-formed pair.
-            return null;
-            // @codeCoverageIgnoreEnd
-        }
-        $class = $spec[0];
-        $method = $spec[1];
-        if (!is_string($class) || !is_string($method)) {
-            // @codeCoverageIgnoreStart
-            // No test/real route provides a non-string class/method.
-            return null;
-            // @codeCoverageIgnoreEnd
-        }
-        return [$class, $method];
+        $value = $args[$position] ?? $args[$name] ?? null;
+        return is_string($value) ? $value : null;
     }
 
     /**
-     * $this->attributeCache[$controllerClass] narrowed to a plain
-     * string-keyed array -- the cache entry is `mixed` (see
-     * $attributeCache's own docblock: it's a `require`d file this same
-     * class wrote via var_export(), but PHPStan can't trust that
-     * statically), and $controllerClass itself may not even be a key in
-     * it (a stale cache, or -- see getHandlerSpec()'s doc -- a
-     * test-stubbed route naming a class that was never compiled).
-     *
-     * @return array<string, mixed>
-     */
-    private function classCacheEntry(string $controllerClass): array
-    {
-        $entry = $this->attributeCache[$controllerClass] ?? null;
-        return $this->toStringKeyedArray($entry);
-    }
-
-    /**
-     * Same reasoning as classCacheEntry(), one level deeper:
-     * classCacheEntry($controllerClass)['methods'][$methodName].
-     *
-     * @return array<string, mixed>
-     */
-    private function methodCacheEntry(string $controllerClass, string $methodName): array
-    {
-        $methods = $this->classCacheEntry($controllerClass)['methods'] ?? null;
-        if (!is_array($methods)) {
-            return [];
-        }
-        return $this->toStringKeyedArray($methods[$methodName] ?? null);
-    }
-
-    /** @return array<string, mixed> */
-    private function toStringKeyedArray(mixed $value): array
-    {
-        if (!is_array($value)) {
-            return [];
-        }
-        $result = [];
-        foreach ($value as $key => $item) {
-            if (is_string($key)) {
-                $result[$key] = $item;
-            }
-        }
-        return $result;
-    }
-
-    /**
-     * Narrows an arbitrary attribute-cache list (see classCacheEntry()'s
-     * doc on why it's untyped) to the precise per-entry shape every
-     * consumer below actually needs.
-     *
-     * @return array<int, array{name?: string, args?: array<int|string, mixed>}>
-     */
-    private function attrList(mixed $value): array
-    {
-        if (!is_array($value)) {
-            return [];
-        }
-        $result = [];
-        foreach ($value as $item) {
-            if (!is_array($item)) {
-                // @codeCoverageIgnoreStart
-                // Every real attribute-cache entry (see
-                // RouteCompiler::exportAllAttributes()) is a well-formed
-                // {name, args} array; this only guards a hand-corrupted
-                // attributes.php cache file.
-                continue;
-                // @codeCoverageIgnoreEnd
-            }
-            $entry = [];
-            $name = $item['name'] ?? null;
-            if (is_string($name)) {
-                $entry['name'] = $name;
-            }
-            $args = $item['args'] ?? null;
-            if (is_array($args)) {
-                $entry['args'] = $this->toIntOrStringKeyedArray($args);
-            }
-            $result[] = $entry;
-        }
-        return $result;
-    }
-
-    /** @return array<int|string, mixed> */
-    private function toIntOrStringKeyedArray(mixed $value): array
-    {
-        return is_array($value) ? $value : [];
-    }
-
-    /**
-     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $classAttrs
-     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $methodAttrs
-     */
-    protected function isIgnored(array $classAttrs, array $methodAttrs): bool
-    {
-        foreach (array_merge($classAttrs, $methodAttrs) as $attr) {
-            if (($attr['name'] ?? null) === Ignore::class) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $methodAttrs
-     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $classAttrs
+     * @param list<array{name: string, args: array<int|string, mixed>}> $methodAttrs
+     * @param list<array{name: string, args: array<int|string, mixed>}> $classAttrs
      * @return array<string, mixed>
      */
     protected function buildOperation(string $controllerClass, string $methodName, array $methodAttrs, array $classAttrs): array
     {
-        // Parameters and requestBody
-        [$parameters, $requestBody, $schemas] = $this->extractParameters($controllerClass, $methodName);
+        [$parameters, $requestBody] = $this->extractParameters($controllerClass, $methodName);
 
-        foreach ($schemas as $name => $fqcn) {
-            if (!isset($this->processedModels[$name]) && class_exists($fqcn)) {
-                // Reserve the slot before recursing: generateModelSchema()
-                // may itself add $name back into $schemas via a self- or
-                // mutually-referencing property, and this is what stops
-                // that from recursing forever.
-                $this->processedModels[$name] = true;
-                $this->components['schemas'][$name] = $this->generateModelSchema($fqcn);
-            }
-        }
-
-        $responses = $this->getResponseSchemas($controllerClass, $methodName);
-
-        // Throws: error responses
+        $responses = ['200' => ['description' => 'Successful response', 'content' => ['application/json' => ['schema' => ['type' => 'object']]]]];
         foreach ($methodAttrs as $attr) {
-            if (($attr['name'] ?? null) === Throws::class) {
-                $throws = $attr['args'] ?? [];
-                $rawStatusCode = $throws['status'] ?? null;
-                // Every real #[Throws(status: ...)] in this codebase uses
-                // an int literal (see DocumentedController's fixture);
-                // the string/default arms only guard a status written as
-                // a string, or omitted entirely.
-                $statusCode = match (true) {
-                    // @codeCoverageIgnoreStart
-                    is_string($rawStatusCode) => $rawStatusCode,
-                    // @codeCoverageIgnoreEnd
-                    is_int($rawStatusCode) => (string) $rawStatusCode,
-                    // @codeCoverageIgnoreStart
-                    default => '500',
-                    // @codeCoverageIgnoreEnd
-                };
-                $desc = $throws['description'] ?? $throws['exception'] ?? "Error";
-                if (!isset($responses[$statusCode])) {
-                    $this->ensureProblemDetailsSchema();
-                    $responses[$statusCode] = [
-                        'description' => $desc,
-                        'content' => [
-                            'application/problem+json' => [
-                                'schema' => ['$ref' => '#/components/schemas/ProblemDetails'],
-                            ],
-                        ],
-                    ];
-                }
+            if ($attr['name'] !== Throws::class) {
+                continue;
+            }
+            $status = $attr['args']['status'] ?? null;
+            $status = is_int($status) || is_string($status) ? (string) $status : '500';
+            if (!isset($responses[$status])) {
+                $this->schemas->ensureProblemDetails();
+                $responses[$status] = [
+                    'description' => $attr['args']['description'] ?? $attr['args']['exception'] ?? 'Error',
+                    'content' => ['application/problem+json' => ['schema' => ['$ref' => '#/components/schemas/ProblemDetails']]],
+                ];
             }
         }
 
-        // Summary
-        $summary = $this->extractSummary($methodAttrs, $controllerClass, $methodName);
+        $summaryArgs = self::findAttr($methodAttrs, Summary::class) ?? [];
+        $tags = [...self::tagsOf($classAttrs), ...self::tagsOf($methodAttrs)];
 
-        // Tags (from method/class)
-        $tags = array_merge(
-            $this->extractTags($classAttrs),
-            $this->extractTags($methodAttrs)
-        );
-        $tags = array_values(array_unique($tags));
-
-        $deprecated = $this->isDeprecated($classAttrs, $methodAttrs);
-
-        $operation = array_filter([
-            'summary' => $summary,
+        return array_filter([
+            'summary' => self::stringArg($summaryArgs, 0, 'text') ?? "$controllerClass->$methodName",
             'operationId' => $controllerClass . '_' . $methodName,
-            'tags' => $tags,
-            'parameters' => $parameters ?: [],
+            'tags' => array_values(array_unique($tags)),
+            'parameters' => $parameters,
             'requestBody' => $requestBody,
-            'responses' => $responses ?: [],
-            'deprecated' => $deprecated,
-            'security' => null,
-            'externalDocs' => null,
-        ], function ($v) {
-            return $v !== null;
-        });
-
-        return $operation;
+            'responses' => $responses,
+            'deprecated' => self::findAttr([...$classAttrs, ...$methodAttrs], Deprecated::class) !== null,
+        ], fn($v) => $v !== null);
     }
 
     /**
-     * Builds the `parameters` list and (if the method takes a #[Body] DTO)
-     * the `requestBody` schema for one operation, from the compiled
-     * attribute cache -- each parameter's real PHP type (captured by
-     * Router::exportAllAttributes()) drives the OpenAPI schema type, rather
-     * than every parameter being documented as a plain string.
+     * @param list<array{name: string, args: array<int|string, mixed>}> $attrs
+     * @return string[]
+     */
+    private static function tagsOf(array $attrs): array
+    {
+        $args = self::findAttr($attrs, Tags::class);
+        if ($args === null) {
+            return [];
+        }
+        $tags = $args[0] ?? $args['tags'] ?? [];
+        return Arr::stringList(is_array($tags) ? $tags : [$tags]);
+    }
+
+    /**
+     * `parameters` and `requestBody` for one operation, from the cached parameter metadata
+     * (attributes, PHP type, nullability, default). An unattributed scalar is Router's implicit
+     * placeholder-then-query binding, documented as a query parameter.
      *
-     * @return array{0: array<int, array<string, mixed>>, 1: array<string, mixed>|null, 2: array<string, class-string>} [parameters, requestBody, schemas]
+     * @return array{0: list<array<string, mixed>>, 1: array<string, mixed>|null}
      */
     protected function extractParameters(string $controllerClass, string $methodName): array
     {
         $params = [];
         $requestBody = null;
-        $schemas = [];
 
-        $paramsMeta = $this->methodCacheEntry($controllerClass, $methodName)['parameters'] ?? null;
-        $paramsMeta = $this->toStringKeyedArray($paramsMeta);
-
-        foreach ($paramsMeta as $paramName => $meta) {
-            // Tolerate the older cache shape (a bare list of attributes,
-            // with no type/nullable/hasDefault) so a stale on-disk cache
-            // degrades to "treat as string" instead of fataling.
-            $metaArr = $this->toStringKeyedArray($meta);
-            $rawAttributes = array_key_exists('attributes', $metaArr) ? $metaArr['attributes'] : $meta;
-            $attributes = $this->attrList($rawAttributes);
+        foreach (Arr::stringKeyed($this->methodCacheEntry($controllerClass, $methodName)['parameters'] ?? null) as $paramName => $meta) {
+            $metaArr = Arr::stringKeyed($meta);
+            // An older cache stored a bare attribute list with no type/nullable/hasDefault.
+            $attributes = self::attrList(array_key_exists('attributes', $metaArr) ? $metaArr['attributes'] : $meta);
             $type = $metaArr['type'] ?? null;
             $type = is_string($type) ? $type : null;
             $nullable = (bool) ($metaArr['nullable'] ?? false);
             $hasDefault = (bool) ($metaArr['hasDefault'] ?? false);
 
-            $kind = null; // 'path' | 'query' | 'body'
+            $kind = null;
             $bindName = $paramName;
-            $bodyOf = null; // element DTO class, for an array/collection #[Body(of: ...)]
-            foreach ($attributes as $attr) {
-                $name = $attr['name'] ?? null;
-                $args = $attr['args'] ?? [];
-                if ($name === Param::class) {
-                    $kind = 'path';
-                    $bindName = self::firstStringArg($args, 0, 'name') ?? $paramName;
-                } elseif ($name === Query::class) {
-                    $kind = 'query';
-                    $bindName = self::firstStringArg($args, 0, 'name') ?? $paramName;
+            $bodyOf = null;
+            foreach ($attributes as ['name' => $name, 'args' => $args]) {
+                if ($name === Param::class || $name === Query::class) {
+                    $kind = $name === Param::class ? 'path' : 'query';
+                    $bindName = self::stringArg($args, 0, 'name') ?? $paramName;
                 } elseif ($name === Body::class) {
                     $kind = 'body';
-                    $bodyOf = self::firstStringArg($args, 1, 'of');
+                    $bodyOf = self::stringArg($args, 1, 'of');
                 }
             }
-
-            // An unattributed scalar parameter is Router's implicit
-            // "Scalar" binding, which tries the route placeholder first and
-            // falls back to the query string -- documented here as a query
-            // parameter, its fallback source.
-            if ($kind === null && $this->isScalarType($type)) {
+            if ($kind === null && SchemaBuilder::isScalar($type) && $type !== 'number') {
                 $kind = 'query';
             }
 
-            if ($kind === 'path') {
+            if ($kind === 'path' || $kind === 'query') {
                 $params[] = [
                     'name' => $bindName,
-                    'in' => 'path',
-                    'required' => true,
-                    'schema' => $this->schemaForType($type),
-                ];
-            } elseif ($kind === 'query') {
-                $params[] = [
-                    'name' => $bindName,
-                    'in' => 'query',
-                    'required' => !$nullable && !$hasDefault,
-                    'schema' => $this->schemaForType($type),
-                ];
-            } elseif ($kind === 'body' && $type !== null && in_array($type, ['array', 'iterable'], true) && $bodyOf) {
-                if (!class_exists($bodyOf)) {
-                    $this->logger->warning(Message::GeneratorPropertyDoesNotExist2->interpolate(
-                        type: $bodyOf,
-                        method: "$controllerClass::$methodName"
-                    ));
-                    continue;
-                }
-                $short = $this->schemaNameFor($bodyOf);
-                $schemas[$short] = $bodyOf;
-                $requestBody = [
-                    'required' => !$nullable,
-                    'content' => [
-                        'application/json' => [
-                            'schema' => [
-                                'type' => 'array',
-                                'items' => ['$ref' => "#/components/schemas/$short"],
-                            ],
-                        ],
-                    ],
+                    'in' => $kind,
+                    'required' => $kind === 'path' || (!$nullable && !$hasDefault),
+                    'schema' => SchemaBuilder::parameterSchema($type),
                 ];
             } elseif ($kind === 'body') {
-                if (!$type || !class_exists($type)) {
-                    $this->logger->warning(Message::GeneratorPropertyDoesNotExist2->interpolate(
-                        type: $type ?? 'mixed',
-                        method: "$controllerClass::$methodName"
-                    ));
+                $isCollection = in_array($type, ['array', 'iterable'], true) && $bodyOf !== null;
+                $dto = $isCollection ? $bodyOf : $type;
+                if ($dto === null || !class_exists($dto)) {
+                    $this->logger->warning(Message::GeneratorPropertyDoesNotExist2->interpolate(type: $dto ?? 'mixed', method: "$controllerClass::$methodName"));
                     continue;
                 }
-                $short = $this->schemaNameFor($type);
-                $schemas[$short] = $type;
+                $ref = ['$ref' => $this->schemas->refFor($dto)];
                 $requestBody = [
                     'required' => !$nullable,
-                    'content' => [
-                        'application/json' => ['schema' => ['$ref' => "#/components/schemas/$short"]],
-                    ],
+                    'content' => ['application/json' => ['schema' => $isCollection ? ['type' => 'array', 'items' => $ref] : $ref]],
                 ];
             }
         }
 
-        return [$params, $requestBody, $schemas];
-    }
-
-    /**
-     * `$args[$posKey] ?? $args[$namedKey] ?? null`, narrowed to string --
-     * an attribute's positional/named constructor arg, as captured by
-     * RouteCompiler::exportAllAttributes() (see AttributeEntry's own doc).
-     *
-     * @param array<int|string, mixed> $args
-     */
-    private static function firstStringArg(array $args, int $posKey, string $namedKey): ?string
-    {
-        $value = $args[$posKey] ?? $args[$namedKey] ?? null;
-        return is_string($value) ? $value : null;
-    }
-
-    private function isScalarType(?string $type): bool
-    {
-        return $type !== null && in_array($type, ['string', 'int', 'integer', 'float', 'bool', 'boolean'], true);
-    }
-
-    /**
-     * Maps a PHP type name to an OpenAPI schema for a parameter.
-     * @return array<string, mixed>|stdClass
-     */
-    protected function schemaForType(?string $type): array|stdClass
-    {
-        if ($type === null) {
-            return ['type' => 'string'];
-        }
-        if ($this->isScalarType($type) || $type === 'number') {
-            return ['type' => $this->mapType($type)];
-        }
-        if ($type === 'array' || $type === 'iterable') {
-            return ['type' => 'array'];
-        }
-        // mixed/object/callable/self/static/null/class-or-interface names
-        // that aren't meant to be inlined here: no useful constraint to add.
-        return new stdClass();
-    }
-
-    /**
-     * The schema key/$ref name for a DTO class: its #[Schema(name: ...)]
-     * override, or its short class name.
-     *
-     * @param class-string $fqcn
-     */
-    protected function schemaNameFor(string $fqcn): string
-    {
-        foreach ((new ReflectionClass($fqcn))->getAttributes(Schema::class) as $attr) {
-            $name = $attr->newInstance()->name;
-            if ($name) {
-                return $name;
-            }
-        }
-        return (new ReflectionClass($fqcn))->getShortName();
-    }
-
-    /**
-     * @return array<int, mixed> Keyed by HTTP status code -- '200' as a
-     *  literal array key is auto-coerced to the int 200 by PHP itself, not
-     *  a string.
-     */
-    protected function getResponseSchemas(string $controllerClass, string $methodName): array
-    {
-        $responses = [];
-        // Could add return type info to attributes cache at build-time for even less reflection
-        $schema = ['type' => 'object'];
-        $responses['200'] = [
-            'description' => 'Successful response',
-            'content' => ['application/json' => ['schema' => $schema]],
-        ];
-        return $responses;
-    }
-
-    /**
-     * Registers the shared RFC 9457 ("Problem Details for HTTP APIs")
-     * schema under components/schemas/ProblemDetails, if not already
-     * present -- every #[Throws(...)]-declared error response ($ref)s it
-     * rather than repeating the same object inline per operation, the
-     * same sharing pattern generateModelSchema() already uses for DTOs.
-     * Mirrors HttpException::toProblemDetails()'s shape (the five
-     * standard RFC 9457 members; 'detail'/'instance' are optional, so
-     * not listed under 'required').
-     */
-    private function ensureProblemDetailsSchema(): void
-    {
-        if (isset($this->components['schemas']['ProblemDetails'])) {
-            return;
-        }
-        $this->components['schemas']['ProblemDetails'] = [
-            'type' => 'object',
-            'properties' => [
-                'type' => ['type' => 'string', 'format' => 'uri-reference'],
-                'title' => ['type' => 'string'],
-                'status' => ['type' => 'integer'],
-                'detail' => ['type' => 'string'],
-                'instance' => ['type' => 'string', 'format' => 'uri-reference'],
-            ],
-            'required' => ['type', 'title', 'status'],
-        ];
-    }
-
-    /** @return array<string, mixed> */
-    protected function generateModelSchema(string $fqcn): array
-    {
-        if (!$fqcn || !class_exists($fqcn)) {
-            throw new RuntimeException(Message::GeneratorClassDoesNotExist->interpolate(fqcn: $fqcn));
-        }
-
-        $rc = new ReflectionClass($fqcn);
-        $schema = ['type' => 'object', 'properties' => [], 'required' => []];
-
-        foreach ($rc->getProperties() as $prop) {
-            if (!$prop->isPublic())
-                continue;
-            $name = $prop->getName();
-            $type = $prop->getType();
-
-            if ($type instanceof ReflectionNamedType) {
-                $typeName = $type->getName();
-                $nullable = $type->allowsNull();
-            } else {
-                // No type at all, or a union/intersection type OpenAPI has
-                // no single slot for -- fall back to "any", but say so.
-                $this->logger->warning(Message::GeneratorPropertyHasNoType->interpolate(name: $name, rc: $fqcn));
-                $typeName = null;
-                $nullable = true;
-            }
-
-            $propertySchema = $this->schemaForProperty($typeName, $name, $fqcn);
-            $this->applyPropertyAnnotation($prop, $propertySchema);
-            $schema['properties'][$name] = $propertySchema;
-
-            // Nullability is the only reliable "this may be omitted" signal
-            // available: PHP-level default values aren't a safe proxy for
-            // it here, since Waypoint's own DTO convention hydrates every
-            // property from an array and so typically gives every one of
-            // them *some* type-safe default regardless of whether it's
-            // actually optional from the API's point of view.
-            if (!$nullable) {
-                $schema['required'][] = $name;
-            }
-        }
-
-        if (empty($schema['required'])) {
-            unset($schema['required']);
-        }
-
-        return $schema;
-    }
-
-    /**
-     * Builds the (pre-annotation) schema for one model property, given its resolved type name.
-     * @return array<string, mixed>
-     */
-    private function schemaForProperty(?string $typeName, string $propertyName, string $ownerFqcn): array
-    {
-        if ($typeName === null) {
-            return [];
-        }
-        if ($this->isScalarType($typeName) || $typeName === 'number') {
-            return ['type' => $this->mapType($typeName)];
-        }
-        if ($typeName === 'array' || $typeName === 'iterable') {
-            return ['type' => 'array'];
-        }
-        if (in_array($typeName, ['mixed', 'object', 'callable', 'self', 'static', 'null'], true)) {
-            return [];
-        }
-        if (!class_exists($typeName) && !interface_exists($typeName) && !enum_exists($typeName)) {
-            $this->logger->warning(Message::GeneratorPropertyDoesNotExist->interpolate(
-                property: $typeName,
-                name: $propertyName,
-                rc: $ownerFqcn
-            ));
-            return [];
-        }
-
-        $short = $this->schemaNameFor($typeName);
-        if (!isset($this->processedModels[$short])) {
-            // Reserve before recursing -- see the identical comment on the
-            // top-level loop in buildOperation() for why this order matters.
-            $this->processedModels[$short] = true;
-            $this->components['schemas'][$short] = $this->generateModelSchema($typeName);
-        }
-        return ['$ref' => "#/components/schemas/$short"];
-    }
-
-    /**
-     * Merges an optional #[Property(...)] attribute's description/format/example/deprecated into a property's schema.
-     * @param array<string, mixed> $schema
-     */
-    private function applyPropertyAnnotation(\ReflectionProperty $prop, array &$schema): void
-    {
-        $attrs = $prop->getAttributes(Property::class);
-        if (!$attrs) {
-            return;
-        }
-        /** @var Property $annotation */
-        $annotation = $attrs[0]->newInstance();
-
-        if ($annotation->description !== null) {
-            $schema['description'] = $annotation->description;
-        }
-        if ($annotation->format !== null) {
-            $schema['format'] = $annotation->format;
-        }
-        if ($annotation->example !== null) {
-            $schema['example'] = $annotation->example;
-        }
-        if ($annotation->deprecated) {
-            $schema['deprecated'] = true;
-        }
-    }
-
-    protected function mapType(string $phpType): string
-    {
-        return match ($phpType) {
-            'int', 'integer' => 'integer',
-            'float', 'double', 'number' => 'number',
-            'bool', 'boolean' => 'boolean',
-            default => 'string',
-        };
-    }
-
-    /**
-     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $attrs
-     * @return string[]
-     */
-    protected function extractTags(array $attrs): array
-    {
-        foreach ($attrs as $attr) {
-            if (($attr['name'] ?? null) === Tags::class) {
-                // Positional
-                if (isset($attr['args'][0])) {
-                    return self::toStringArray($attr['args'][0]);
-                }
-                // Named
-                if (isset($attr['args']['tags'])) {
-                    return self::toStringArray($attr['args']['tags']);
-                }
-            }
-        }
-        return [];
-    }
-
-    /** @return string[] */
-    private static function toStringArray(mixed $value): array
-    {
-        $items = is_array($value) ? $value : [$value];
-        return array_values(array_filter($items, 'is_string'));
-    }
-
-    /** @param array<int, array{name?: string, args?: array<int|string, mixed>}> $methodAttrs */
-    protected function extractSummary(array $methodAttrs, string $controllerClass, string $methodName): string
-    {
-        foreach ($methodAttrs as $attr) {
-            if (($attr['name'] ?? null) === Summary::class) {
-                // Positional
-                $positional = $attr['args'][0] ?? null;
-                if (is_string($positional)) {
-                    return $positional;
-                }
-                // Named
-                $named = $attr['args']['text'] ?? null;
-                if (is_string($named)) {
-                    return $named;
-                }
-            }
-        }
-        // Default fallback
-        return "$controllerClass->$methodName";
-    }
-
-    /**
-     * True if PHP's native #[\Deprecated] (8.4+) is present at either level -- RouteCompiler applies the same "either level counts" rule for the Deprecation response header (Router::dispatch()).
-     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $classAttrs
-     * @param array<int, array{name?: string, args?: array<int|string, mixed>}> $methodAttrs
-     */
-    protected function isDeprecated(array $classAttrs, array $methodAttrs): bool
-    {
-        foreach ([...$classAttrs, ...$methodAttrs] as $attr) {
-            if (($attr['name'] ?? null) === Deprecated::class) {
-                return true;
-            }
-        }
-        return false;
+        return [$params, $requestBody];
     }
 }

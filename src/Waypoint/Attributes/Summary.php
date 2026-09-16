@@ -4,24 +4,11 @@ namespace Waypoint\Attributes;
 
 use Attribute;
 
-/**
- *
- */
+/** OpenAPI operation summary for a route method. */
 #[Attribute(Attribute::TARGET_METHOD)]
 class Summary
 {
-    /**
-     * Undocumented function
-     *
-     * @param string|null $text
-     */
-    public function __construct(
-        /**
-         * Undocumented variable
-         *
-         * @var string|null
-         */
-        public ?string $text = null
-    ) {
+    public function __construct(public ?string $text = null)
+    {
     }
 }

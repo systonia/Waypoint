@@ -3,19 +3,10 @@
 namespace Waypoint;
 
 /**
- * Hydrates every public property of the using class from a plain array
- * whose keys match property names -- the exact contract Router::
- * buildMethodArguments() relies on for every #[Body]/#[Body(of: ...)]
- * argument: it constructs the DTO directly as `new $class($req->body())`
- * (see Router's 'Body'/'BodyCollection' cases), so any class used that
- * way needs a constructor shaped like this one. `use FromArray;` on a DTO
- * is that constructor, so it doesn't have to be hand-written (and kept in
- * sync across every DTO in every app) separately each time.
- *
- * Unknown keys in $data are silently ignored (the property_exists()
- * guard) -- request bodies routinely carry extra fields a DTO doesn't
- * declare, and rejecting them isn't this constructor's job (#[Property]/
- * Validator handle actual shape enforcement).
+ * The array constructor #[Body] DTOs need (Router constructs them as
+ * `new $class($req->body())`): each key that names a property is assigned,
+ * unknown keys are ignored, and a value that doesn't fit the property's type
+ * is skipped so the Validator can report it as a 422 instead of a TypeError 500.
  */
 trait FromArray
 {
@@ -26,12 +17,7 @@ trait FromArray
     }
 
     /**
-     * The actual hydration loop, split out from __construct() so a using
-     * class that needs extra logic around it (e.g. RendererOptions
-     * normalizing $directory afterward) can declare its own __construct()
-     * -- which overrides the trait's, same as any other method a class
-     * redeclares -- and still call this directly.
-     *
+     * Split out so a using class can declare its own __construct() and still call this.
      * @param array<string, mixed> $data
      */
     protected function hydrateFromArray(array $data): void
@@ -47,35 +33,13 @@ trait FromArray
             try {
                 $this->$key = $value;
             } catch (\TypeError) {
-                // $value doesn't fit this property's declared type --
-                // e.g. a client sending JSON `null` for a non-nullable
-                // `string` property (a missing/omitted field decodes to
-                // PHP null the same way), or an array where a scalar was
-                // expected. Left at its own default instead of crashing
-                // the whole request: request bodies are untrusted input,
-                // and a raw TypeError escaping here would otherwise
-                // become an uncaught 500 instead of the #[NotBlank]/
-                // Validator-driven 422 a genuinely missing/malformed
-                // field should produce (see Router::buildMethodArguments()'s
-                // 'Body' case, which validates the DTO right after
-                // constructing it).
                 continue;
             }
         }
     }
 
     /**
-     * Property names to skip during hydration -- e.g. a nested DTO
-     * property that must be set some other way (#[Body] hydration is
-     * flat: assigning a raw array straight to a typed object property
-     * would TypeError instead of recursively hydrating it, so a
-     * server-computed/cross-referenced property like that belongs here).
-     * A method, not a property: PHP refuses to let a using class
-     * redeclare a typed trait property with a different default value
-     * ("the definition differs and is considered incompatible"), while
-     * overriding a method is completely ordinary. Empty by default;
-     * override in the using class to add entries.
-     *
+     * Property names hydration skips (e.g. a nested DTO set some other way). A method, since a trait property's default can't be overridden.
      * @return array<int, string>
      */
     protected function fromArrayExcludes(): array

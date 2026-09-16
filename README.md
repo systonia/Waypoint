@@ -126,8 +126,8 @@ $app->run();
 ```
 
 `attach()` discovers every class reachable from your controllers via `#[Inject]` (see
-[Dependency Injection](#dependency-injection) below), wires up the router and container, and installs
-the built-in `X-Waypoint-Accept: partial` handling. `run()` branches on `php_sapi_name()`: under a real
+[Dependency Injection](#dependency-injection) below) and wires up the router and container. `run()`
+branches on `php_sapi_name()`: under a real
 HTTP SAPI it dispatches the current request (`handleHttp()`); under `cli` it runs the CLI task runner
 against the process's own `$argv` (`runCli()`) — see [CLI Tasks](#cli-tasks).
 
@@ -666,7 +666,7 @@ below) and served through `GET /assets/{hash}.css`/`.js` with a year-long, immut
 header.
 
 Passing `partial: true` (typically driven by a request header your client sets — `$req->acceptPartial`
-reflects the built-in `X-Waypoint-Accept: partial` handling `attach()` installs) skips the layout
+is true when the request carried `X-Waypoint-Accept: partial`) skips the layout
 entirely and renders just the view. The response also carries `X-Waypoint-View-Name`/`-Css`/`-Js`
 headers describing what was rendered, for a client-side router to apply without a full page reload.
 

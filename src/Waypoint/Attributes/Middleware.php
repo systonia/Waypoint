@@ -5,15 +5,14 @@ namespace Waypoint\Attributes;
 use Attribute;
 
 /**
- * Usable on controller classes and on individual route methods; class-level
- * middleware runs before any method-level middleware on that class. When
- * $callable is given as a plain class name, its 'handle' method is used --
- * pass [Class::class, 'method'] to call something else.
+ * Attaches a MiddlewareBase subclass to a controller class (runs for every
+ * route on it, before any method-level middleware) or one route method.
+ * Pass the class name; [Class::class, 'handle'] is the only other accepted form.
  */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD | Attribute::IS_REPEATABLE)]
 class Middleware
 {
-    /** @var array{0: string, 1?: string} [class-string, methodName] -- methodName defaults to 'handle' where read (see RouteCompiler::collectMiddlewares()). */
+    /** @var array{0: string, 1?: string} */
     public array $callable;
 
     /** @param string|array{0: string, 1?: string} $callable */

@@ -5,49 +5,28 @@ namespace Waypoint;
 use DateTimeImmutable;
 use DateTimeZone;
 use Deprecated;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionNamedType;
-use ReflectionProperty;
-
+use ReflectionParameter;
 use Waypoint\Enums\Message;
-use Waypoint\Http\Request;
-use Waypoint\Http\Response;
-use Waypoint\Http\MiddlewareBase;
+use Waypoint\Http\{MiddlewareBase, Request, Response};
+use Waypoint\Routing\PropertyInjector;
 use Waypoint\Attributes\{
-    Inject,
-    Body,
-    Param,
-    Query,
-    Authenticated,
-    Controller,
-    FileFormatter,
-    JSONFormatter,
-    Manager,
-    Middleware,
-    NoGzip,
-    Permissions,
-    Role,
-    RouteAttribute,
-    SimpleXmlFormatter,
-    SkipCsrf,
-    Sunset,
-    Task,
-    Version
+    Authenticated, Body, Controller, FileFormatter, Inject, JSONFormatter, Manager, Middleware, NoGzip,
+    Param, Permissions, Query, Role, RouteAttribute, SimpleXmlFormatter, SkipCsrf, Sunset, Task, Version
 };
 
 /**
- * Reflects over a set of controller/manager classes and compiles them into
- * the plain-array route/task plans Router actually dispatches against.
- * Kept separate from Router itself: "how a #[Controller]/#[Manager]
- * class's attributes turn into a route plan" is a compile-time concern with
- * no knowledge of a live request, distinct from Router's own job of
- * matching and dispatching an already-compiled plan. Router::exportPlans()/
- * importPlans() are what persist this compiler's output to/from the
- * FileSystem cache; this class has no idea that cache exists.
+ * Reflects #[Controller]/#[Manager] classes once into the plain-array route/
+ * task plans Router dispatches against (and FileSystem caches). Everything a
+ * request needs -- argument binding, injections, middleware, auth/CSRF flags,
+ * headers -- is resolved here so dispatch never reflects.
  */
 final class RouteCompiler
 {
+    private const FORMATTERS = [FileFormatter::class, SimpleXmlFormatter::class, JSONFormatter::class];
+
     /**
      * @param class-string[] $classes
      * @return array{staticRoutes: array<string, array<string, RoutePlan>>, dynamicRoutes: array<string, array<int, RoutePlan>>, tasks: array<string, TaskPlan>}
@@ -63,185 +42,69 @@ final class RouteCompiler
                 continue;
             }
             $rc = new ReflectionClass($class);
-
-            // find first class-level attribute that we support
-            $classAttrInstance = null;
-            foreach ($rc->getAttributes() as $attr) {
-                $instance = $attr->newInstance();
-                if ($instance instanceof Controller || $instance instanceof Manager) {
-                    $classAttrInstance = $instance;
-                    break;
-                }
-            }
-
-            if (!$classAttrInstance) {
-                // not a controller or manager; skip
+            $controller = self::attribute($rc, Controller::class);
+            if ($controller !== null) {
+                $this->compileController($rc, $class, $controller->getPath(), $staticRoutes, $dynamicRoutes);
                 continue;
             }
-
-            // Derive a normalized prefix from the attribute (supports getPath/getPrefix/getName)
-            $prefix = $this->normalizePrefix($classAttrInstance);
-
-            // Dispatch (easy to extend with more kinds later)
-            match (true) {
-                $classAttrInstance instanceof Controller
-                => $this->compileController($rc, $class, $prefix, $staticRoutes, $dynamicRoutes),
-
-                // Always Manager, not just a generic fallback: the loop
-                // above only ever sets $classAttrInstance to a Controller
-                // or a Manager instance (or leaves it null, which continue's
-                // past this match entirely) -- Controller was just ruled
-                // out above, so nothing else reaches this arm. Written as
-                // `default` rather than `instanceof Manager` because that
-                // instanceof would be statically always-true and unusable
-                // (PHPStan rejects a condition it can prove is redundant).
-                default => $this->compileManager($rc, $class, $prefix, $tasks),
-            };
-        }
-
-        return [
-            'staticRoutes' => $staticRoutes,
-            'dynamicRoutes' => $dynamicRoutes,
-            'tasks' => $tasks,
-        ];
-    }
-
-    /**
-     * Normalize prefix from a class attribute instance (Controller|Manager).
-     * Accepts getPath(), getPrefix(), or getName() — first one found wins.
-     */
-    private function normalizePrefix(object $attr): string
-    {
-        $raw = '';
-        foreach (['getPath', 'getPrefix', 'getName'] as $method) {
-            if (method_exists($attr, $method)) {
-                $value = $attr->{$method}();
-                // A dynamic method-name call can't be statically resolved to
-                // a return type; every real caller (Controller::getPath(),
-                // Manager::getName()) returns string, but this narrows
-                // explicitly rather than assuming it.
-                $raw = is_string($value) ? $value : '';
-                break;
+            $manager = self::attribute($rc, Manager::class);
+            if ($manager !== null) {
+                $this->compileManager($rc, $class, $manager->getName(), $tasks);
             }
         }
-        // For controllers, treat prefix as a URL path; for managers it’s a plain name.
-        // We standardize to "string" here and let the per-kind compilers format as needed.
-        return trim($raw);
+
+        return ['staticRoutes' => $staticRoutes, 'dynamicRoutes' => $dynamicRoutes, 'tasks' => $tasks];
     }
 
     /**
-     * Compile HTTP routes from a Controller class.
-     * Populates $staticRoutes and $dynamicRoutes by reference.
-     *
      * @param ReflectionClass<object> $rc
      * @param array<string, array<string, RoutePlan>> $staticRoutes
      * @param array<string, array<int, RoutePlan>> $dynamicRoutes
      */
-    private function compileController(
-        ReflectionClass $rc,
-        string|object $controller,
-        string $prefix,
-        array &$staticRoutes,
-        array &$dynamicRoutes
-    ): void {
-        // Controller path prefix (URL-ish)
-        $prefixPath = $prefix !== '' ? '/' . trim($prefix, '/') : '';
-
-        // Pre-compute property injections once per controller
+    private function compileController(ReflectionClass $rc, string $controller, string $prefixPath, array &$staticRoutes, array &$dynamicRoutes): void
+    {
         $propInject = $this->collectPropertyInjections($rc);
-        // Pre-compute class-level middleware once per controller; it runs
-        // before any method-level middleware on every route below.
         $classMiddlewares = $this->collectMiddlewares($rc->getAttributes(Middleware::class));
-        // #[NoGzip] on the class disables compression for every route
-        // below regardless of the method's own attributes -- combined
-        // with each method's own below into a single 'gzip' bool per
-        // route, so Response::maybeCompress() never has to reflect.
-        $classHasNoGzip = $rc->getAttributes(NoGzip::class) !== [];
-        // Same "class or method, combined once" reasoning as #[NoGzip]
-        // above, for #[SkipCsrf] -- Router::dispatch() never has to
-        // reflect to know whether CSRF verification applies to this route.
-        $classSkipsCsrf = $rc->getAttributes(SkipCsrf::class) !== [];
-        // Same reasoning again for #[Authenticated] -- combined with each
-        // method's own below into a single 'authenticated' bool per route.
-        $classIsAuthenticated = $rc->getAttributes(Authenticated::class) !== [];
 
         foreach ($rc->getMethods() as $method) {
-            [$routeAttr, $formatterAttr] = $this->extractRouteAndFormatter($method);
-            if (!$routeAttr) {
+            $routeAttr = self::lastAttribute($method, RouteAttribute::class, ReflectionAttribute::IS_INSTANCEOF);
+            if ($routeAttr === null) {
                 continue;
             }
 
             $httpMethod = strtoupper($routeAttr->getHttpMethod());
-
-            $methodPath = $routeAttr->getPath() ?: '';
-            $combined = rtrim($prefixPath, '/') . '/' . ltrim($methodPath, '/');
-            $unversionedPath = '/' . trim($combined, '/');
-
-            // #[Version] on the method overrides the class's, exactly like
-            // #[Sunset] below -- see resolveOverridable(). No attribute at
-            // either level (the common case today) means no prefix at all,
-            // and $unversionedPath IS the final path.
-            $effectiveVersion = $this->resolveOverridable($rc, $method, Version::class, 'value');
-            $path = $effectiveVersion !== null ? '/' . $effectiveVersion . $unversionedPath : $unversionedPath;
-
-            if ($effectiveVersion === null) {
-                $this->logUnversionedRoute($httpMethod, $path);
+            $unversionedPath = '/' . trim(rtrim($prefixPath, '/') . '/' . ltrim($routeAttr->getPath(), '/'), '/');
+            $version = self::inherited($rc, $method, Version::class)?->value;
+            $path = $version !== null ? "/$version$unversionedPath" : $unversionedPath;
+            if ($version === null) {
+                $this->warn(Message::RouteUnversioned, method: $httpMethod, path: $path);
             }
 
-            $dynamic = strpos($path, '{') !== false;
-            $regex = $dynamic
-                ? '#^' . preg_replace('#\{(\w+)\}#', '(?P<\1>[^/]+)', $path) . '$#'
-                : null;
-
-            $argPlan = $this->buildArgPlan($method);
-            $formatter = $this->normalizeFormatter($formatterAttr);
-            $methodMiddlewares = $this->collectMiddlewares($method->getAttributes(Middleware::class));
-            $middlewares = [...$classMiddlewares, ...$methodMiddlewares];
-            $methodHasNoGzip = $method->getAttributes(NoGzip::class) !== [];
-            $methodSkipsCsrf = $method->getAttributes(SkipCsrf::class) !== [];
-            $methodIsAuthenticated = $method->getAttributes(Authenticated::class) !== [];
-
-            $role = $this->resolveOverridable($rc, $method, Role::class, 'role');
-            $permissions = $this->resolvePermissions($rc, $method);
-            // #[Role]/#[Permissions] each imply #[Authenticated] too --
-            // checking either one without being authenticated first makes
-            // no sense (see both attributes' own doc).
-            $authenticated = $classIsAuthenticated || $methodIsAuthenticated || $role !== null || $permissions !== null;
-
-            // PHP's own native #[\Deprecated] (8.4+), not a Waypoint
-            // attribute -- there's nothing to "override" the way
-            // #[Version]/#[Sunset] have a class-vs-method precedence,
-            // since presence alone is the whole signal. The $rc check is
-            // effectively always false in practice: PHP itself refuses to
-            // let #[\Deprecated] target a class at all (a fatal compile
-            // error, not just unenforced) -- kept here anyway in case a
-            // future PHP version lifts that restriction, since checking
-            // costs nothing and getAttributes() never throws for an
-            // attribute that simply isn't present.
-            $isDeprecated = $method->getAttributes(Deprecated::class) !== [] || $rc->getAttributes(Deprecated::class) !== [];
-
-            $sunsetDate = $this->resolveOverridable($rc, $method, Sunset::class, 'date');
-            $sunsetHeader = $sunsetDate !== null
-                ? $this->formatSunsetHeader($sunsetDate, $httpMethod, $path)
-                : null;
+            $dynamic = str_contains($path, '{');
+            $role = self::inherited($rc, $method, Role::class)?->role;
+            $permissions = self::inherited($rc, $method, Permissions::class)?->permissions;
+            $permissions = $permissions !== null ? array_values(array_filter($permissions, 'is_string')) : null;
+            $sunsetDate = self::inherited($rc, $method, Sunset::class)?->date;
 
             $plan = [
                 'httpMethod' => $httpMethod,
                 'path' => $path,
-                'regex' => $regex,
+                'regex' => $dynamic ? '#^' . preg_replace('#\{(\w+)\}#', '(?P<\1>[^/]+)', $path) . '$#' : null,
                 'controller' => $controller,
                 'method' => $method->getName(),
-                'argPlan' => $argPlan,
+                'argPlan' => $this->buildArgPlan($method),
                 'propInject' => $propInject,
-                'formatter' => $formatter,
-                'middlewares' => $middlewares,
-                'gzip' => !($classHasNoGzip || $methodHasNoGzip),
-                'skipCsrf' => $classSkipsCsrf || $methodSkipsCsrf,
-                'version' => $effectiveVersion,
+                'formatter' => self::normalizeFormatter(self::findFormatter($method)),
+                'middlewares' => [...$classMiddlewares, ...$this->collectMiddlewares($method->getAttributes(Middleware::class))],
+                'gzip' => !self::hasEither($rc, $method, NoGzip::class),
+                'skipCsrf' => self::hasEither($rc, $method, SkipCsrf::class),
+                'version' => $version,
                 'unversionedPath' => $unversionedPath,
-                'deprecated' => $isDeprecated,
-                'sunsetHeader' => $sunsetHeader,
-                'authenticated' => $authenticated,
+                // PHP's native #[\Deprecated]; presence at either level is the whole signal.
+                'deprecated' => self::hasEither($rc, $method, Deprecated::class),
+                'sunsetHeader' => $sunsetDate !== null ? $this->formatSunsetHeader($sunsetDate, $httpMethod, $path) : null,
+                // #[Role]/#[Permissions] imply #[Authenticated].
+                'authenticated' => self::hasEither($rc, $method, Authenticated::class) || $role !== null || $permissions !== null,
                 'role' => $role,
                 'permissions' => $permissions,
                 'throws' => [],
@@ -256,161 +119,124 @@ final class RouteCompiler
     }
 
     /**
-     * "Method wins over class, else null" resolution shared by #[Version]
-     * (property 'value') and #[Sunset] (property 'date') -- both are
-     * single-string-payload attributes usable at either level with the
-     * exact same override rule, just under a different attribute/property
-     * name.
-     *
      * @param ReflectionClass<object> $rc
+     * @param array<string, TaskPlan> $tasks Keyed by "prefix:name" (or just "name").
      */
-    private function resolveOverridable(ReflectionClass $rc, ReflectionMethod $method, string $attributeClass, string $property): ?string
+    private function compileManager(ReflectionClass $rc, string $manager, string $namePrefix, array &$tasks): void
     {
-        $methodAttr = $method->getAttributes($attributeClass)[0] ?? null;
-        if ($methodAttr) {
-            $value = $methodAttr->newInstance()->{$property};
-            return is_string($value) ? $value : null;
+        $propInject = $this->collectPropertyInjections($rc);
+
+        foreach ($rc->getMethods() as $method) {
+            $name = self::attribute($method, Task::class)?->getName();
+            if ($name === null || $name === '') {
+                continue;
+            }
+            $fullName = $namePrefix !== '' ? "$namePrefix:$name" : $name;
+            $tasks[$fullName] = [
+                'name' => $name,
+                'fullName' => $fullName,
+                'manager' => $manager,
+                'method' => $method->getName(),
+                'argPlan' => $this->buildArgPlan($method),
+                'propInject' => $propInject,
+                'formatter' => self::normalizeFormatter(self::findFormatter($method)),
+                'throws' => [],
+            ];
         }
-        $classAttr = $rc->getAttributes($attributeClass)[0] ?? null;
-        if (!$classAttr) {
-            return null;
-        }
-        $value = $classAttr->newInstance()->{$property};
-        return is_string($value) ? $value : null;
     }
 
     /**
-     * Same "method overrides class, else null" precedence
-     * resolveOverridable() uses, for #[Permissions(array $permissions)]
-     * specifically -- its payload is a list, not resolveOverridable()'s
-     * single string property, so it needs its own instance() lookup
-     * rather than a generic {$property} read.
-     *
-     * @param ReflectionClass<object> $rc
-     * @return array<int, string>|null
+     * @template T of object
+     * @param ReflectionClass<object>|ReflectionMethod|ReflectionParameter $target
+     * @param class-string<T> $attribute
+     * @return T|null
      */
-    private function resolvePermissions(ReflectionClass $rc, ReflectionMethod $method): ?array
+    private static function attribute(ReflectionClass|ReflectionMethod|ReflectionParameter $target, string $attribute, int $flags = 0): ?object
     {
-        $methodAttr = $method->getAttributes(Permissions::class)[0] ?? null;
-        $attr = $methodAttr ?? ($rc->getAttributes(Permissions::class)[0] ?? null);
-        if (!$attr) {
-            return null;
-        }
-        $permissions = $attr->newInstance()->permissions;
-        return array_values(array_filter($permissions, 'is_string'));
+        $attrs = $target->getAttributes($attribute, $flags);
+        return $attrs === [] ? null : $attrs[0]->newInstance();
     }
 
     /**
-     * RFC 8594's Sunset header is an HTTP-date (e.g. "Sat, 31 Dec 2022
-     * 00:00:00 GMT"), not a bare 'YYYY-MM-DD' -- computed once here, at
-     * compile time, since it never depends on anything about a live
-     * request. Returns null (skipping the header entirely, after logging a
-     * warning) for a malformed date -- a typo in #[Sunset] shouldn't take
-     * the whole route down.
+     * Like attribute(), but the last declared one wins.
+     * @template T of object
+     * @param class-string<T> $attribute
+     * @return T|null
      */
+    private static function lastAttribute(ReflectionMethod $target, string $attribute, int $flags = 0): ?object
+    {
+        $attrs = $target->getAttributes($attribute, $flags);
+        return $attrs === [] ? null : $attrs[array_key_last($attrs)]->newInstance();
+    }
+
+    /**
+     * Method-level wins over class-level, else null -- the shared precedence of #[Version]/#[Sunset]/#[Role]/#[Permissions].
+     * @template T of object
+     * @param ReflectionClass<object> $rc
+     * @param class-string<T> $attribute
+     * @return T|null
+     */
+    private static function inherited(ReflectionClass $rc, ReflectionMethod $method, string $attribute): ?object
+    {
+        return self::attribute($method, $attribute) ?? self::attribute($rc, $attribute);
+    }
+
+    /**
+     * @param ReflectionClass<object> $rc
+     * @param class-string $attribute
+     */
+    private static function hasEither(ReflectionClass $rc, ReflectionMethod $method, string $attribute): bool
+    {
+        return $method->getAttributes($attribute) !== [] || $rc->getAttributes($attribute) !== [];
+    }
+
+    /** The last formatter attribute on $method, if any. */
+    private static function findFormatter(ReflectionMethod $method): ?object
+    {
+        $found = null;
+        foreach ($method->getAttributes() as $attr) {
+            if (in_array($attr->getName(), self::FORMATTERS, true)) {
+                $found = $attr->newInstance();
+            }
+        }
+        return $found;
+    }
+
+    /** @return FormatterSpec */
+    private static function normalizeFormatter(?object $formatter): array
+    {
+        if ($formatter === null) {
+            return ['type' => 'json', 'options' => null];
+        }
+        $options = [];
+        foreach (get_object_vars($formatter) as $key => $value) {
+            if (is_string($key)) {
+                $options[$key] = $value;
+            }
+        }
+        return ['type' => get_class($formatter), 'options' => $options];
+    }
+
+    /** RFC 8594 Sunset is an HTTP-date; a malformed 'YYYY-MM-DD' is logged and skipped rather than failing the route. */
     private function formatSunsetHeader(string $date, string $httpMethod, string $path): ?string
     {
         $dt = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone('UTC'));
         if ($dt === false) {
-            $this->logInvalidSunsetDate($httpMethod, $path, $date);
+            $this->warn(Message::RouteInvalidSunsetDate, method: $httpMethod, path: $path, date: $date);
             return null;
         }
         return $dt->format('D, d M Y H:i:s \G\M\T');
     }
 
-    /**
-     * Logged once per unversioned HTTP route, only during a real compile --
-     * never when a cached routes.php is loaded instead (Router's
-     * constructor only ever calls RouteCompiler::compile() on a cache
-     * miss), so this never fires per-request. Silently skipped when
-     * there's no live App to resolve LoggerOptions through
-     * (Waypoint::getInstance() === null, e.g. a Router built directly in a
-     * test) -- "usable without an App" is a design goal Router itself
-     * already guarantees elsewhere, and Logger has no way to work without
-     * one.
-     */
-    private function logUnversionedRoute(string $httpMethod, string $path): void
+    /** Compile-time warnings need a live App to resolve LoggerOptions; a Router built without one (tests) just stays silent. */
+    private function warn(Message $message, string ...$vars): void
     {
-        if (Waypoint::getInstance() === null) {
-            return;
-        }
-        (new Logger())->warning(Message::RouteUnversioned->interpolate(method: $httpMethod, path: $path));
-    }
-
-    /** Same "no App, no logging" guard as logUnversionedRoute() -- see there. */
-    private function logInvalidSunsetDate(string $httpMethod, string $path, string $date): void
-    {
-        if (Waypoint::getInstance() === null) {
-            return;
-        }
-        (new Logger())->warning(Message::RouteInvalidSunsetDate->interpolate(method: $httpMethod, path: $path, date: $date));
-    }
-
-    /**
-     * Compile named tasks from a Manager class.
-     * Populates $tasks by reference, keyed by full task name (prefix:name).
-     *
-     * All tasks behave like "static" entries (no HTTP method, direct lookup by name).
-     *
-     * @param ReflectionClass<object> $rc
-     * @param array<string, TaskPlan> $tasks
-     */
-    private function compileManager(
-        ReflectionClass $rc,
-        string|object $manager,
-        string $namePrefix,
-        array &$tasks
-    ): void {
-        // normalize manager prefix (no slashes, plain token)
-        $normalizedPrefix = trim($namePrefix, " \t\n\r\0\x0B/");
-
-        // Pre-compute property injections once per manager
-        $propInject = $this->collectPropertyInjections($rc);
-
-        foreach ($rc->getMethods() as $method) {
-            // find a #[Task('name')] on method
-            $taskAttr = null;
-            foreach ($method->getAttributes() as $attr) {
-                $instance = $attr->newInstance();
-                if ($instance instanceof Task) {
-                    $taskAttr = $instance;
-                    break;
-                }
-            }
-            if (!$taskAttr) {
-                continue;
-            }
-
-            $taskName = $this->extractTaskName($taskAttr);
-            if ($taskName === '') {
-                // ignore unnamed tasks
-                continue;
-            }
-
-            $fullName = $normalizedPrefix !== '' ? $normalizedPrefix . ':' . $taskName : $taskName;
-
-            // Tasks share the same arg/prop injection logic
-            $argPlan = $this->buildArgPlan($method);
-
-            $plan = [
-                'name' => $taskName,
-                'fullName' => $fullName,
-                'manager' => $manager,
-                'method' => $method->getName(),
-                'argPlan' => $argPlan,
-                'propInject' => $propInject,
-                // Optional: allow a formatter attribute to influence output of task runs
-                'formatter' => $this->extractFormatterOnly($method),
-                'throws' => [],
-            ];
-
-            // Tasks are "static-like" — direct lookup by exact name
-            $tasks[$fullName] = $plan;
+        if (Waypoint::getInstance() !== null) {
+            (new Logger())->warning($message->format($vars));
         }
     }
 
     /**
-     * Collect #[Inject] property metadata once per class.
      * @param ReflectionClass<object> $rc
      * @return array<int, PropInjectEntry>
      */
@@ -418,65 +244,43 @@ final class RouteCompiler
     {
         $propInject = [];
         foreach ($rc->getProperties() as $prop) {
-            if ($prop->getAttributes(Inject::class)) {
-                $propType = $prop->getType();
-                $type = $propType instanceof ReflectionNamedType ? $propType->getName() : null;
-                $propInject[] = [
-                    'name' => $prop->getName(),
-                    'type' => $type,
-                ];
+            if ($prop->getAttributes(Inject::class) !== []) {
+                $propInject[] = ['name' => $prop->getName(), 'type' => PropertyInjector::namedType($prop)];
             }
         }
         return $propInject;
     }
 
     /**
-     * Collect #[Middleware(...)] attributes (from a controller class or a route
-     * method) in declaration order. A bare class name defaults to calling its
-     * 'handle' method. Each Middleware class is container-resolved at dispatch
-     * time so it can itself use #[Inject].
+     * #[Middleware(...)] entries in declaration order. Only a MiddlewareBase subclass via its
+     * final handle() is accepted; anything else is skipped at compile time rather than crashing boot.
      *
-     * @param \ReflectionAttribute<Middleware>[] $attributes
+     * @param ReflectionAttribute<Middleware>[] $attributes
      * @return array<int, MiddlewareEntry>
      */
     private function collectMiddlewares(array $attributes): array
     {
         $middlewares = [];
         foreach ($attributes as $attr) {
-            $instance = $attr->newInstance();
-            $callable = $instance->callable;
-            $method = $callable[1] ?? 'handle';
-            // MiddlewareBase is required, not optional: its handle() is
-            // the only valid entry point (final, always runs
-            // before()/$next()/after()), so a middleware that doesn't
-            // extend it -- or that names some other method via
-            // #[Middleware([Class::class, 'notHandle'])] -- is rejected
-            // here, the same "skip at compile time, don't crash app boot"
-            // treatment a nonexistent class already gets below.
-            if (!class_exists($callable[0]) || !self::extendsMiddlewareBase($callable[0]) || $method !== 'handle') {
+            [$class, $method] = $attr->newInstance()->callable + [1 => 'handle'];
+            if ($method !== 'handle' || !class_exists($class) || !self::extendsMiddlewareBase($class)) {
                 continue;
             }
             $middlewares[] = [
-                'class' => $callable[0],
+                'class' => $class,
                 'method' => $method,
-                // Computed once at compile time so #[Inject] works on middleware
-                // classes too, without reflecting on every request.
-                'propInject' => $this->collectPropertyInjections(new ReflectionClass($callable[0])),
+                'propInject' => $this->collectPropertyInjections(new ReflectionClass($class)),
             ];
         }
         return $middlewares;
     }
 
     /**
-     * Same check as `is_subclass_of($class, MiddlewareBase::class)`,
-     * wrapped so PHPStan doesn't narrow the caller's $class to
-     * class-string<MiddlewareBase> -- ReflectionClass's own template
-     * param isn't covariant, so passing that narrowed type into `new
-     * ReflectionClass($class)` right after would produce a
-     * ReflectionClass<MiddlewareBase> collectPropertyInjections()'s
-     * ReflectionClass<object> parameter then refuses.
-     *
+
+     * Wrapped so PHPStan doesn't narrow the caller's $class to class-string<MiddlewareBase>, which ReflectionClass<object> would then refuse.
+
      * @param class-string $class
+
      */
     private static function extendsMiddlewareBase(string $class): bool
     {
@@ -484,150 +288,36 @@ final class RouteCompiler
     }
 
     /**
-     * Build argument injection plan for a method.
-     * Mirrors the original logic (Request/Response/Body/Query/Route/Scalar/Unknown).
+     * How each method parameter is bound at dispatch (see Routing\ArgumentResolver).
      * @return array<int, array<string, mixed>>
      */
     private function buildArgPlan(ReflectionMethod $method): array
     {
         $argPlan = [];
-
         foreach ($method->getParameters() as $param) {
-            $paramType = $param->getType();
-            // Only a plain named type (string, int, Some\Class, ...) is
-            // usable below; union/intersection types (the only other
-            // ReflectionType subtypes) have no single name to extract.
-            $type = $paramType instanceof ReflectionNamedType ? $paramType->getName() : null;
+            $type = PropertyInjector::namedType($param);
+            $body = self::attribute($param, Body::class);
+            $of = $body?->of;
 
-            $bodyAttr = $param->getAttributes(Body::class)[0] ?? null;
-            $queryAttr = $param->getAttributes(Query::class)[0] ?? null;
-            $routeAttrP = $param->getAttributes(Param::class)[0] ?? null;
-
-            if ($type === Request::class) {
-                $argPlan[] = ['inject' => 'Request'];
-            } elseif ($type === Response::class) {
-                $argPlan[] = ['inject' => 'Response'];
-            } elseif ($bodyAttr && $type && class_exists($type)) {
-                $argPlan[] = ['inject' => 'Body', 'class' => $type, 'validate' => true];
-            } elseif ($bodyAttr && in_array($type, ['array', 'iterable'], true) && ($of = $bodyAttr->newInstance()->of) && class_exists($of)) {
-                $argPlan[] = ['inject' => 'BodyCollection', 'class' => $of, 'validate' => true];
-            } elseif ($queryAttr) {
-                $attrInstance = $queryAttr->newInstance();
-                $key = $attrInstance->name ?? $param->getName();
-                $argPlan[] = ['inject' => 'Query', 'name' => $key];
-            } elseif ($routeAttrP) {
-                $attrInstance = $routeAttrP->newInstance();
-                $key = $attrInstance->name ?? $param->getName();
-                $argPlan[] = ['inject' => 'Route', 'name' => $key];
-            } elseif ($type && in_array($type, ['string', 'int', 'float', 'bool'], true)) {
-                $key = $param->getName();
-                $argPlan[] = ['inject' => 'Scalar', 'name' => $key, 'type' => $type];
-            } else {
-                $argPlan[] = ['inject' => 'Unknown'];
-            }
+            $argPlan[] = match (true) {
+                $type === Request::class => ['inject' => 'Request'],
+                $type === Response::class => ['inject' => 'Response'],
+                $body !== null && $type !== null && class_exists($type) => ['inject' => 'Body', 'class' => $type, 'validate' => true],
+                $body !== null && in_array($type, ['array', 'iterable'], true) && $of !== null && class_exists($of) => ['inject' => 'BodyCollection', 'class' => $of, 'validate' => true],
+                ($query = self::attribute($param, Query::class)) !== null => ['inject' => 'Query', 'name' => $query->name ?? $param->getName()],
+                ($route = self::attribute($param, Param::class)) !== null => ['inject' => 'Route', 'name' => $route->name ?? $param->getName()],
+                in_array($type, ['string', 'int', 'float', 'bool'], true) => ['inject' => 'Scalar', 'name' => $param->getName(), 'type' => $type],
+                default => ['inject' => 'Unknown'],
+            };
         }
-
         return $argPlan;
     }
 
     /**
-     * Extract both route attribute (must implement RouteAttribute) and optional formatter.
-     * @return array{0: RouteAttribute|null, 1: object|null}
-     */
-    private function extractRouteAndFormatter(ReflectionMethod $method): array
-    {
-        $routeAttr = null;
-        $formatter = null;
-
-        foreach ($method->getAttributes() as $attr) {
-            $instance = $attr->newInstance();
-            if ($instance instanceof RouteAttribute) {
-                $routeAttr = $instance;
-            }
-            if (
-                $instance instanceof FileFormatter
-                || $instance instanceof SimpleXmlFormatter
-                || $instance instanceof JSONFormatter
-            ) {
-                $formatter = $instance;
-            }
-        }
-
-        return [$routeAttr, $formatter];
-    }
-
-    /**
-     * Extract only a formatter (for tasks; optional).
-     * @return FormatterSpec
-     */
-    private function extractFormatterOnly(ReflectionMethod $method): array
-    {
-        $formatterAttr = null;
-        foreach ($method->getAttributes() as $attr) {
-            $instance = $attr->newInstance();
-            if (
-                $instance instanceof FileFormatter
-                || $instance instanceof SimpleXmlFormatter
-                || $instance instanceof JSONFormatter
-            ) {
-                $formatterAttr = $instance;
-            }
-        }
-        return self::normalizeFormatter($formatterAttr);
-    }
-
-    /**
-     * Normalize formatter into a plan-friendly array.
-     * @return FormatterSpec
-     */
-    private function normalizeFormatter(?object $formatterAttr): array
-    {
-        if ($formatterAttr === null) {
-            return ['type' => 'json', 'options' => null];
-        }
-
-        // get_object_vars() is typed array<mixed> by PHPStan (it can't
-        // guarantee string keys for an arbitrary object) even though a real
-        // object's property names are always strings -- narrow explicitly.
-        $options = [];
-        foreach (get_object_vars($formatterAttr) as $key => $value) {
-            if (is_string($key)) {
-                $options[$key] = $value;
-            }
-        }
-
-        return ['type' => get_class($formatterAttr), 'options' => $options];
-    }
-
-    /** Extract task name from a #[Task(...)] attribute instance defensively. */
-    private function extractTaskName(object $taskAttr): string
-    {
-        // Support common shapes: ->getName(), public $name, or ->name()
-        foreach (['getName', 'name', '__toString'] as $method) {
-            if (method_exists($taskAttr, $method)) {
-                $val = $taskAttr->{$method}();
-                if (is_string($val) && $val !== '') {
-                    return $val;
-                }
-            }
-        }
-        // Fallback for a *public* property named "name" -- checked via
-        // Reflection rather than `$taskAttr->name` directly, since that
-        // would fatal with "Cannot access private property" for an
-        // attribute (like Task itself) that declares $name as private.
-        if (property_exists($taskAttr, 'name')) {
-            $prop = new ReflectionProperty($taskAttr, 'name');
-            if ($prop->isPublic()) {
-                $value = $prop->getValue($taskAttr);
-                if (is_string($value)) {
-                    return $value;
-                }
-            }
-        }
-        return '';
-    }
-
-    /**
+     * Every attribute on every controller, property, method and parameter, as
+     * plain {name, args} entries plus each parameter's type -- what
+     * OpenAPIGenerator reads instead of reflecting at request time.
+     *
      * @param class-string[] $controllers
      * @return array<class-string, mixed>
      */
@@ -635,59 +325,42 @@ final class RouteCompiler
     {
         $result = [];
         foreach ($controllers as $className) {
-            if (!class_exists($className))
+            if (!class_exists($className)) {
                 continue;
+            }
             $rc = new ReflectionClass($className);
+            $result[$className]['__class'] = self::attributeEntries($rc->getAttributes());
 
-            // Class-level
-            $result[$className]['__class'] = array_map(
-                fn($attr) => [
-                    'name' => $attr->getName(),
-                    'args' => $attr->getArguments(),
-                ],
-                $rc->getAttributes()
-            );
-
-            // Property-level
             foreach ($rc->getProperties() as $prop) {
-                $result[$className]['properties'][$prop->getName()] = array_map(
-                    fn($attr) => [
-                        'name' => $attr->getName(),
-                        'args' => $attr->getArguments(),
-                    ],
-                    $prop->getAttributes()
-                );
+                $result[$className]['properties'][$prop->getName()] = self::attributeEntries($prop->getAttributes());
             }
 
-            // Method/Param-level
             foreach ($rc->getMethods() as $method) {
-                $result[$className]['methods'][$method->getName()]['__method'] = array_map(
-                    fn($attr) => [
-                        'name' => $attr->getName(),
-                        'args' => $attr->getArguments(),
-                    ],
-                    $method->getAttributes()
-                );
+                $result[$className]['methods'][$method->getName()]['__method'] = self::attributeEntries($method->getAttributes());
                 foreach ($method->getParameters() as $param) {
                     $type = $param->getType();
                     $result[$className]['methods'][$method->getName()]['parameters'][$param->getName()] = [
-                        'attributes' => array_map(
-                            fn($attr) => [
-                                'name' => $attr->getName(),
-                                'args' => $attr->getArguments(),
-                            ],
-                            $param->getAttributes()
-                        ),
-                        // Only a plain named type (string, int, Some\Class, ...) is
-                        // reported; union/intersection types come through as null
-                        // since OpenAPI has no single-type slot to put them in.
-                        'type' => $type instanceof ReflectionNamedType ? $type->getName() : null,
-                        'nullable' => $type ? $type->allowsNull() : true,
+                        'attributes' => self::attributeEntries($param->getAttributes()),
+                        'type' => PropertyInjector::namedType($param),
+                        'nullable' => $type === null || $type->allowsNull(),
                         'hasDefault' => $param->isDefaultValueAvailable(),
                     ];
                 }
             }
         }
         return $result;
+    }
+
+    /**
+     * @param ReflectionAttribute<object>[] $attributes
+     * @return list<AttributeEntry>
+     */
+    private static function attributeEntries(array $attributes): array
+    {
+        $entries = [];
+        foreach ($attributes as $attr) {
+            $entries[] = ['name' => $attr->getName(), 'args' => $attr->getArguments()];
+        }
+        return $entries;
     }
 }

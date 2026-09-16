@@ -3,20 +3,18 @@
 namespace Waypoint\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 use RuntimeException;
-use Waypoint\{Waypoint, Router, RouteCompiler};
+use Waypoint\Waypoint;
+use Waypoint\Routing\PropertyInjector;
 use Waypoint\Http\View;
 use Waypoint\Enums\RouteType;
 use Waypoint\Tests\Fixtures\Managers\{MaintenanceManager, InjectionAwareManager};
 use Waypoint\Tests\Fixtures\Support\ViewWithUnresolvableInject;
 
 /**
- * Targets Router internals that the "normal usage" integration tests can't
- * reach on their own: defensive guards for crafted/malformed task plans
- * (Router::$tasks is public, so these are constructed directly rather than
- * through normal compilation), and a couple of private helper methods
- * exercised via Reflection.
+ * Router/PropertyInjector edge cases the integration tests can't reach:
+ * defensive guards for crafted/malformed task plans (Router::$tasks is
+ * public, so these are planted directly) and injection without a container.
  */
 final class RouterInternalsTest extends TestCase
 {
@@ -47,26 +45,6 @@ final class RouterInternalsTest extends TestCase
         $router = $app->getRouter();
 
         $this->assertNull($router->findRoute($router->getRoutes(), 'GET', '/nope'));
-    }
-
-    public function testExtractTaskNameFallsBackToAPublicNameProperty(): void
-    {
-        // extractTaskName() is written to "defensively" support any
-        // attribute-like object exposing ->getName(), a public $name, or
-        // ->__toString() -- Task itself only ever exercises the first (its
-        // own $name is private), so this proves the public-property
-        // fallback actually works for a shape that would use it. Lives on
-        // RouteCompiler (the reflection-based attribute-to-plan compiler),
-        // not Router itself.
-        $compiler = new RouteCompiler();
-
-        $fakeTaskAttr = new class {
-            public string $name = 'from-public-property';
-        };
-
-        $method = new ReflectionMethod($compiler, 'extractTaskName');
-
-        $this->assertSame('from-public-property', $method->invoke($compiler, $fakeTaskAttr));
     }
 
     public function testExecuteTaskSkipsNonArrayEntriesWhileScanningForAShortNameMatch(): void
@@ -133,35 +111,27 @@ final class RouterInternalsTest extends TestCase
         $this->assertTrue($result['hasRouter']);
     }
 
-    public function testInjectViewPropertiesDoesNothingWithoutAContainer(): void
+    public function testInjectReflectedDoesNothingWithoutAContainer(): void
     {
-        // A bare Router (no container passed) -- injectViewProperties()
-        // must tolerate this and simply leave #[Inject] properties unset,
-        // same as injectControllerProperties()'s default branch does.
-        $router = new Router([]);
+        // A Router built without a container leaves a View's #[Inject] properties unset.
         $view = new View('SomeView');
 
-        $method = new ReflectionMethod($router, 'injectViewProperties');
-        $method->invoke($router, $view);
+        (new PropertyInjector(null))->injectReflected($view);
 
         $envProp = new \ReflectionProperty($view, 'env');
         $this->assertFalse($envProp->isInitialized($view));
     }
 
-    public function testInjectViewPropertiesSkipsAnUnresolvableInjectProperty(): void
+    public function testInjectReflectedSkipsAnUnresolvableInjectProperty(): void
     {
         $app = Waypoint::create();
         $app->attach([]);
-        $router = $app->getRouter();
 
         $view = new ViewWithUnresolvableInject('SomeView');
 
-        $method = new ReflectionMethod($router, 'injectViewProperties');
-
-        // Must not crash just because one #[Inject] property's type isn't
-        // a real class -- View::$env (a real, resolvable type) on the same
-        // instance still gets wired up normally.
-        $method->invoke($router, $view);
+        // One #[Inject] property whose type isn't a real class must not stop
+        // View::$env (a resolvable one) on the same instance from being wired.
+        (new PropertyInjector($app->getContainer()))->injectReflected($view);
 
         $envProp = new \ReflectionProperty($view, 'env');
         $this->assertInstanceOf(\Waypoint\Environment::class, $envProp->getValue($view));

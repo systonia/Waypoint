@@ -4,25 +4,12 @@ namespace Waypoint\Attributes;
 
 use Attribute;
 
-/**
- *
- */
+/** OpenAPI tags for a controller (every route on it) or one route method; both levels are merged. */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD)]
 class Tags
 {
-    /**
-     * Undocumented function
-     *
-     * @param string[] $tags
-     * @param string|null $name
-     */
-    public function __construct(
-        /**
-         * @var string[]
-         */
-        public array $tags = [],
-
-        public ?string $name = null
-    ) {
+    /** @param string[] $tags */
+    public function __construct(public array $tags = [], public ?string $name = null)
+    {
     }
 }

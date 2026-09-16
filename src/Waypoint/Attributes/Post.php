@@ -4,46 +4,12 @@ namespace Waypoint\Attributes;
 
 use Attribute;
 
-/**
- * Defines a route for HTTP POST method.
- */
+/** Routes a controller method for HTTP POST. */
 #[Attribute(Attribute::TARGET_METHOD)]
-class Post implements RouteAttribute
+class Post extends HttpRoute
 {
-    /**
-     * Undocumented variable
-     *
-     * @var string
-     */
-    private string $path;
-
-    /**
-     * Undocumented variable
-     *
-     * @param string $path The route path pattern (e.g. '/users/{id}').
-     */
-    public function __construct(string $path = '')
-    {
-        $this->path = $path;
-    }
-
-    /**
-     * Undocumented function
-     *
-     * @return string
-     */
     public function getHttpMethod(): string
     {
         return 'POST';
-    }
-
-    /**
-     * Undocumented function
-     *
-     * @return string
-     */
-    public function getPath(): string
-    {
-        return $this->path;
     }
 }

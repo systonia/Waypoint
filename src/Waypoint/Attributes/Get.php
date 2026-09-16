@@ -4,46 +4,12 @@ namespace Waypoint\Attributes;
 
 use Attribute;
 
-/**
- *
- */
+/** Routes a controller method for HTTP GET. */
 #[Attribute(Attribute::TARGET_METHOD)]
-class Get implements RouteAttribute
+class Get extends HttpRoute
 {
-    /**
-     * Undocumented variable
-     *
-     * @var string
-     */
-    private string $path;
-
-    /**
-     * Undocumented variable
-     *
-     * @param string $path The route path pattern (e.g. '/users/{id}').
-     */
-    public function __construct(string $path = '')
-    {
-        $this->path = $path;
-    }
-
-    /**
-     * Undocumented function
-     *
-     * @return string
-     */
     public function getHttpMethod(): string
     {
         return 'GET';
-    }
-
-    /**
-     * Undocumented function
-     *
-     * @return string
-     */
-    public function getPath(): string
-    {
-        return $this->path;
     }
 }

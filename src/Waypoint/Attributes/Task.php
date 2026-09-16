@@ -4,43 +4,20 @@ namespace Waypoint\Attributes;
 
 use Attribute;
 
-/**
- *
- */
+/** Marks a #[Manager] method as a CLI task, invoked as `php index.php [prefix:]name`. */
 #[Attribute(Attribute::TARGET_METHOD)]
 class Task
 {
-        /**
-     * Undocumented variable
-     *
-     * @var string|null
-     */
-    private ?string $name;
+    private string $name;
 
-    /**
-     * Undocumented function
-     *
-     * @param string|null $name Optional prefix name for this manager, e.g. 'hello_'
-     */
     public function __construct(?string $name = null)
     {
-        // Normalize: ensure leading slash, no trailing slash (or null)
-        if ($name === null || $name === '') {
-            $this->name = null;
-        } else {
-            $trimmed = trim($name, '/');
-            $this->name = $trimmed;
-        }
+        $this->name = trim($name ?? '', '/');
     }
 
-    /**
-     * Get the configured manager name prefix (e.g. 'hello_').
-     * Returns empty string if none.
-     *
-     * @return string
-     */
+    /** The task name, or '' when none (such a task is skipped). */
     public function getName(): string
     {
-        return $this->name ?? '';
+        return $this->name;
     }
 }

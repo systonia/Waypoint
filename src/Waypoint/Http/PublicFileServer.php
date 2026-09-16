@@ -4,14 +4,7 @@ namespace Waypoint\Http;
 
 use Waypoint\Options\FileSystemOptions;
 
-/**
- * Serves files directly from FileSystemOptions::$publicDirectory (a
- * consumer app's own images/robots.txt/favicon.ico/etc). Distinct from
- * Router::tryServeViewAsset(), which only ever serves what Waypoint itself
- * compiled (view CSS/JS, the bundled waypoint.js client) -- this serves
- * whatever the app happens to have put in its public directory, matched
- * directly against the request path.
- */
+/** Serves the app's own static files from FileSystemOptions::$publicDirectory, matched against the request path (realpath-confined to that directory). */
 final class PublicFileServer
 {
     private const MIME_MAP = [
@@ -32,38 +25,24 @@ final class PublicFileServer
         if ($this->options->publicDirectory === null) {
             return false;
         }
-
         $publicPath = $this->options->getPublicDirectory();
-        $realPublicPath = realpath($publicPath);
-        $filePath = realpath($publicPath . $path);
-
-        if (
-            !$filePath
-            || !$realPublicPath
-            || !str_starts_with($filePath, $realPublicPath)
-            || !is_file($filePath)
-        ) {
+        $root = realpath($publicPath);
+        $file = realpath($publicPath . $path);
+        if (!$file || !$root || !str_starts_with($file, $root) || !is_file($file)) {
             return false;
         }
 
-        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-        $mime = self::MIME_MAP[$ext] ?? (mime_content_type($filePath) ?: 'application/octet-stream');
-
-        $content = @file_get_contents($filePath);
-        // @codeCoverageIgnoreStart
-        // Only reachable via a race (deleted/permissions changed between
-        // is_file() above and file_get_contents()) that can't be reliably
-        // reproduced cross platform -- same guard as
-        // FileSystem::readViewAssetFile().
+        $content = @file_get_contents($file);
         if ($content === false) {
+            // @codeCoverageIgnoreStart
+            // only a delete/permission race after is_file().
             return false;
+            // @codeCoverageIgnoreEnd
         }
-        // @codeCoverageIgnoreEnd
-
-        $res->withHeader('Content-Type', $mime)
-            ->withHeader('Content-Length', (string) filesize($filePath))
+        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        $res->withHeader('Content-Type', self::MIME_MAP[$ext] ?? (mime_content_type($file) ?: 'application/octet-stream'))
+            ->withHeader('Content-Length', (string) strlen($content))
             ->write($content);
-
         return true;
     }
 }

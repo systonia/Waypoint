@@ -9,21 +9,14 @@ use Waypoint\OpenAPI\OpenAPIGenerator;
 use Waypoint\Router;
 use Waypoint\Exceptions\NotFoundException;
 
-/**
- *
- */
+/** GET /openapi/swagger.html, /openapi/spec.json and /openapi/spec.{version}.json. Optional: attach it to serve them. */
 #[Ignore]
 #[Controller('/openapi')]
 class OpenAPIController
 {
     private string $assetDir;
 
-    /**
-     * @param string|null $assetDir Overrides where swagger.html
-     *  are read from; defaults to this class's own directory. Exists mainly
-     *  so tests can point at a directory that deliberately doesn't have
-     *  these files, without touching the real bundled assets.
-     */
+    /** @param string|null $assetDir Overrides this class's directory as the asset location (tests). */
     public function __construct(?string $assetDir = null)
     {
         $this->assetDir = $assetDir ?? __DIR__;
@@ -47,13 +40,7 @@ class OpenAPIController
     }
 
     /**
-     * GET /openapi/spec.v1.json, spec.v2.json, ... -- one per distinct
-     * #[Version] actually used by an attached route. A dynamic route
-     * rather than one static #[Get] per version: the set of versions that
-     * exist is only known once controllers are attached/compiled, not at
-     * class-definition time when attributes are declared. 404s (rather
-     * than an empty spec) for a version nothing was ever compiled with.
-     *
+     * One spec per #[Version] in use; 404 for a version nothing was compiled with (the set is only known after attach()).
      * @return array<string, mixed>
      */
     #[Get('spec.{version}.json')]
@@ -80,10 +67,7 @@ class OpenAPIController
 
         $content = @file_get_contents($path);
         // @codeCoverageIgnoreStart
-        // Only reachable via a race (deleted/permissions changed between
-        // is_file()/is_readable() and file_get_contents()) that can't be
-        // reliably reproduced cross platform -- same guard as
-        // FileSystem::readViewAssetFile().
+        // only a delete/permission race after is_file().
         if ($content === false) {
             throw new NotFoundException("Asset '$safeName' not found.");
         }

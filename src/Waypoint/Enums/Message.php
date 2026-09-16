@@ -6,20 +6,13 @@ namespace Waypoint\Enums;
 enum Message: string
 {
     /**
-     * Undocumented function
-     *
+     * Replaces each {key} placeholder with the matching $vars value.
      * @param array<array-key, mixed> $vars
-     * @return string
      */
     public function format(array $vars = []): string
     {
         $result = $this->value;
         foreach ($vars as $key => $value) {
-            // Every real interpolate() call in this codebase passes plain
-            // strings (see RouteCompiler's Message::X->interpolate(...)
-            // call sites) -- the Stringable/default arms only exist so an
-            // unusual future caller can't fatal or silently drop a
-            // placeholder.
             $replacement = match (true) {
                 is_scalar($value) => (string) $value,
                 // @codeCoverageIgnoreStart
@@ -33,14 +26,14 @@ enum Message: string
     }
 
     /**
-     * Optional: allow named params (PHP 8.1+)
-     *
+
+     * format() with named arguments: Message::X->interpolate(method: $m, path: $p).
+
      * @param mixed ...$vars
-     * @return string
+
      */
     public function interpolate(...$vars): string
     {
-        // Supports: Message::ControllerNotFound->interpolate(class: $foo, route: $bar)
         return $this->format($vars);
     }
 

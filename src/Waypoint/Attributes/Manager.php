@@ -4,42 +4,20 @@ namespace Waypoint\Attributes;
 
 use Attribute;
 
-/**
- *
- */
+/** Marks a class as a CLI task manager, with an optional name prefix ("prefix:task") for every #[Task] on it. */
 #[Attribute(Attribute::TARGET_CLASS)]
 class Manager
 {
-    /**
-     * Undocumented variable
-     *
-     * @var string|null
-     */
-    private ?string $name;
+    private string $name;
 
-    /**
-     * Undocumented function
-     *
-     * @param string|null $name Optional prefix name for this manager, e.g. 'hello_'
-     */
     public function __construct(?string $name = null)
     {
-        // Normalize: plain token, no surrounding slashes (or null)
-        if ($name === null || $name === '') {
-            $this->name = null;
-        } else {
-            $this->name = trim($name, '/');
-        }
+        $this->name = trim($name ?? '', '/');
     }
 
-    /**
-     * Get the configured manager name prefix (e.g. 'hello_').
-     * Returns empty string if none.
-     *
-     * @return string
-     */
+    /** The prefix, or '' when none. */
     public function getName(): string
     {
-        return $this->name ?? '';
+        return $this->name;
     }
 }

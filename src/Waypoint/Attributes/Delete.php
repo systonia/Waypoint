@@ -4,46 +4,12 @@ namespace Waypoint\Attributes;
 
 use Attribute;
 
-/**
- *
- */
+/** Routes a controller method for HTTP DELETE. */
 #[Attribute(Attribute::TARGET_METHOD)]
-class Delete implements RouteAttribute
+class Delete extends HttpRoute
 {
-    /**
-     * Undocumented variable
-     *
-     * @var string
-     */
-    private string $path;
-
-    /**
-     * Undocumented function
-     *
-     * @param string $path The route path pattern (e.g. '/users/{id}').
-     */
-    public function __construct(string $path = '')
-    {
-        $this->path = $path;
-    }
-
-    /**
-     * Undocumented function
-     *
-     * @return string
-     */
     public function getHttpMethod(): string
     {
         return 'DELETE';
-    }
-
-    /**
-     * Undocumented function
-     *
-     * @return string
-     */
-    public function getPath(): string
-    {
-        return $this->path;
     }
 }

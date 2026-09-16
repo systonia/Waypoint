@@ -4,24 +4,11 @@ namespace Waypoint\Attributes;
 
 use Attribute;
 
-/**
- *
- */
+/** Binds a query-string value to a method parameter; $name overrides the key when it differs from the parameter name. */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 class Query
 {
-    /**
-     * Undocumented function
-     *
-     * @param string|null $name
-     */
-    public function __construct(
-        /**
-         * Undocumented variable
-         *
-         * @var string|null
-         */
-        public ?string $name = null
-    ) {
+    public function __construct(public ?string $name = null)
+    {
     }
 }
