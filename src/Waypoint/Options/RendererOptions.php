@@ -2,11 +2,15 @@
 
 namespace Waypoint\Options;
 
+use Waypoint\FromArray;
+
 /**
  * Undocumented class
  */
 class RendererOptions
 {
+    use FromArray;
+
     /**
      * Undocumented variable
      *
@@ -34,11 +38,7 @@ class RendererOptions
      */
     public function __construct(array $options = [])
     {
-        foreach ($options as $key => $value) {
-            if (property_exists($this, $key)) {
-                $this->$key = $value;
-            }
-        }
+        $this->hydrateFromArray($options);
 
         $this->directory = (new FileSystemOptions())->buildPath($this->directory ?? '');
     }

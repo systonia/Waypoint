@@ -2,11 +2,15 @@
 
 namespace Waypoint\Options;
 
+use Waypoint\FromArray;
+
 /**
  * Undocumented class
  */
 class OpenAPIOptions
 {
+    use FromArray;
+
     /**
      * Undocumented variable
      *
@@ -61,18 +65,6 @@ class OpenAPIOptions
      * @var array{description?: string, url?: string}|null
      */
     public ?array $externalDocs = null;
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    public function __construct(array $options = [])
-    {
-        foreach ($options as $key => $value) {
-            if (property_exists($this, $key)) {
-                $this->$key = $value;
-            }
-        }
-    }
 
     /**
      * @return array<string, mixed>
