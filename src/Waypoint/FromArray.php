@@ -41,8 +41,25 @@ trait FromArray
             if (in_array($key, $excludes, true)) {
                 continue;
             }
-            if (property_exists($this, $key)) {
+            if (!property_exists($this, $key)) {
+                continue;
+            }
+            try {
                 $this->$key = $value;
+            } catch (\TypeError) {
+                // $value doesn't fit this property's declared type --
+                // e.g. a client sending JSON `null` for a non-nullable
+                // `string` property (a missing/omitted field decodes to
+                // PHP null the same way), or an array where a scalar was
+                // expected. Left at its own default instead of crashing
+                // the whole request: request bodies are untrusted input,
+                // and a raw TypeError escaping here would otherwise
+                // become an uncaught 500 instead of the #[NotBlank]/
+                // Validator-driven 422 a genuinely missing/malformed
+                // field should produce (see Router::buildMethodArguments()'s
+                // 'Body' case, which validates the DTO right after
+                // constructing it).
+                continue;
             }
         }
     }

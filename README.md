@@ -78,7 +78,6 @@ benchmarked well over an order of magnitude faster than uncached reflection-base
 - [Environment Variables](#environment-variables)
 - [Route/DI Compilation Caching & Production Performance](#routedi-compilation-caching--production-performance)
 - [Options Reference](#options-reference)
-- [Requirements](#requirements)
 - [Contributing](#contributing)
 - [License](#license)
 - [Contact](#contact)
@@ -471,20 +470,30 @@ cookie (`CsrfOptions::$cookieName`, default `csrf_token`) on every rendered `Vie
 (`CsrfOptions::$fieldName`, default `_csrf` — a classic no-JS `<form>`). A mismatch, missing token, or
 expired token throws `ForbiddenException` (403).
 
-Inside a view template, `$this->csrf` renders either half of that pattern:
+Inside a view template, `$this->csrf` renders the classic no-JS `<form>` half of that pattern:
 
 ```php
 <form method="post">
-    <?= $this->csrf->field() ?>  <!-- hidden input, classic <form> path -->
+    <?= $this->csrf->field() ?>  <!-- hidden input -->
 </form>
 ```
 
+The AJAX/`fetch()` half needs no app code at all if you're loading
+[`waypoint.js`](#views) (see `<script src="/waypoint.js">` in [Views](#views)): it patches `fetch()`
+itself so every same-origin `POST`/`PUT`/`PATCH`/`DELETE` call automatically carries the header, reading
+the token straight from the cookie. A plain `fetch()` call needs to know nothing about CSRF:
+
 ```js
-fetch('/orders', {
-    method: 'POST',
-    headers: { 'X-CSRF-Token': /* read from document.cookie[csrfCookieName] */ '...' },
-    body: JSON.stringify(data),
-});
+fetch('/orders', { method: 'POST', body: JSON.stringify(data) }); // X-CSRF-Token attached automatically
+```
+
+Not using `waypoint.js`? Read the cookie and attach the header yourself the same way it does —
+`Waypoint.csrf.token()` is also there directly, for a non-`fetch()` use (a WebSocket handshake, a
+manually-built `XMLHttpRequest`). If `CsrfOptions` itself was reconfigured away from its default cookie/
+header names, point `waypoint.js` at the new ones via data attributes on its own `<script>` tag:
+
+```html
+<script src="/waypoint.js" data-csrf-cookie="my_token" data-csrf-header="X-My-Token"></script>
 ```
 
 Opt a token-auth-only JSON API (or any route with no double-submit cookie to check) out entirely with
