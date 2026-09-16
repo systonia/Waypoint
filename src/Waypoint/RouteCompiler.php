@@ -19,12 +19,15 @@ use Waypoint\Attributes\{
     Body,
     Param,
     Query,
+    Authenticated,
     Controller,
     FileFormatter,
     JSONFormatter,
     Manager,
     Middleware,
     NoGzip,
+    Permissions,
+    Role,
     RouteAttribute,
     SimpleXmlFormatter,
     SkipCsrf,
@@ -158,6 +161,9 @@ final class RouteCompiler
         // above, for #[SkipCsrf] -- Router::dispatch() never has to
         // reflect to know whether CSRF verification applies to this route.
         $classSkipsCsrf = $rc->getAttributes(SkipCsrf::class) !== [];
+        // Same reasoning again for #[Authenticated] -- combined with each
+        // method's own below into a single 'authenticated' bool per route.
+        $classIsAuthenticated = $rc->getAttributes(Authenticated::class) !== [];
 
         foreach ($rc->getMethods() as $method) {
             [$routeAttr, $formatterAttr] = $this->extractRouteAndFormatter($method);
@@ -193,6 +199,14 @@ final class RouteCompiler
             $middlewares = [...$classMiddlewares, ...$methodMiddlewares];
             $methodHasNoGzip = $method->getAttributes(NoGzip::class) !== [];
             $methodSkipsCsrf = $method->getAttributes(SkipCsrf::class) !== [];
+            $methodIsAuthenticated = $method->getAttributes(Authenticated::class) !== [];
+
+            $role = $this->resolveOverridable($rc, $method, Role::class, 'role');
+            $permissions = $this->resolvePermissions($rc, $method);
+            // #[Role]/#[Permissions] each imply #[Authenticated] too --
+            // checking either one without being authenticated first makes
+            // no sense (see both attributes' own doc).
+            $authenticated = $classIsAuthenticated || $methodIsAuthenticated || $role !== null || $permissions !== null;
 
             // PHP's own native #[\Deprecated] (8.4+), not a Waypoint
             // attribute -- there's nothing to "override" the way
@@ -227,6 +241,9 @@ final class RouteCompiler
                 'unversionedPath' => $unversionedPath,
                 'deprecated' => $isDeprecated,
                 'sunsetHeader' => $sunsetHeader,
+                'authenticated' => $authenticated,
+                'role' => $role,
+                'permissions' => $permissions,
                 'throws' => [],
             ];
 
@@ -260,6 +277,27 @@ final class RouteCompiler
         }
         $value = $classAttr->newInstance()->{$property};
         return is_string($value) ? $value : null;
+    }
+
+    /**
+     * Same "method overrides class, else null" precedence
+     * resolveOverridable() uses, for #[Permissions(array $permissions)]
+     * specifically -- its payload is a list, not resolveOverridable()'s
+     * single string property, so it needs its own instance() lookup
+     * rather than a generic {$property} read.
+     *
+     * @param ReflectionClass<object> $rc
+     * @return array<int, string>|null
+     */
+    private function resolvePermissions(ReflectionClass $rc, ReflectionMethod $method): ?array
+    {
+        $methodAttr = $method->getAttributes(Permissions::class)[0] ?? null;
+        $attr = $methodAttr ?? ($rc->getAttributes(Permissions::class)[0] ?? null);
+        if (!$attr) {
+            return null;
+        }
+        $permissions = $attr->newInstance()->permissions;
+        return array_values(array_filter($permissions, 'is_string'));
     }
 
     /**

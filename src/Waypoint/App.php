@@ -14,7 +14,7 @@ use Waypoint\{Router};
 use Waypoint\Options\{FileSystemOptions, JWTOptions, CorsOptions, CompressionOptions};
 use Waypoint\Attributes\Inject;
 use Waypoint\Http\{Request, Response};
-use Waypoint\Exceptions\HttpException;
+use Waypoint\Exceptions\{HttpException, UnauthorizedException};
 
 class App
 {
@@ -340,6 +340,38 @@ class App
             }
         );
 
+        // Exact-class match, so this overrides the generic HttpException
+        // handler above for UnauthorizedException specifically (see
+        // resolveExceptionHandler()) -- #[Authenticated]/#[Role]/
+        // #[Permissions] (Router::dispatch()) throw it when $req->jwt is
+        // null, and so can any app code (e.g. a login endpoint rejecting
+        // bad credentials).
+        $this->useExceptionHandler(
+            UnauthorizedException::class,
+            function (Throwable $e, Request $req, Response $res): void {
+                // @codeCoverageIgnoreStart
+                if (!$e instanceof UnauthorizedException) {
+                    return;
+                }
+                // @codeCoverageIgnoreEnd
+
+                $loginRedirectUrl = $this->container->get(JWTOptions::class)->loginRedirectUrl;
+                if ($loginRedirectUrl !== null && self::isBrowserNavigation($req)) {
+                    // A real top-level navigation (typed URL, bookmark,
+                    // hard reload) -- no client-side JS has run yet to
+                    // react to anything but a real 3xx, so only an actual
+                    // redirect works here at all. An ordinary fetch()/XHR
+                    // call (same-origin or cors, never 'navigate') always
+                    // falls through to the plain 401 below instead,
+                    // regardless of this option.
+                    $res->status(302)->withHeader('Location', $loginRedirectUrl);
+                    return;
+                }
+
+                $this->writeProblemDetails($res, $e->getStatusCode(), $e->toProblemDetails());
+            }
+        );
+
         $this->useExceptionHandler(
             Throwable::class,
             function (Throwable $e, Request $req, Response $res): void {
@@ -379,6 +411,29 @@ class App
         $res->status($status)
             ->withHeader('Content-Type', 'application/problem+json')
             ->write($body !== false ? $body : '{"type":"about:blank","title":"Internal Server Error","status":500}');
+    }
+
+    /**
+     * True only for a real top-level browser navigation (a typed URL,
+     * bookmark, hard reload, or a plain <a href> the client never
+     * intercepted) -- Sec-Fetch-Mode is a standard Fetch Metadata request
+     * header every current browser sends automatically on every request,
+     * with no app-side configuration needed: 'navigate' for exactly the
+     * case above, 'same-origin'/'cors'/'no-cors' for any fetch()/XHR call
+     * instead (what a client-side router, or a plain form's own JS
+     * handler, actually sends) -- never 'navigate'. Missing entirely
+     * (an older browser, or a non-browser client like curl) is treated as
+     * "not a navigation", the safe default: a 401 Problem Details body
+     * over a surprise redirect a non-browser caller can't follow anyway.
+     */
+    private static function isBrowserNavigation(Request $req): bool
+    {
+        foreach ($req->headers as $name => $value) {
+            if (strcasecmp($name, 'Sec-Fetch-Mode') === 0) {
+                return $value === 'navigate';
+            }
+        }
+        return false;
     }
 
     /**

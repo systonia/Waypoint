@@ -4,12 +4,15 @@ namespace Waypoint\Tests\Unit\Attributes;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use Waypoint\Attributes\{Summary, Tags, Throws, Ignore, Schema, Property, Inject, Middleware, NoGzip, Sensitive, PII};
+use Waypoint\Attributes\{Summary, Tags, Throws, Ignore, Schema, Property, Inject, Middleware, NoGzip, Sensitive, PII, Authenticated, Role, Permissions};
 use Waypoint\Exceptions\NotFoundException;
 
 #[Ignore]
 #[Schema('Widget')]
 #[NoGzip]
+#[Authenticated]
+#[Role('admin')]
+#[Permissions(['users.manage', 'users.delete'])]
 class MetadataAttributes_ClassFixture
 {
     #[Property]
@@ -110,6 +113,30 @@ final class MetadataAttributesTest extends TestCase
             ->getProperty('email')->getAttributes(PII::class)[0]->newInstance();
 
         $this->assertSame('**redacted**', $attr->placeholder);
+    }
+
+    public function testAuthenticatedIsInstantiable(): void
+    {
+        $attr = (new ReflectionClass(MetadataAttributes_ClassFixture::class))
+            ->getAttributes(Authenticated::class)[0]->newInstance();
+
+        $this->assertInstanceOf(Authenticated::class, $attr);
+    }
+
+    public function testRoleStoresItsValue(): void
+    {
+        $attr = (new ReflectionClass(MetadataAttributes_ClassFixture::class))
+            ->getAttributes(Role::class)[0]->newInstance();
+
+        $this->assertSame('admin', $attr->role);
+    }
+
+    public function testPermissionsStoresItsList(): void
+    {
+        $attr = (new ReflectionClass(MetadataAttributes_ClassFixture::class))
+            ->getAttributes(Permissions::class)[0]->newInstance();
+
+        $this->assertSame(['users.manage', 'users.delete'], $attr->permissions);
     }
 
     public function testSummaryStoresText(): void

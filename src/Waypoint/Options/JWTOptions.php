@@ -57,4 +57,21 @@ class JWTOptions
      * @var string|null
      */
     public ?string $cookieName = null;
+
+    /**
+     * Where App's default #[Authenticated] failure handler redirects a
+     * real browser navigation (Sec-Fetch-Mode: navigate -- a hard page
+     * load/typed URL/bookmark, where only a real 3xx response works at
+     * all, since no client-side JS has run yet to react to anything
+     * else) that arrives with no JWT. Left null (the default): every
+     * UnauthorizedException always gets a plain 401 Problem Details
+     * response instead, regardless of Sec-Fetch-Mode -- the right
+     * default for a JSON API with no login *page* to send a browser to
+     * in the first place. Has no effect on a request that isn't a real
+     * browser navigation (an ordinary fetch()/XHR call, same-origin or
+     * cors, still gets 401 JSON either way) -- see App's own doc.
+     *
+     * @var string|null
+     */
+    public ?string $loginRedirectUrl = null;
 }

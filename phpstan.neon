@@ -26,7 +26,7 @@ parameters:
         # nullable) to match Router's own `?? <default>` handling of each
         # -- a routes.php cached by an older Waypoint version can
         # genuinely lack a key added by a later feature.
-        RoutePlan: 'array{httpMethod: string, path: string, regex: string|null, controller: string|object, method: string, argPlan: array<int, array<string, mixed>>, propInject: array<int, PropInjectEntry>, formatter?: FormatterSpec, middlewares?: array<int, MiddlewareEntry>, gzip?: bool, version?: string|null, unversionedPath?: string, deprecated?: bool, sunsetHeader?: string|null, skipCsrf?: bool, throws: array<int, mixed>}'
+        RoutePlan: 'array{httpMethod: string, path: string, regex: string|null, controller: string|object, method: string, argPlan: array<int, array<string, mixed>>, propInject: array<int, PropInjectEntry>, formatter?: FormatterSpec, middlewares?: array<int, MiddlewareEntry>, gzip?: bool, version?: string|null, unversionedPath?: string, deprecated?: bool, sunsetHeader?: string|null, skipCsrf?: bool, authenticated?: bool, role?: string|null, permissions?: array<int, string>|null, throws: array<int, mixed>}'
         # One compiled #[Task], as built by RouteCompiler::compileManager().
         TaskPlan: 'array{name: string, fullName: string, manager: string|object, method: string, argPlan: array<int, array<string, mixed>>, propInject: array<int, PropInjectEntry>, formatter: FormatterSpec, throws: array<int, mixed>}'
         # One entry of Router::getRoutes()' plain-object listing, consumed

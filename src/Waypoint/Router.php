@@ -13,9 +13,9 @@ use Waypoint\Enums\{Message, RouteType};
 use Waypoint\Http\{PublicFileServer, Request, Response, ResultRenderer, View};
 use Waypoint\UI\WaypointController;
 use Waypoint\Validator;
-use Waypoint\Exceptions\{ForbiddenException, ValidationException};
+use Waypoint\Exceptions\{ForbiddenException, UnauthorizedException, ValidationException};
 use Waypoint\FileSystem;
-use Waypoint\Options\{FileSystemOptions, RendererOptions};
+use Waypoint\Options\{FileSystemOptions, PermissionOptions, RendererOptions};
 use Waypoint\ViewAssets;
 use Waypoint\Attributes\Inject;
 
@@ -453,6 +453,35 @@ class Router
         $sunsetHeader = $route['sunsetHeader'] ?? null;
         if (is_string($sunsetHeader) && $sunsetHeader !== '') {
             $res->withHeader('Sunset', $sunsetHeader);
+        }
+
+        // #[Authenticated]/#[Role]/#[Permissions] -- computed once at
+        // compile time into a single 'authenticated' bool (see
+        // RouteCompiler), so a route with none of the three skips this
+        // entirely. $req->jwt is null unless useJwt() already decoded a
+        // valid token for this request (see App::useJwt()) -- checked
+        // first, since #[Role]/#[Permissions] both imply #[Authenticated]
+        // too (see either attribute's own doc) and neither makes sense to
+        // evaluate against no identity at all.
+        if ($route['authenticated'] ?? false) {
+            if ($req->jwt === null) {
+                throw new UnauthorizedException();
+            }
+
+            $role = $route['role'] ?? null;
+            if (is_string($role) && (!is_array($req->jwt) || ($req->jwt['role'] ?? null) !== $role)) {
+                throw new ForbiddenException();
+            }
+
+            $permissions = $route['permissions'] ?? null;
+            if (is_array($permissions) && $permissions !== []) {
+                $provider = $this->container?->get(PermissionOptions::class)->provider;
+                foreach ($permissions as $permission) {
+                    if (!is_string($permission) || $provider === null || !$provider->hasPermission($req->jwt, $permission)) {
+                        throw new ForbiddenException();
+                    }
+                }
+            }
         }
 
         // State-changing methods only (GET/HEAD never carry a body/side
