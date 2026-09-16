@@ -7,10 +7,13 @@
 - *(http)* Add request/correlation ID tracking
 - *(security)* Add stateless CSRF protection
 - *(middleware)* Add before()/after() hooks to base Middleware class
+- *(security)* Add security headers middleware
+- *(errors)* Add HttpException hierarchy with RFC 9457 problem details
 
 ### 🐛 Bug Fixes
 
 - *(ci)* Enable xdebug extension for header assertions in tests
+- *(http)* Make Response::send() idempotent and call it exactly once
 
 ### 📚 Documentation
 
