@@ -1,10 +1,10 @@
 [![Latest Version](https://img.shields.io/packagist/v/systonia/waypoint.svg)](https://packagist.org/packages/systonia/waypoint)
-![Build](https://github.com/Systonia/Waypoint/actions/workflows/build.yaml/badge.svg)
-[![PSR-3 Compatible](https://img.shields.io/badge/PSR--3-compatible-brightgreen.svg)](https://www.php-fig.org/psr/psr-3/)
-[![PSR-4 Compatible](https://github.com/Systonia/Waypoint/actions/workflows/psr-4.yaml/badge.svg)](https://www.php-fig.org/psr/psr-4/)
-![PHPStan](https://github.com/systonia/Waypoint/actions/workflows/phpstan.yaml/badge.svg)
-![PHPStan Level](https://img.shields.io/badge/PHPStan-level%2010-brightgreen)
 ![PHP Version](https://img.shields.io/badge/PHP-8.5-blue)
+![Build](https://github.com/Systonia/Waypoint/actions/workflows/build.yaml/badge.svg)
+![Dependency Audit](https://github.com/systonia/Waypoint/actions/workflows/audit.yaml/badge.svg)
+![PHPStan Level 10](https://github.com/systonia/Waypoint/actions/workflows/phpstan.yaml/badge.svg)
+[![PSR-3](https://img.shields.io/badge/PSR--3-compatible-brightgreen.svg)](https://www.php-fig.org/psr/psr-3/)
+[![PSR-4](https://github.com/Systonia/Waypoint/actions/workflows/psr-4.yaml/badge.svg)](https://www.php-fig.org/psr/psr-4/)
 ![License](https://img.shields.io/github/license/Systonia/Waypoint)
 
 # Waypoint
