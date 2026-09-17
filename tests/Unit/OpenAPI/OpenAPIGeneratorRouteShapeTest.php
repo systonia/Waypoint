@@ -83,6 +83,13 @@ final class OpenAPIGeneratorRouteShapeTest extends TestCase
         $this->assertSame([], $spec['paths']);
     }
 
+    public function testGenerateModelSchemaSkipsTheComputedValidationProperties(): void
+    {
+        $schema = (new SchemaBuilder(new Logger()))->generateModelSchema(\Waypoint\Tests\Fixtures\Support\FromArrayDTO::class);
+
+        $this->assertSame(['name', 'age', 'role', 'excluded'], array_keys($schema['properties']));
+    }
+
     public function testGenerateModelSchemaThrowsForANonexistentClass(): void
     {
         // Every internal call site already checks class_exists() before

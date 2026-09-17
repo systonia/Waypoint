@@ -4,7 +4,7 @@ namespace Waypoint\Tests\Unit\Attributes;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use Waypoint\Attributes\{NotBlank, Email, Length, Regex};
+use Waypoint\Attributes\{NotBlank, Email, Length, Regex, OneOf, SameAs};
 
 class ValidationAttributes_Fixture
 {
@@ -22,6 +22,12 @@ class ValidationAttributes_Fixture
 
     #[Regex(pattern: '/^\d+$/')]
     public $digitsOnly;
+
+    #[OneOf(['a', 'b'])]
+    public $choice;
+
+    #[SameAs('choice')]
+    public $confirm;
 }
 
 /**
@@ -67,5 +73,11 @@ final class ValidationAttributesTest extends TestCase
     {
         $attr = $this->attributeOn('digitsOnly', Regex::class);
         $this->assertSame('/^\d+$/', $attr->pattern);
+    }
+
+    public function testOneOfStoresValuesAndSameAsThePropertyName(): void
+    {
+        $this->assertSame(['a', 'b'], $this->attributeOn('choice', OneOf::class)->values);
+        $this->assertSame('choice', $this->attributeOn('confirm', SameAs::class)->property);
     }
 }

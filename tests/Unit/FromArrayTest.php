@@ -23,6 +23,37 @@ final class FromArrayTest extends TestCase
         $this->assertSame(0, $dto->age);
     }
 
+    public function testErrorsAndIsValidApplyTheRuleAttributesOnEveryRead(): void
+    {
+        $dto = new FromArrayDTO(['role' => 'root']);
+
+        $this->assertFalse($dto->isValid);
+        $this->assertSame(['name' => 'This value should not be blank.', 'role' => 'This value should be one of: guest, user.'], $dto->errors);
+
+        $dto->name = 'Ada';
+        $dto->role = 'user';
+        $this->assertTrue($dto->isValid);
+        $this->assertSame([], $dto->errors);
+    }
+
+    public function testFailAddsAFailureTheAttributesCannotKnowAboutAndTheLastOnePerFieldWins(): void
+    {
+        $dto = new FromArrayDTO(['name' => 'Ada']);
+        $this->assertTrue($dto->isValid);
+
+        $this->assertSame($dto, $dto->fail('name', 'Taken.')->fail('name', 'Really taken.'));
+        $this->assertFalse($dto->isValid);
+        $this->assertSame(['name' => 'Really taken.'], $dto->errors);
+    }
+
+    public function testInputCannotTouchTheValidationProperties(): void
+    {
+        $dto = new FromArrayDTO(['name' => 'Ada', 'errors' => ['x' => 'y'], 'isValid' => false, 'failures' => ['x' => 'y']]);
+
+        $this->assertTrue($dto->isValid);
+        $this->assertSame([], $dto->errors);
+    }
+
     public function testUnknownKeysAreSilentlyIgnored(): void
     {
         $dto = new FromArrayDTO(['name' => 'Ada', 'doesNotExist' => 'x']);

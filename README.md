@@ -37,7 +37,7 @@ through your app or plugin from PHPUnit.
 
 - Attribute-based routing and controllers (`#[Get]`/`#[Post]`/`#[Put]`/`#[Patch]`/`#[Delete]`)
 - Simple, reachability-based dependency injection via `#[Inject]` (no separate "service" attribute)
-- Request validation attributes (`#[NotBlank]`, `#[Email]`, `#[Length]`, `#[Regex]`)
+- Request validation attributes (`#[NotBlank]`, `#[Email]`, `#[Length]`, `#[Regex]`, `#[OneOf]`, `#[SameAs]`), read as `$dto->isValid` / `$dto->errors`
 - A `FromArray` trait for `#[Body]`-bound DTOs, so their array-hydrating constructor never has to be
   hand-written
 - A unified `HttpException` hierarchy with RFC 9457 ("Problem Details for HTTP APIs") JSON error
@@ -235,7 +235,7 @@ This is reflected in the generated OpenAPI schema too: the request body document
 DTOs used with `#[Body]` can carry validation attributes on their public properties:
 
 ```php
-use Waypoint\Attributes\{NotBlank, Email, Length, Regex};
+use Waypoint\Attributes\{NotBlank, Email, Length, Regex, OneOf, SameAs};
 
 class CreateProductDTO
 {
@@ -248,8 +248,19 @@ class CreateProductDTO
     #[Length(min: 2, max: 12)]
     #[Regex(pattern: '/^[A-Z0-9\-]+$/')]
     public string $sku = '';
+
+    #[OneOf(['draft', 'live'])]
+    public string $status = 'draft';
+
+    public string $password = '';
+
+    #[SameAs('password')]
+    public string $passwordConfirm = '';
 }
 ```
+
+`#[OneOf]` compares strictly (`'1'` is not `1`) and, like `#[Email]`, skips `null`; `#[SameAs]` compares
+against the named property of the same DTO.
 
 A failing DTO throws `ValidationException`, which the default exception handler turns into a `422`
 RFC 9457 Problem Details response, with per-field errors under `errors`:
@@ -306,6 +317,27 @@ class ProductDTO
 A DTO that needs extra logic around hydration (not just the plain loop) can declare its own
 `__construct()` — which overrides the trait's, same as any other method — and call
 `$this->hydrateFromArray($data)` from it directly.
+
+#### Validating by hand (`$dto->isValid`, `$dto->errors`, `fail()`)
+
+Outside `#[Body]` — an HTML form handler that re-renders the page with the errors instead of a 422 — the
+DTO validates itself. `isValid` and `errors` are computed properties: every read applies the attribute
+rules, so there is no validator to construct and no moment where the result is stale. `fail()` adds a
+failure only your code can know about (a taken email, a wrong current password) to the same list:
+
+```php
+$data = new RegisterDTO($req->body());
+if ($data->isValid && $this->users->findByEmail($data->email)) {
+    $data->fail('email', 'That email is already registered.');
+}
+if (!$data->isValid) {
+    return $this->registerView($req, error: implode(' ', $data->errors));
+}
+```
+
+`errors` is `field => message`, attribute failures first and `fail()` entries after them; a later `fail()`
+for the same field replaces the earlier one. Input keys named `errors`, `isValid` or `failures` are never
+hydrated, and the two computed properties never appear in OpenAPI schemas or redacted logs.
 
 ---
 
@@ -1019,6 +1051,7 @@ Available plugins:
 |---|---|
 | `systonia/waypoint-i18n` | `$this->t('Source text')` with JSON catalogs kept by CLI tasks, per-request locale, translated validation errors. |
 | `systonia/waypoint-flash` | Flash messages across a redirect, shown once, with and without JavaScript; the reference for the client plugin API. |
+| `systonia/waypoint-charts` | Bar and line charts as server-rendered SVG with a data table; `$this->chart($chart)` in views or `return $chart;` as `image/svg+xml`. |
 
 ---
 

@@ -4,10 +4,15 @@ namespace Waypoint\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Waypoint\Waypoint;
-use Waypoint\Tests\Fixtures\Support\RedactableDTO;
+use Waypoint\Tests\Fixtures\Support\{FromArrayDTO, RedactableDTO};
 
 final class WaypointTest extends TestCase
 {
+    public function testRedactSkipsTheComputedValidationProperties(): void
+    {
+        $this->assertSame(['name' => 'Ada', 'age' => 0, 'role' => null, 'excluded' => 'default'], Waypoint::redact(new FromArrayDTO(['name' => 'Ada'])));
+    }
+
     public function testRedactLeavesOrdinaryPropertiesAsIs(): void
     {
         $dto = new RedactableDTO();

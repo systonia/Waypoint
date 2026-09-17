@@ -100,6 +100,9 @@ final class SchemaBuilder
         $properties = [];
         $required = [];
         foreach ((new ReflectionClass($fqcn))->getProperties(ReflectionProperty::IS_PUBLIC) as $prop) {
+            if ($prop->isVirtual()) {
+                continue; // FromArray's $errors/$isValid are computed, never part of the payload
+            }
             $name = $prop->getName();
             $type = $prop->getType();
             if ($type instanceof ReflectionNamedType) {

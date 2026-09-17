@@ -4,20 +4,20 @@ namespace Waypoint;
 
 use ReflectionClass;
 use ReflectionProperty;
-use Waypoint\Attributes\{NotBlank, Email, Length, Regex};
+use Waypoint\Attributes\{NotBlank, Email, Length, Regex, OneOf, SameAs};
 use Waypoint\Validation\Messages;
 
 /**
  * Validates a DTO's public properties against #[NotBlank]/#[Email]/#[Length]/
- * #[Regex]. The attribute set per class is reflected once and cached, so
+ * #[Regex], #[OneOf], #[SameAs]. The attribute set per class is reflected once and cached, so
  * validating the same DTO class on every request costs no reflection.
  */
 class Validator
 {
-    /** @var array<class-string, list<array{prop: ReflectionProperty, rules: list<NotBlank|Email|Length|Regex>}>> */
+    /** @var array<class-string, list<array{prop: ReflectionProperty, rules: list<NotBlank|Email|Length|Regex|OneOf|SameAs>}>> */
     private static array $rulesByClass = [];
 
-    /** @return array<string, string> field => message (the last failing rule wins, in NotBlank, Email, Length, Regex order). */
+    /** @return array<string, string> field => message (the last failing rule wins, in NotBlank, Email, Length, Regex, OneOf, SameAs order). */
     #[\NoDiscard('Ignoring the returned errors means validation never actually gets enforced.')]
     public function validate(object $dto): array
     {
@@ -32,6 +32,8 @@ class Validator
                     $rule instanceof Email => $value !== null && !filter_var($value, FILTER_VALIDATE_EMAIL) ? $this->message('This value is not a valid email address.') : null,
                     $rule instanceof Length => $this->lengthError($value, $rule),
                     $rule instanceof Regex => is_string($value) && !preg_match($rule->pattern, $value) ? $this->message('This value does not match the required format.') : null,
+                    $rule instanceof OneOf => $value !== null && !in_array($value, $rule->values, true) ? $this->message('This value should be one of: {choices}.', ['choices' => implode(', ', array_map('strval', $rule->values))]) : null,
+                    $rule instanceof SameAs => $value !== self::propertyValue($dto, $rule->property) ? $this->message('This value should match {field}.', ['field' => $rule->property]) : null,
                 };
                 if ($message !== null) {
                     $errors[$name] = $message;
@@ -41,7 +43,7 @@ class Validator
         return $errors;
     }
 
-    /** @return list<array{prop: ReflectionProperty, rules: list<NotBlank|Email|Length|Regex>}> */
+    /** @return list<array{prop: ReflectionProperty, rules: list<NotBlank|Email|Length|Regex|OneOf|SameAs>}> */
     private static function rulesFor(object $dto): array
     {
         $class = get_class($dto);
@@ -52,7 +54,7 @@ class Validator
         $entries = [];
         foreach ((new ReflectionClass($dto))->getProperties(ReflectionProperty::IS_PUBLIC) as $prop) {
             $rules = [];
-            foreach ([NotBlank::class, Email::class, Length::class, Regex::class] as $attribute) {
+            foreach ([NotBlank::class, Email::class, Length::class, Regex::class, OneOf::class, SameAs::class] as $attribute) {
                 foreach ($prop->getAttributes($attribute) as $attr) {
                     $rules[] = $attr->newInstance();
                 }
@@ -62,6 +64,12 @@ class Validator
             }
         }
         return self::$rulesByClass[$class] = $entries;
+    }
+
+    /** The named public property's value, null when it is uninitialized or absent. */
+    private static function propertyValue(object $dto, string $property): mixed
+    {
+        return $dto->{$property} ?? null;
     }
 
     private static function isBlank(mixed $value): bool

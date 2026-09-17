@@ -70,7 +70,7 @@ class Waypoint
         $result = [];
 
         foreach ((new ReflectionObject($target))->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
-            if ($property->isStatic() || !$property->isInitialized($target)) {
+            if ($property->isStatic() || $property->isVirtual() || !$property->isInitialized($target)) {
                 continue;
             }
 

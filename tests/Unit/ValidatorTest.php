@@ -4,7 +4,7 @@ namespace Waypoint\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Waypoint\Validator;
-use Waypoint\Attributes\{NotBlank, Email, Length, Regex};
+use Waypoint\Attributes\{NotBlank, Email, Length, Regex, OneOf, SameAs};
 
 class ValidatorTest_ContactDTO
 {
@@ -29,6 +29,20 @@ class ValidatorTest_MultiRuleDTO
     #[NotBlank]
     #[Length(min: 3, max: 5)]
     public $code;
+}
+
+class ValidatorTest_ChoiceDTO
+{
+    #[OneOf(['guest', 'user', 'admin'])]
+    public $role;
+
+    #[OneOf([1, 2])]
+    public $level;
+
+    public $password;
+
+    #[SameAs('password')]
+    public $passwordConfirm;
 }
 
 class ValidatorTest_UninitializedTypedPropertyDTO
@@ -149,6 +163,35 @@ final class ValidatorTest extends TestCase
         $dto->email = 'me@a.com';
 
         $this->assertEmpty($this->validator->validate($dto));
+    }
+
+    public function testOneOfRejectsAValueOutsideTheListAndSkipsNull(): void
+    {
+        $dto = new ValidatorTest_ChoiceDTO();
+        $dto->role = 'root';
+        $dto->level = '1'; // strict: the string '1' is not the int 1
+
+        $errors = $this->validator->validate($dto);
+
+        $this->assertSame('This value should be one of: guest, user, admin.', $errors['role']);
+        $this->assertSame('This value should be one of: 1, 2.', $errors['level']);
+
+        $dto->role = null;
+        $dto->level = 2;
+        $this->assertArrayNotHasKey('role', $this->validator->validate($dto));
+        $this->assertArrayNotHasKey('level', $this->validator->validate($dto));
+    }
+
+    public function testSameAsComparesAgainstTheNamedProperty(): void
+    {
+        $dto = new ValidatorTest_ChoiceDTO();
+        $dto->password = 'secret';
+        $dto->passwordConfirm = 'secrets';
+
+        $this->assertSame('This value should match password.', $this->validator->validate($dto)['passwordConfirm']);
+
+        $dto->passwordConfirm = 'secret';
+        $this->assertArrayNotHasKey('passwordConfirm', $this->validator->validate($dto));
     }
 
     public function testUninitializedTypedPropertyIsTreatedAsBlank(): void
