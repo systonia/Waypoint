@@ -7,13 +7,14 @@ use PHPUnit\Framework\TestCase;
 use Waypoint\Csrf;
 use Waypoint\Http\{Request, Response};
 use Waypoint\Options\CsrfOptions;
-use Waypoint\Support\FiberLocal;
+use Waypoint\Support\{FiberLocal, LocalStorage};
 use Waypoint\Waypoint;
 
 final class FiberLocalTest extends TestCase
 {
     protected function tearDown(): void
     {
+        FiberLocal::useStorage(null);
         Waypoint::reset();
     }
 
@@ -74,5 +75,37 @@ final class FiberLocalTest extends TestCase
         $this->assertSame($aIssued, $aLater);
         $this->assertSame($bIssued, $bLater);
         $this->assertSame('', $csrf->token());
+    }
+
+    public function testARuntimesStorageTakesOverForFiberLocalsUsedAfterwards(): void
+    {
+        $before = new FiberLocal();
+        $before->get();
+        // One shared slot stands in for a runtime's async context, which hands values on to child tasks
+        $shared = new class implements LocalStorage {
+            public mixed $value = null;
+
+            public function get(): mixed
+            {
+                return $this->value;
+            }
+
+            public function set(mixed $value): void
+            {
+                $this->value = $value;
+            }
+        };
+        FiberLocal::useStorage(fn () => $shared);
+        $local = new FiberLocal();
+
+        $local->set('request-1');
+        $child = new Fiber(fn () => $local->get());
+        $child->start();
+
+        $this->assertSame('request-1', $child->getReturn());
+        $this->assertSame('request-1', $shared->value);
+        // A FiberLocal already in use keeps its own storage
+        $before->set('own');
+        $this->assertSame('request-1', $shared->value);
     }
 }
