@@ -30,11 +30,25 @@ class ProductsController
 
     #[Get('/logo.svg')]
     #[FileFormatter(mimetype: 'image/svg+xml')]
-    public function logo(): string
+    public function logo(): \SplFileInfo
     {
-        // Unlike report(), this returns an actual file *path* -- exercises
-        // ResultRenderer::renderFileResult()'s read-from-disk branch, as
-        // opposed to writing the returned value out directly.
-        return __DIR__ . '/../Public/style.css';
+        // Unlike report(), this hands over a file -- read from disk, not written out as text.
+        return new \SplFileInfo(__DIR__ . '/../Public/style.css');
+    }
+
+    #[Get('/echo.txt')]
+    #[FileFormatter(mimetype: 'text/plain', download: true)]
+    public function echoText(\Waypoint\Http\Request $req): string
+    {
+        // A string is always content: even a value that names a file on disk
+        $text = $req->query('text');
+        return is_string($text) ? $text : '';
+    }
+
+    #[Get('/named-download')]
+    #[FileFormatter(mimetype: 'text/plain', download: true)]
+    public function namedDownload(): \SplFileInfo
+    {
+        return new \SplFileInfo(__DIR__ . '/../Public/style.css');
     }
 }

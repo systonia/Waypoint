@@ -822,6 +822,23 @@ class DownloadsController
 }
 ```
 
+### File Responses
+
+`#[FileFormatter]` sends the return value as a raw body instead of JSON. Return an `SplFileInfo` to send
+a file from disk. A returned string is always the content itself, even when it happens to name a file,
+so text from a user can never turn into a file read:
+
+```php
+use Waypoint\Attributes\{Get, FileFormatter};
+
+#[Get('/invoice')]
+#[FileFormatter(mimetype: 'application/pdf', download: true)] // filename defaults to the file's own name
+public function invoice(): \SplFileInfo
+{
+    return new \SplFileInfo('/srv/invoices/2026-10.pdf');
+}
+```
+
 ---
 
 ## JWT Authentication

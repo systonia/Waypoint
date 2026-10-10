@@ -2,6 +2,7 @@
 
 namespace Waypoint\Http;
 
+use SplFileInfo;
 use Waypoint\Attributes\{FileFormatter, SimpleXmlFormatter};
 
 /** Writes a route's return value to the Response as JSON (default), a raw file/body (#[FileFormatter]) or flat XML (#[SimpleXmlFormatter]). Views and Redirects never come here. */
@@ -21,7 +22,8 @@ final class ResultRenderer
     }
 
     /**
-     * A string naming an existing file is read from disk; any other scalar is written as-is; anything else as JSON.
+     * An SplFileInfo is read from disk; a string or other scalar is the content itself, never a path; anything else goes as JSON.
+     * A string that happens to name a file (user input, say) is therefore sent as that text, not as the file.
      * @param array<string, mixed> $options
      */
     private function renderFile(mixed $result, Response $res, array $options): void
@@ -30,16 +32,15 @@ final class ResultRenderer
         $res->withHeader('Content-Type', is_string($mimetype) ? $mimetype : 'application/octet-stream');
 
         if (!empty($options['download'])) {
-            $filename = $options['filename'] ?? (is_string($result) ? basename($result) : null);
-            $filename = is_string($filename) ? $filename : 'download.bin';
+            $filename = $options['filename'] ?? ($result instanceof SplFileInfo ? $result->getFilename() : null);
+            // Quotes and line breaks would end the header value
+            $filename = is_string($filename) ? str_replace(['"', '\\', "\r", "\n"], '', $filename) : 'download.bin';
             $res->withHeader('Content-Disposition', "attachment; filename=\"$filename\"");
         }
 
-        if (is_string($result) && is_file($result)) {
-            // @codeCoverageIgnoreStart
-            // the read only fails on a delete race after is_file().
-            $res->write(@file_get_contents($result) ?: '');
-            // @codeCoverageIgnoreEnd
+        if ($result instanceof SplFileInfo) {
+            $path = $result->getPathname();
+            $res->write(is_file($path) ? (@file_get_contents($path) ?: '') : '');
         } elseif (is_scalar($result)) {
             $res->write((string) $result);
         } else {

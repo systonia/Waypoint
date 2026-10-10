@@ -92,6 +92,24 @@ final class RouterDispatchTest extends IntegrationTestCase
         $this->assertStringStartsWith('image/svg+xml', $this->sentHeaders()['content-type'] ?? '');
     }
 
+    public function testFileFormatterNeverReadsAFileNamedByAReturnedString(): void
+    {
+        $path = __DIR__ . '/../Fixtures/Public/style.css';
+
+        $output = $this->dispatch('GET', '/products/echo.txt?text=' . rawurlencode($path));
+
+        $this->assertSame($path, $output);
+        $this->assertSame('attachment; filename="download.bin"', $this->sentHeaders()['content-disposition'] ?? null);
+    }
+
+    public function testFileFormatterNamesADownloadAfterTheFileItSends(): void
+    {
+        $output = $this->dispatch('GET', '/products/named-download');
+
+        $this->assertSame("body { color: red; }\n", $output);
+        $this->assertSame('attachment; filename="style.css"', $this->sentHeaders()['content-disposition'] ?? null);
+    }
+
     public function testXmlFormatterWrapsArrayInRootElement(): void
     {
         $output = $this->dispatch('GET', '/products/export.xml');
