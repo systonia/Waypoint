@@ -42,6 +42,39 @@ final class ArgumentBindingTest extends IntegrationTestCase
         $this->assertSame(['id' => 42, 'type' => 'integer'], json_decode($output, true));
     }
 
+    public function testScalarQueryValuesConvertByTheirMeaningNotByPhpCasting(): void
+    {
+        $output = $this->dispatch('GET', '/argbinding/typed?active=false&page=3&ratio=0.5');
+        $this->assertSame(['active' => false, 'page' => 3, 'ratio' => 0.5], json_decode($output, true));
+
+        $output = $this->dispatch('GET', '/argbinding/typed?active=yes&page=-2&ratio=2.5');
+        $this->assertSame(['active' => true, 'page' => -2, 'ratio' => 2.5], json_decode($output, true));
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function invalidScalarQueries(): array
+    {
+        return [
+            'int from text' => ['active=1&page=abc&ratio=1', 'page'],
+            'int with trailing text' => ['active=1&page=12abc&ratio=1', 'page'],
+            'int from a fraction' => ['active=1&page=1.5&ratio=1', 'page'],
+            'float from text' => ['active=1&page=1&ratio=half', 'ratio'],
+            'bool from text' => ['active=maybe&page=1&ratio=1', 'active'],
+            'int from a list' => ['active=1&page[]=1&ratio=1', 'page'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('invalidScalarQueries')]
+    public function testAnUnconvertibleScalarQueryValueIsAValidationError(string $query, string $field): void
+    {
+        $output = $this->dispatch('GET', "/argbinding/typed?{$query}");
+
+        $this->assertSame(422, http_response_code());
+        $decoded = json_decode($output, true);
+        $this->assertSame('Validation failed', $decoded['title']);
+        $this->assertArrayHasKey($field, $decoded['errors']);
+    }
+
     public function testUnrecognizedClassParameterAlwaysBindsToNull(): void
     {
         $output = $this->dispatch('GET', '/argbinding/unknown');

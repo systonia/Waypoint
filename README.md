@@ -176,7 +176,10 @@ depending on where the value comes from:
 | `#[Body]`   | Binds the request body to a DTO: JSON for a JSON `Content-Type` (`application/json`, `application/*+json`), form fields otherwise | `#[Body] UserDTO $user`               |
 
 An unattributed scalar-typed parameter (`string`/`int`/`float`/`bool`) is bound implicitly: Waypoint
-tries the route placeholder first, then falls back to the query string. `Request`/`Response`
+tries the route placeholder first, then falls back to the query string. The text converts by its
+meaning: `bool` accepts `true/false`, `1/0`, `yes/no` and `on/off` (so `?active=false` is `false`),
+`int` and `float` accept only whole numbers. Anything else, like `?page=abc`, answers `422` with the
+parameter in `errors` instead of silently becoming `0`. `Request`/`Response`
 type-hinted parameters (or properties) are injected directly, no attribute needed.
 
 ```php

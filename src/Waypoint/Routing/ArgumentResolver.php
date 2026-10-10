@@ -2,6 +2,7 @@
 
 namespace Waypoint\Routing;
 
+use Waypoint\Enums\Message;
 use Waypoint\Exceptions\ValidationException;
 use Waypoint\Http\{Request, Response};
 use Waypoint\Plugin\ArgumentBinder;
@@ -115,9 +116,32 @@ final class ArgumentResolver
     {
         $value = $params[$name] ?? $req->query($name);
         $type = $arg['type'] ?? null;
-        if (is_string($type)) {
-            settype($value, $type);
+        if (!is_string($type)) {
+            // @codeCoverageIgnoreStart
+            // RouteCompiler always records the type for 'Scalar'.
+            return $value;
+            // @codeCoverageIgnoreEnd
         }
-        return $value;
+        if ($value === null) {
+            // Missing entirely: the type's empty value, as before
+            settype($value, $type);
+            return $value;
+        }
+        $converted = is_string($value) ? self::convertScalar($value, $type) : null;
+        if ($converted === null) {
+            throw new ValidationException(Message::ValidationFailed, [$name => "Expected a value of type {$type}."]);
+        }
+        return $converted;
+    }
+
+    /** A text from the URL as int, float, bool or string; null when it isn't one ("false" is false, "abc" is no int). */
+    private static function convertScalar(string $value, string $type): int|float|bool|string|null
+    {
+        return match ($type) {
+            'int' => filter_var($value, FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE),
+            'float' => filter_var($value, FILTER_VALIDATE_FLOAT, FILTER_NULL_ON_FAILURE),
+            'bool' => filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE),
+            default => $value,
+        };
     }
 }

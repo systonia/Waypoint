@@ -50,6 +50,12 @@ class ArgBindingController
         return ['id' => $id, 'type' => gettype($id)];
     }
 
+    #[Get('/typed')]
+    public function typedQuery(bool $active, int $page, float $ratio): array
+    {
+        return ['active' => $active, 'page' => $page, 'ratio' => $ratio];
+    }
+
     #[Get('/unknown')]
     public function unknownBinding(?stdClass $thing): array
     {
