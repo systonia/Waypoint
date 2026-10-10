@@ -178,9 +178,12 @@ depending on where the value comes from:
 An unattributed scalar-typed parameter (`string`/`int`/`float`/`bool`) is bound implicitly: Waypoint
 tries the route placeholder first, then falls back to the query string. The text converts by its
 meaning: `bool` accepts `true/false`, `1/0`, `yes/no` and `on/off` (so `?active=false` is `false`),
-`int` and `float` accept only whole numbers. Anything else, like `?page=abc`, answers `422` with the
+`int` accepts only whole numbers, `float` only numbers. Anything else, like `?page=abc`, answers `422` with the
 parameter in `errors` instead of silently becoming `0`. `Request`/`Response`
 type-hinted parameters (or properties) are injected directly, no attribute needed.
+
+Placeholder values arrive URL-decoded: `/user/J%C3%BCrgen` binds `Jürgen`, and an encoded `%2F`
+stays inside its own segment.
 
 ```php
 use Waypoint\Attributes\{Get, Post, Param, Query, Body};

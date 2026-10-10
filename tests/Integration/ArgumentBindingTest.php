@@ -75,6 +75,16 @@ final class ArgumentBindingTest extends IntegrationTestCase
         $this->assertArrayHasKey($field, $decoded['errors']);
     }
 
+    public function testRouteParametersArriveUrlDecoded(): void
+    {
+        $output = $this->dispatch('GET', '/argbinding/name/J%C3%BCrgen%20M%C3%BCller');
+        $this->assertSame(['name' => 'Jürgen Müller'], json_decode($output, true));
+
+        // An encoded slash stays inside its segment
+        $output = $this->dispatch('GET', '/argbinding/name/a%2Fb');
+        $this->assertSame(['name' => 'a/b'], json_decode($output, true));
+    }
+
     public function testUnrecognizedClassParameterAlwaysBindsToNull(): void
     {
         $output = $this->dispatch('GET', '/argbinding/unknown');

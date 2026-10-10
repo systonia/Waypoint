@@ -50,6 +50,12 @@ class ArgBindingController
         return ['id' => $id, 'type' => gettype($id)];
     }
 
+    #[Get('/name/{name}')]
+    public function nameBinding(string $name): array
+    {
+        return ['name' => $name];
+    }
+
     #[Get('/typed')]
     public function typedQuery(bool $active, int $page, float $ratio): array
     {

@@ -424,7 +424,8 @@ class Router
                 $params = [];
                 foreach ($matches as $key => $value) {
                     if (is_string($key)) {
-                        $params[$key] = $value;
+                        // The path arrives URL-encoded; '%2F' decodes inside its own segment, never splitting it
+                        $params[$key] = rawurldecode($value);
                     }
                 }
                 return [$plan, $params];
