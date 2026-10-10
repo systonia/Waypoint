@@ -205,11 +205,11 @@ class App
     }
 
     /**
-     * Makes the app a request handler for nope: `Nope\Http\serve(3000, $app)`. See Nope\Bridge.
+     * Makes the app a request handler for Tenma: `Tenma::serve(3000, $app)`. See Tenma\Bridge.
      */
-    public function __invoke(\Nope\Http\Request $request): \Nope\Http\Response
+    public function __invoke(\Tenma\Http\Request $request): \Tenma\Http\Response
     {
-        return Nope\Bridge::respond($this, $request);
+        return Tenma\Bridge::respond($this, $request);
     }
 
     /**

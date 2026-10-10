@@ -147,20 +147,20 @@ $res = $app->handle(Request::fromParts('GET', '/customers/7?tab=orders', $header
 // $res->getStatus(), $res->getHeaders(), $res->getCookies() (one Set-Cookie value each), $res->getBody()
 ```
 
-Under nope (PHP with a Node-style event loop) the app itself is the request handler, as in Express:
+Under Tenma (PHP with a Node-style event loop) the app itself is the request handler, as in Express:
 one process serves every request, each in a Fiber of its own, interleaved while they wait on I/O. The
-request id and the CSRF token follow a request into the tasks it starts (`Nope\async()`); files under the
-`static` prefixes are served by nope itself, without PHP:
+request id and the CSRF token follow a request into the tasks it starts (`Tenma::async()`); files under the
+`static` prefixes are served by Tenma itself, without PHP:
 
 ```php
-if (function_exists('nope_listen')) {
-    Nope\Http\serve(8080, $app, static: ['/assets' => __DIR__ . '/public/assets']);
+if (class_exists(Tenma::class)) {
+    Tenma::serve(8080, $app, static: ['/assets' => __DIR__ . '/public/assets']);
 } else {
     $app->run();
 }
 ```
 
-A controller may then wait on nope's async I/O (`Nope\Db`, `Nope\Http\fetch()`, `Nope\all()`) while the
+A controller may then wait on Tenma's async I/O (`Tenma\Db`, `Tenma::fetch()`, `Tenma::all()`) while the
 process serves other requests. Read [Controllers per request, services shared](#controllers-per-request-services-shared)
 first. In a template, don't wait: fetch the data in the controller before `render()`.
 
@@ -451,7 +451,7 @@ in the container yourself (one with constructor arguments) is cloned per request
 constructor set up. Under FPM nothing changes: there a controller never outlived its request anyway.
 
 Services are the opposite: one instance per process, shared by every request. On a long-lived worker
-(FrankenPHP worker mode, RoadRunner, nope), and on one that runs requests interleaved while they wait
+(FrankenPHP worker mode, RoadRunner, Tenma), and on one that runs requests interleaved while they wait
 on I/O, anything a service keeps in a property is visible to every other request. So **a service must
 not keep per-request state in its properties**:
 

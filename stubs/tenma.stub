@@ -1,7 +1,7 @@
 <?php
-// The parts of nope's standard library Waypoint\Nope uses, for PHPStan only: nope provides them at runtime.
+// The parts of Tenma's standard library Waypoint\Tenma uses, for PHPStan only: Tenma provides them at runtime.
 
-namespace Nope {
+namespace Tenma {
     /** @template T */
     final class AsyncLocal
     {
@@ -13,7 +13,7 @@ namespace Nope {
     }
 }
 
-namespace Nope\Http {
+namespace Tenma\Http {
     final class Request
     {
         public readonly string $method;
@@ -36,10 +36,4 @@ namespace Nope\Http {
         /** @param array<string, string|list<string>> $headers */
         public function __construct(string $body = '', int $status = 200, array $headers = []) {}
     }
-
-    /**
-     * @param callable(Request): Response $handler
-     * @param string|array<string, string>|null $static
-     */
-    function serve(int $port, callable $handler, string|array|null $static = null): void {}
 }

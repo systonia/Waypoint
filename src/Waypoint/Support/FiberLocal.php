@@ -39,7 +39,7 @@ final class FiberLocal implements LocalStorage
      * Keeps the values of every FiberLocal in what $create returns from now on, e.g. a runtime's async context
      * that follows a request into the tasks it starts. Call it before the first request.
      *
-     *   FiberLocal::useStorage(fn () => new class implements LocalStorage { ... Nope\AsyncLocal ... });
+     *   FiberLocal::useStorage(fn () => new class implements LocalStorage { ... Tenma\AsyncLocal ... });
      *
      * @param (Closure(): LocalStorage)|null $create
      */

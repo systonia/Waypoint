@@ -49,9 +49,9 @@ $app->configure(function (CorsOptions $opts) {
 $app->useCors();
 $app->useJwt();
 
-// attach() takes the whole set at once; the nope-only controller joins it under nope
+// attach() takes the whole set at once; the tenma-only controller joins it under Tenma
 $app->attach([
-    ...(function_exists('nope_listen') ? [\Waypoint\Tests\Fixtures\Controllers\NopeController::class] : []),
+    ...(class_exists(Tenma::class) ? [\Waypoint\Tests\Fixtures\Controllers\TenmaController::class] : []),
     CustomersController::class,
     OrdersController::class,
     ProductsController::class,
@@ -62,9 +62,9 @@ $app->attach([
     MaintenanceManager::class,
 ]);
 
-// Under nope (NopeLiveTest) one process serves every request; under php -S each request runs this file anew
-if (function_exists('nope_listen')) {
-    Nope\Http\serve((int) getenv('E2E_PORT'), $app);
+// Under Tenma (TenmaLiveTest) one process serves every request; under php -S each request runs this file anew
+if (class_exists(Tenma::class)) {
+    Tenma::serve((int) getenv('E2E_PORT'), $app);
 } else {
     $app->run();
 }

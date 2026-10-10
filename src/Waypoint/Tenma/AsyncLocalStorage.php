@@ -1,11 +1,11 @@
 <?php
 
-namespace Waypoint\Nope;
+namespace Waypoint\Tenma;
 
-use Nope\AsyncLocal;
+use Tenma\AsyncLocal;
 use Waypoint\Support\LocalStorage;
 
-/** A FiberLocal's value in nope's async context: a task a request starts gets a copy of it. */
+/** A FiberLocal's value in Tenma's async context: a task a request starts gets a copy of it. */
 final class AsyncLocalStorage implements LocalStorage
 {
     /** @var AsyncLocal<mixed> */

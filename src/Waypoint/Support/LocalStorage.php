@@ -4,7 +4,7 @@ namespace Waypoint\Support;
 
 /**
  * Where a FiberLocal keeps its value, see FiberLocal::useStorage(). A runtime with async context (such as
- * nope's Nope\AsyncLocal) lets the value follow a request into the tasks it starts.
+ * Tenma\AsyncLocal) lets the value follow a request into the tasks it starts.
  */
 interface LocalStorage
 {

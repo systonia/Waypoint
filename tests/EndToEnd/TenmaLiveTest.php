@@ -3,16 +3,16 @@
 namespace Waypoint\Tests\EndToEnd;
 
 /**
- * The whole live suite again, with the same front controller under nope instead of php -S: one process
- * serves every request, with the app itself as nope's handler. Skipped without nope; NOPE_BIN points at the binary
+ * The whole live suite again, with the same front controller under Tenma instead of php -S: one process
+ * serves every request, with the app itself as Tenma's handler. Skipped without Tenma; TENMA_BIN points at the binary
  * when it isn't on the PATH.
  */
-final class NopeLiveTest extends FullAppLiveTest
+final class TenmaLiveTest extends FullAppLiveTest
 {
     public static function setUpBeforeClass(): void
     {
-        if (self::nope() === null) {
-            self::markTestSkipped('nope not found: set NOPE_BIN or put nope on the PATH');
+        if (self::tenma() === null) {
+            self::markTestSkipped('Tenma not found: set TENMA_BIN or put tenma on the PATH');
         }
         parent::setUpBeforeClass();
     }
@@ -20,18 +20,18 @@ final class NopeLiveTest extends FullAppLiveTest
     protected static function serverCommand(string $host, int $port, string $docroot, string $router): array
     {
         // One worker: the interleaving test needs both requests in the same process
-        return [(string) self::nope(), '--workers', '1', $router];
+        return [(string) self::tenma(), '--workers', '1', $router];
     }
 
-    private static function nope(): ?string
+    private static function tenma(): ?string
     {
-        $configured = getenv('NOPE_BIN');
+        $configured = getenv('TENMA_BIN');
         if (is_string($configured) && is_executable($configured)) {
             return $configured;
         }
         foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $dir) {
-            if ($dir !== '' && is_executable("$dir/nope")) {
-                return "$dir/nope";
+            if ($dir !== '' && is_executable("$dir/tenma")) {
+                return "$dir/tenma";
             }
         }
         return null;
@@ -43,7 +43,7 @@ final class NopeLiveTest extends FullAppLiveTest
         $multi = curl_multi_init();
         $handles = [];
         foreach (['ada', 'bo'] as $name) {
-            $handle = curl_init($this->baseUrl() . "/nope/interleaved?name=$name");
+            $handle = curl_init($this->baseUrl() . "/tenma/interleaved?name=$name");
             curl_setopt_array($handle, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_HTTPHEADER => ["X-Request-Id: id-$name"]]);
             curl_multi_add_handle($multi, $handle);
             $handles[$name] = $handle;
