@@ -1203,7 +1203,9 @@ class AuthController
 }
 ```
 
-`APP_ENV` defaults to `development` under the `cli`/`cli-server` SAPI when unset anywhere;
+`APP_ENV` defaults to `development` under the `cli`/`cli-server` SAPI, or for a request whose
+`SERVER_NAME` is exactly `localhost`, a `*.localhost` name, `127.0.0.1` or `::1`, when unset anywhere.
+Every other server, with or without Xdebug, defaults to `production`.
 `Environment::isDev()` gates whether unhandled-exception messages are exposed in the default 500
 response.
 

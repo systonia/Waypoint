@@ -110,23 +110,23 @@ class EnvironmentOptions
         }
     }
 
-    /** 'development' under the CLI/built-in server, on localhost, or with Xdebug loaded; else 'production'. */
     private function detectEnvironment(): string
     {
-        /** @var string|null $result */
-        static $result;
-        if ($result !== null) {
-            return $result;
+        return self::environmentFor(php_sapi_name() ?: '', $_SERVER['SERVER_NAME'] ?? null);
+    }
+
+    /**
+     * 'development' for the CLI, PHP's built-in server or a request to a local host name; everything else is 'production'.
+     * The host must be local exactly: "localhost.example.com" is a public server, and so is any server with Xdebug loaded.
+     * @internal
+     */
+    public static function environmentFor(string $sapi, mixed $serverName): string
+    {
+        if ($sapi === 'cli' || $sapi === 'cli-server') {
+            return 'development';
         }
-        if (php_sapi_name() === 'cli' || php_sapi_name() === 'cli-server') {
-            return $result = 'development';
-        }
-        // @codeCoverageIgnoreStart
-        $serverName = $_SERVER['SERVER_NAME'] ?? null;
-        if ((is_string($serverName) && str_contains($serverName, 'localhost')) || extension_loaded('xdebug')) {
-            return $result = 'development';
-        }
-        return $result = 'production';
-        // @codeCoverageIgnoreEnd
+        $host = is_string($serverName) ? strtolower(trim($serverName, '[]')) : '';
+        $local = $host === 'localhost' || str_ends_with($host, '.localhost') || $host === '127.0.0.1' || $host === '::1';
+        return $local ? 'development' : 'production';
     }
 }
