@@ -4,7 +4,7 @@ namespace Waypoint\Tests\EndToEnd;
 
 /**
  * The whole live suite again, with the same front controller under nope instead of php -S: one process
- * serves every request through Waypoint\Nope\Server. Skipped without nope; NOPE_BIN points at the binary
+ * serves every request, with the app itself as nope's handler. Skipped without nope; NOPE_BIN points at the binary
  * when it isn't on the PATH.
  */
 final class NopeLiveTest extends FullAppLiveTest

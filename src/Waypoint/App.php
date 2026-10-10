@@ -205,6 +205,14 @@ class App
     }
 
     /**
+     * Makes the app a request handler for nope: `Nope\Http\serve(3000, $app)`. See Nope\Bridge.
+     */
+    public function __invoke(\Nope\Http\Request $request): \Nope\Http\Response
+    {
+        return Nope\Bridge::respond($this, $request);
+    }
+
+    /**
      * Runs $req through the middleware pipe, routing and exception handlers and returns the finalized Response
      * without sending it: for a runtime that hands over requests itself (Request::fromParts()) and writes
      * getStatus()/getHeaders()/getCookies()/getBody() out on its own.

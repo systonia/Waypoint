@@ -64,7 +64,7 @@ $app->attach([
 
 // Under nope (NopeLiveTest) one process serves every request; under php -S each request runs this file anew
 if (function_exists('nope_listen')) {
-    \Waypoint\Nope\Server::serve($app, (int) getenv('E2E_PORT'));
+    Nope\Http\serve((int) getenv('E2E_PORT'), $app);
 } else {
     $app->run();
 }

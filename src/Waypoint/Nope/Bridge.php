@@ -8,34 +8,23 @@ use Waypoint\Http\{Request, Response};
 use Waypoint\Support\FiberLocal;
 
 /**
- * Runs a Waypoint app under nope (PHP with a Node-style event loop): one process serves many requests,
- * each in a Fiber of its own, interleaved while they wait on I/O. Only loaded under nope; Waypoint has
- * no dependency on it.
- *
- *   if (function_exists('nope_listen')) {
- *       Waypoint\Nope\Server::serve($app, 8080, static: ['/assets' => __DIR__ . '/public/assets']);
- *   } else {
- *       $app->run();
- *   }
+ * Translates between nope (PHP with a Node-style event loop) and Waypoint for App::__invoke(), which makes
+ * an app nope's request handler: `Nope\Http\serve(3000, $app)`. One process then serves many requests,
+ * each in a Fiber of its own, interleaved while they wait on I/O. Only used under nope; Waypoint has no
+ * dependency on it.
  */
-final class Server
+final class Bridge
 {
-    /**
-     * Starts nope's HTTP server for $app. $static is handed to Nope\Http\serve(): files under those URL
-     * prefixes are served by nope itself, without PHP.
-     *
-     * @param string|array<string, string>|null $static
-     */
-    public static function serve(App $app, int $port, string|array|null $static = null): void
-    {
-        // Request id and CSRF token follow a request into the tasks it starts
-        FiberLocal::useStorage(fn () => new AsyncLocalStorage());
-        \Nope\Http\serve($port, fn (NopeRequest $request): NopeResponse => self::respond($app, $request), $static);
-    }
+    private static bool $storageInstalled = false;
 
     /** One request: nope's Request in, through App::handle(), nope's Response out. */
     public static function respond(App $app, NopeRequest $request): NopeResponse
     {
+        if (!self::$storageInstalled) {
+            // Request id and CSRF token follow a request into the tasks it starts
+            FiberLocal::useStorage(fn () => new AsyncLocalStorage());
+            self::$storageInstalled = true;
+        }
         return self::toNope($app->handle(self::toWaypoint($request)));
     }
 
