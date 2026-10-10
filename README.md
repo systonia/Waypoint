@@ -166,7 +166,9 @@ class HelloController
 
 A route method declares its path with `#[Get]`/`#[Post]`/`#[Put]`/`#[Patch]`/`#[Delete]` — that
 attribute *is* the route (there is no separate `#[Route]` attribute). `#[Controller('/prefix')]`
-optionally prefixes every route in the class. Parameters are then bound with one of three attributes
+optionally prefixes every route in the class. A `HEAD` request runs the `GET` route and sends its
+headers without the body. A path that exists under other methods answers `405` with an `Allow`
+header instead of `404`. Parameters are then bound with one of three attributes
 depending on where the value comes from:
 
 | Attribute   | Description                                                     | Example                              |

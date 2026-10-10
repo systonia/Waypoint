@@ -323,7 +323,17 @@ class Router
         }
 
         [$route, $params] = $this->matchRoute($httpMethod, $path);
+        if ($route === null && $method === 'HEAD') {
+            // HEAD is GET without the body (Response::send() leaves it out)
+            [$route, $params] = $this->matchRoute('GET', $path);
+        }
         if ($route === null) {
+            $allowed = $this->allowedMethods($path);
+            if ($allowed !== []) {
+                $res->status(405)->withHeader('Allow', implode(', ', $allowed))
+                    ->withHeader('Content-Type', 'application/json')->write('{"error":"Method not allowed"}');
+                return;
+            }
             $this->respondNotFound($res);
             return;
         }
@@ -452,6 +462,24 @@ class Router
             ->withHeader('Content-Length', (string) strlen($content))
             ->write($content);
         return true;
+    }
+
+    /**
+     * The methods some route answers on $path; HEAD wherever GET is.
+     * @return list<string>
+     */
+    private function allowedMethods(string $path): array
+    {
+        $allowed = [];
+        foreach (array_unique([...array_keys($this->staticRoutes), ...array_keys($this->dynamicRoutes)]) as $method) {
+            if ($this->matchRoute($method, $path)[0] !== null) {
+                $allowed[] = $method;
+            }
+        }
+        if (in_array('GET', $allowed, true) && !in_array('HEAD', $allowed, true)) {
+            $allowed[] = 'HEAD';
+        }
+        return $allowed;
     }
 
     private function respondNotFound(Response $res): void

@@ -163,7 +163,10 @@ class Response
             }
         }
 
-        echo $body;
+        // A HEAD answer carries the headers of the GET, Content-Length included, but never the body
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'HEAD') {
+            echo $body;
+        }
     }
 
     /** gzip when: not disabled, enabled in options, the client accepts it, the body is big enough, and it isn't already encoded. */

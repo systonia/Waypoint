@@ -110,6 +110,29 @@ final class RouterDispatchTest extends IntegrationTestCase
         $this->assertSame('attachment; filename="style.css"', $this->sentHeaders()['content-disposition'] ?? null);
     }
 
+    public function testHeadAnswersLikeGetWithoutTheBody(): void
+    {
+        $output = $this->dispatch('HEAD', '/products/report.txt');
+
+        $this->assertSame(200, http_response_code());
+        $this->assertSame('', $output);
+        $this->assertSame('attachment; filename="report.txt"', $this->sentHeaders()['content-disposition'] ?? null);
+    }
+
+    public function testAKnownPathWithTheWrongMethodIs405WithTheAllowedMethods(): void
+    {
+        $this->dispatch('DELETE', '/products/report.txt');
+        $this->assertSame(405, http_response_code());
+        $this->assertSame('GET, HEAD', $this->sentHeaders()['allow'] ?? null);
+
+        $this->dispatch('GET', '/products');
+        $this->assertSame(405, http_response_code());
+        $this->assertSame('POST', $this->sentHeaders()['allow'] ?? null);
+
+        $this->dispatch('DELETE', '/products/nothing-here');
+        $this->assertSame(404, http_response_code());
+    }
+
     public function testXmlFormatterWrapsArrayInRootElement(): void
     {
         $output = $this->dispatch('GET', '/products/export.xml');
