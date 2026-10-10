@@ -35,3 +35,12 @@ export function onReady(fn: () => void): void {
 export function warn(message: string, ...rest: unknown[]): void {
     console.warn(`[waypoint] ${message}`, ...rest);
 }
+
+/** True when `input` points at this page's own origin; an unparsable address counts as foreign. */
+export function isSameOrigin(input: RequestInfo | URL): boolean {
+    try {
+        return new URL(input instanceof Request ? input.url : String(input), location.href).origin === location.origin;
+    } catch {
+        return false;
+    }
+}

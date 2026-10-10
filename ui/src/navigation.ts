@@ -1,4 +1,4 @@
-import { delegate, warn } from './dom';
+import { delegate, isSameOrigin, warn } from './dom';
 import { applyViewAssets, parseFragments, swapInto } from './fragments';
 
 /**
@@ -13,6 +13,9 @@ import { applyViewAssets, parseFragments, swapInto } from './fragments';
  * fetch() follows a redirect on its own (a form's success case), so history
  * records response.url, not the requested one. A 401 on an authenticated page
  * is already a server-side redirect to the login page for partial navigations.
+ *
+ * Only this page's own origin is swapped in: its scripts run here. A link or
+ * form pointing elsewhere is left to the browser, which navigates normally.
  */
 
 interface HistoryState {
@@ -31,7 +34,7 @@ export function registerNavigation(assetsPath: string): void {
         if (!(el instanceof HTMLAnchorElement)) return;
         const href = el.getAttribute('href');
         const key = el.getAttribute('wp-target');
-        if (!href || !key) return;
+        if (!href || !key || !isSameOrigin(href)) return;
         event.preventDefault();
         void navigateTo(href, key, assetsPath);
     });
@@ -39,6 +42,7 @@ export function registerNavigation(assetsPath: string): void {
     delegate('submit', 'wp-target', (el, event) => {
         const key = el.getAttribute('wp-target');
         if (!(el instanceof HTMLFormElement) || !key) return;
+        if (!isSameOrigin(el.getAttribute('action') || location.href)) return;
         event.preventDefault();
         void submitForm(el, key, assetsPath);
     });
@@ -55,6 +59,10 @@ export function registerNavigation(assetsPath: string): void {
 }
 
 export function navigateTo(href: string, key: string, assetsPath: string, options: NavigateOptions = {}): Promise<void> {
+    if (!isSameOrigin(href)) {
+        warn(`Refusing a partial navigation to another origin: ${href}`);
+        return Promise.resolve();
+    }
     return run(key, href, () => fetch(href, { headers: PARTIAL }), assetsPath, options);
 }
 
@@ -93,6 +101,11 @@ async function run(
         response = await request();
     } catch (err) {
         warn(`Navigation to ${href} failed:`, err);
+        return;
+    }
+    // A redirect may have left the origin: that content and its scripts never run on this page
+    if (response.url && !isSameOrigin(response.url)) {
+        warn(`Navigation to ${href} ended on another origin: ${response.url}`);
         return;
     }
     // An HTML error page or a re-rendered form (422) is content the user should see; anything else isn't.

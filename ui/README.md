@@ -14,7 +14,7 @@ it isn't part of the Composer distribution.
 
 | Attribute | On | Does |
 |---|---|---|
-| `wp-target="key"` | `<a>`, `<form>` | Re-issues the link/form request with `X-Waypoint-Accept: partial` and swaps the response into `[wp-container="key"]`. Without JS the link and form work exactly the same, with the layout around it. |
+| `wp-target="key"` | `<a>`, `<form>` | Re-issues the link/form request with `X-Waypoint-Accept: partial` and swaps the response into `[wp-container="key"]`. Without JS the link and form work exactly the same, with the layout around it. Only the page's own origin is swapped in: a link or form to another origin navigates normally, and a response that a redirect took to another origin is dropped. |
 | `wp-container="key"` | any element | The swap target for `wp-target="key"`. |
 | `wp-swap-oob="key"` | `<template>` in a response | Extra fragment routed to another container in the same round trip. |
 | `wp-onclick="name"` | any element | Calls the named handler with the element's `dataset`. |

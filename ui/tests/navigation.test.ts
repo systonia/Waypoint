@@ -22,7 +22,7 @@ describe('navigation', () => {
     });
 
     it('swaps the fragment in, records the final URL and announces the navigation', async () => {
-        fetchMock.mockImplementation(async () => htmlResponse('<p>dash</p>', { url: 'http://localhost/dashboard?x=1' }));
+        fetchMock.mockImplementation(async () => htmlResponse('<p>dash</p>', { url: 'http://localhost:3000/dashboard?x=1' }));
         const navigated = vi.fn();
         document.addEventListener('wp:navigated', navigated);
 
@@ -84,5 +84,46 @@ describe('navigation', () => {
         await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
 
         expect(fetchMock.mock.calls[0]?.[0]).toBe('/search?q=x+y');
+    });
+
+    it('leaves links and forms to another origin to the browser', async () => {
+        document.body.innerHTML +=
+            '<a id="foreign" href="https://evil.example/x" wp-target="main">x</a>' +
+            '<a id="relative" href="//evil.example/y" wp-target="main">y</a>' +
+            '<form id="ff" method="post" action="https://evil.example/f" wp-target="main"></form>';
+
+        // Runs after Waypoint's document listener: records whether Waypoint took the event, then keeps happy-dom from really navigating away
+        const leftToBrowser: boolean[] = [];
+        const record = (event: Event): void => {
+            leftToBrowser.push(!event.defaultPrevented);
+            event.preventDefault();
+        };
+        window.addEventListener('click', record);
+        window.addEventListener('submit', record);
+        document.getElementById('foreign')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        document.getElementById('relative')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        document.getElementById('ff')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        window.removeEventListener('click', record);
+        window.removeEventListener('submit', record);
+
+        expect(leftToBrowser).toEqual([true, true, true]);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(document.querySelector('main')?.innerHTML).toBe('<p>old</p>');
+    });
+
+    it('never swaps in content from another origin, called directly or reached by redirect', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        await navigateTo('https://evil.example/x', 'main', '/assets');
+        expect(fetchMock).not.toHaveBeenCalled();
+
+        fetchMock.mockResolvedValueOnce(htmlResponse('<script>alert(1)</script>', { url: 'https://evil.example/landing' }));
+        await navigateTo('/goes-elsewhere', 'main', '/assets');
+
+        expect(document.querySelector('main')?.innerHTML).toBe('<p>old</p>');
+        expect(pushState).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(2);
+        warn.mockRestore();
     });
 });

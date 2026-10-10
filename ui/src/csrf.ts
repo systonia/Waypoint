@@ -4,6 +4,7 @@
  * POST/PUT/PATCH/DELETE. No cookie (CSRF not configured server-side) or a
  * header already set by the caller leaves the request untouched.
  */
+import { isSameOrigin } from './dom';
 
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -26,12 +27,4 @@ export function installCsrfFetch(cookieName: string, headerName: string): void {
         if (!headers.has(headerName)) headers.set(headerName, token);
         return original(input, { ...init, headers });
     };
-}
-
-function isSameOrigin(input: RequestInfo | URL): boolean {
-    try {
-        return new URL(input instanceof Request ? input.url : String(input), location.href).origin === location.origin;
-    } catch {
-        return false;
-    }
 }
