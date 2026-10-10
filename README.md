@@ -61,7 +61,7 @@ through your app or plugin from PHPUnit.
   rather than live reflection
 - Optional route/DI compilation caching with an opt-in "trust mode" for production deploys
 - A plugin system with fixed hooks (endpoints, route attributes, guards, argument binders, renderers,
-  view helpers, client assets), so features ship as packages instead of growing the core
+  OpenAPI extensions, view helpers, client assets), so features ship as packages instead of growing the core
 - A testing kit (`Waypoint\Testing`) with a request builder and fluent response assertions
 
 ---
@@ -1037,6 +1037,7 @@ declares what it adds and does nothing else:
 | `ResponseHook` | After the result was rendered. | Audit, metrics, idempotency store. |
 | `ArgumentBinder` | Own parameter attributes/types for controller methods, asked after the core attributes and before the implicit scalar binding. | `#[File]`, a table request. |
 | `Renderer` | Own return types, asked after `View`/`Redirect`. | Exports, PDFs. |
+| `OpenApiExtension` | Describes the plugin's bound parameters and rendered return types for the spec; without it they show as `string`/`object`. | `text/csv` for an export. |
 | `ViewHelper` | Methods templates can call as `$this->name()`. | `$this->t('key')`. |
 | `ClientAsset` | CSS/JS files shipped by the plugin, served content-hashed; render with `$this->pluginAssetTags()`. | A table component. |
 
@@ -1052,6 +1053,8 @@ Available plugins:
 | `systonia/waypoint-i18n` | `$this->t('Source text')` with JSON catalogs kept by CLI tasks, per-request locale, translated validation errors. |
 | `systonia/waypoint-flash` | Flash messages across a redirect, shown once, with and without JavaScript; the reference for the client plugin API. |
 | `systonia/waypoint-charts` | Bar and line charts as server-rendered SVG with a data table; `$this->chart($chart)` in views or `return $chart;` as `image/svg+xml`. |
+| `systonia/waypoint-export` | `return Sheet::file('users.xlsx')->columns([...])->rows($rows);` downloads CSV, JSON Lines, HTML, XML with schema, XLSX or ODS by extension; `$this->sheet()` for an inline table. |
+| `systonia/waypoint-export-fixed` | Fixed-width record files (`#[Fixed]` layouts, Windows-1252/EBCDIC) as a sub-plugin of waypoint-export; the reference for plugins that extend a plugin. |
 
 ---
 

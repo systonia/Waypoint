@@ -8,6 +8,7 @@ use Deprecated;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionNamedType;
 use ReflectionParameter;
 use Waypoint\Enums\Message;
 use Waypoint\Http\{MiddlewareBase, Request, Response};
@@ -377,7 +378,9 @@ final class RouteCompiler
             }
 
             foreach ($rc->getMethods() as $method) {
+                $returnType = $method->getReturnType();
                 $result[$className]['methods'][$method->getName()]['__method'] = self::attributeEntries($method->getAttributes());
+                $result[$className]['methods'][$method->getName()]['returnType'] = $returnType instanceof ReflectionNamedType ? $returnType->getName() : null;
                 foreach ($method->getParameters() as $param) {
                     $type = $param->getType();
                     $result[$className]['methods'][$method->getName()]['parameters'][$param->getName()] = [

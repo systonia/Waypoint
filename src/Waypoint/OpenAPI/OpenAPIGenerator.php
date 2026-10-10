@@ -8,6 +8,7 @@ use Waypoint\{FileSystem, Logger, Router, Waypoint};
 use Waypoint\Attributes\{Body, Ignore, Param, Query, Summary, Tags, Throws};
 use Waypoint\Enums\Message;
 use Waypoint\Options\{FileSystemOptions, OpenAPIOptions};
+use Waypoint\Plugin\OpenApiExtension;
 use Waypoint\Support\Arr;
 
 /**
@@ -24,11 +25,15 @@ class OpenAPIGenerator
     /** @var array<class-string, mixed> See RouteCompiler::exportAllAttributes() for the shape. */
     private array $attributeCache;
 
+    /** @var array<string, OpenApiExtension> plugin name => extension */
+    private array $extensions;
+
     public function __construct(private Router $router)
     {
         $this->logger = new Logger();
         $this->schemas = new SchemaBuilder($this->logger);
         $this->attributeCache = (new FileSystem(Waypoint::getConfig(FileSystemOptions::class)))->loadAttributes();
+        $this->extensions = $router->pluginHooks(OpenApiExtension::class);
     }
 
     /**
@@ -240,7 +245,9 @@ class OpenAPIGenerator
     {
         [$parameters, $requestBody] = $this->extractParameters($controllerClass, $methodName);
 
-        $responses = ['200' => ['description' => 'Successful response', 'content' => ['application/json' => ['schema' => ['type' => 'object']]]]];
+        $returnType = $this->methodCacheEntry($controllerClass, $methodName)['returnType'] ?? null;
+        $content = is_string($returnType) ? $this->pluginContent($returnType) : null;
+        $responses = ['200' => ['description' => 'Successful response', 'content' => $content ?? ['application/json' => ['schema' => ['type' => 'object']]]]];
         foreach ($methodAttrs as $attr) {
             if ($attr['name'] !== Throws::class) {
                 continue;
@@ -268,6 +275,35 @@ class OpenAPIGenerator
             'responses' => $responses,
             'deprecated' => self::findAttr([...$classAttrs, ...$methodAttrs], Deprecated::class) !== null,
         ], fn($v) => $v !== null);
+    }
+
+    /** @return array<string, array<string, mixed>>|null The first plugin's description of $returnType. */
+    private function pluginContent(string $returnType): ?array
+    {
+        foreach ($this->extensions as $extension) {
+            $content = $extension->describeResult($returnType);
+            if ($content !== null) {
+                return $content;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The first plugin's description of a parameter, or null.
+     * @param list<array{name: string, args: array<int|string, mixed>}> $attributes
+     * @return array{parameters?: list<array<string, mixed>>, requestBody?: array<string, mixed>}|null
+     */
+    private function pluginParameter(string $name, ?string $type, bool $nullable, bool $hasDefault, array $attributes): ?array
+    {
+        $parameter = ['name' => $name, 'type' => $type, 'nullable' => $nullable, 'hasDefault' => $hasDefault, 'attributes' => $attributes];
+        foreach ($this->extensions as $extension) {
+            $described = $extension->describeParameter($parameter);
+            if ($described !== null) {
+                return $described;
+            }
+        }
+        return null;
     }
 
     /**
@@ -304,6 +340,13 @@ class OpenAPIGenerator
             $type = is_string($type) ? $type : null;
             $nullable = (bool) ($metaArr['nullable'] ?? false);
             $hasDefault = (bool) ($metaArr['hasDefault'] ?? false);
+
+            $described = $this->pluginParameter($paramName, $type, $nullable, $hasDefault, $attributes);
+            if ($described !== null) {
+                $params = [...$params, ...($described['parameters'] ?? [])];
+                $requestBody = $described['requestBody'] ?? $requestBody;
+                continue;
+            }
 
             $kind = null;
             $bindName = $paramName;

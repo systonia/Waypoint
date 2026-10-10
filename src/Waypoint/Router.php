@@ -532,6 +532,17 @@ class Router
     // -- Listing (OpenAPI) --
 
     /**
+     * The registered plugins' hooks of one type (OpenAPIGenerator asks for OpenApiExtension).
+     * @template T of object
+     * @param class-string<T> $type
+     * @return array<string, T>
+     */
+    public function pluginHooks(string $type): array
+    {
+        return $this->plugins->hooks($type);
+    }
+
+    /**
      * A flat summary of every route. 'version'/'unversionedPath' fall back to null/path for a
      * plan predating #[Version] -- what an unversioned route looks like anyway.
      * @return array<int, RouteSummary>

@@ -8,11 +8,11 @@ use ReflectionParameter;
 use Waypoint\Container;
 use Waypoint\Exceptions\ForbiddenException;
 use Waypoint\Http\{Request, Response};
-use Waypoint\Plugin\{ArgumentBinder, ClientAsset, Endpoint, Guard, PluginBase, Renderer, ResponseHook, RouteAttributeCompiler, ViewHelper};
+use Waypoint\Plugin\{ArgumentBinder, ClientAsset, Endpoint, Guard, OpenApiExtension, PluginBase, Renderer, ResponseHook, RouteAttributeCompiler, ViewHelper};
 use Waypoint\Tests\Fixtures\Support\CallTracker;
 
 /** Exercises every hook type once. Routes carrying #[Tagged('x')] get plan['plugins']['echo'] = ['tag' => 'x']. */
-final class EchoPlugin extends PluginBase implements Endpoint, RouteAttributeCompiler, Guard, ResponseHook, ArgumentBinder, Renderer, ViewHelper, ClientAsset
+final class EchoPlugin extends PluginBase implements Endpoint, RouteAttributeCompiler, Guard, ResponseHook, ArgumentBinder, Renderer, ViewHelper, ClientAsset, OpenApiExtension
 {
     public bool $booted = false;
 
@@ -101,6 +101,21 @@ final class EchoPlugin extends PluginBase implements Endpoint, RouteAttributeCom
     public function helpers(): array
     {
         return ['shout' => fn(string $text): string => strtoupper($text)];
+    }
+
+    public function describeParameter(array $parameter): ?array
+    {
+        foreach ($parameter['attributes'] as $attr) {
+            if ($attr['name'] === Shout::class) {
+                return ['parameters' => [['name' => $parameter['name'], 'in' => 'query', 'required' => true, 'description' => 'Shouted back in upper case', 'schema' => ['type' => 'string']]]];
+            }
+        }
+        return null;
+    }
+
+    public function describeResult(string $returnType): ?array
+    {
+        return $returnType === EchoResult::class ? ['text/echo' => ['schema' => ['type' => 'string']]] : null;
     }
 
     public function assets(): array

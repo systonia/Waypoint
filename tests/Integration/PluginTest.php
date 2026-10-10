@@ -4,6 +4,7 @@ namespace Waypoint\Tests\Integration;
 
 use InvalidArgumentException;
 use RuntimeException;
+use Waypoint\OpenAPI\OpenAPIGenerator;
 use Waypoint\Waypoint;
 use Waypoint\Options\{FileSystemOptions, RendererOptions};
 use Waypoint\Tests\Fixtures\Controllers\CustomersController;
@@ -85,6 +86,20 @@ final class PluginTest extends IntegrationTestCase
 
         $this->assertSame('rendered by plugin', $this->dispatch('GET', '/echo/result'));
         $this->assertStringStartsWith('text/echo', $this->sentHeaders()['content-type'] ?? '');
+    }
+
+    public function testOpenApiExtensionDocumentsThePluginsParametersAndReturnTypes(): void
+    {
+        $this->boot();
+        $paths = (new OpenAPIGenerator(Waypoint::getRouter()))->generate()['paths'];
+
+        $this->assertSame(
+            [['name' => 'word', 'in' => 'query', 'required' => true, 'description' => 'Shouted back in upper case', 'schema' => ['type' => 'string']]],
+            $paths['/echo/shout']['get']['parameters']
+        );
+        $this->assertSame(['text/echo' => ['schema' => ['type' => 'string']]], $paths['/echo/result']['get']['responses']['200']['content']);
+        // A route the plugin doesn't know keeps the core's description.
+        $this->assertSame(['application/json' => ['schema' => ['type' => 'object']]], $paths['/echo/plain']['get']['responses']['200']['content']);
     }
 
     public function testViewHelpersAndPluginAssetsAreAvailableInTemplates(): void
