@@ -130,4 +130,25 @@ final class ArgumentBindingTest extends IntegrationTestCase
         $this->assertArrayHasKey('1', $decoded['errors']);
         $this->assertArrayNotHasKey('0', $decoded['errors']);
     }
+
+    /** @return array<string, array{mixed, string}> */
+    public static function malformedCollections(): array
+    {
+        return [
+            'scalar items' => [[1, 'two'], '0'],
+            'a scalar between objects' => [[['name' => 'Widget', 'sku' => 'AB12'], 'oops'], '1'],
+            'an object instead of a list' => [['name' => 'Widget', 'sku' => 'AB12'], 'body'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('malformedCollections')]
+    public function testAMalformedBodyCollectionIsAValidationErrorNotACrash(mixed $body, string $errorKey): void
+    {
+        $output = $this->dispatch('POST', '/documented/bulk-products', [], $body);
+
+        $this->assertSame(422, http_response_code());
+        $decoded = json_decode($output, true);
+        $this->assertSame('Validation failed', $decoded['title']);
+        $this->assertArrayHasKey($errorKey, $decoded['errors']);
+    }
 }

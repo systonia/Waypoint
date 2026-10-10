@@ -234,6 +234,9 @@ class OrdersController
 }
 ```
 
+The body must be a JSON list of objects. A single object answers `422` with a `body` error, and an
+element that is no object (`[1, "two"]`) answers `422` with an error under its index.
+
 This is reflected in the generated OpenAPI schema too: the request body documents as
 `{"type": "array", "items": {"$ref": "#/components/schemas/LineItemDTO"}}` rather than a single `$ref`.
 

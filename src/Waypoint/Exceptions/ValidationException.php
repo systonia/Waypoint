@@ -8,12 +8,12 @@ use Waypoint\Enums\Message;
 /** HTTP 422: field-level validation errors, exposed as the RFC 9457 extension member 'errors'. */
 class ValidationException extends HttpException
 {
-    /** @var array<string, mixed> field => message; for a #[Body(of: ...)] collection, index => {field => message}. */
+    /** @var array<array-key, mixed> field => message; for a #[Body(of: ...)] collection, index => {field => message}. */
     protected array $errors = [];
 
     /**
      * @param string|Message $message
-     * @param array<string, mixed> $errors
+     * @param array<array-key, mixed> $errors
      */
     public function __construct(
         $message = Message::ValidationFailed->value,
@@ -33,13 +33,13 @@ class ValidationException extends HttpException
         $this->errors = $errors;
     }
 
-    /** @return array<string, mixed> */
+    /** @return array<array-key, mixed> */
     public function getErrors(): array
     {
         return $this->errors;
     }
 
-    /** @return array<string, mixed> */
+    /** @return array<array-key, mixed> */
     #[\Override]
     public function toProblemDetails(): array
     {

@@ -88,10 +88,18 @@ final class ArgumentResolver
             return [];
             // @codeCoverageIgnoreEnd
         }
+        $body = $req->body();
+        if (!array_is_list($body)) {
+            throw new ValidationException(Message::ValidationFailed, ['body' => 'Expected a list.']);
+        }
         $validator = ($arg['validate'] ?? false) ? new Validator() : null;
         $items = [];
         $errors = [];
-        foreach ($req->body() as $index => $item) {
+        foreach ($body as $index => $item) {
+            if (!is_array($item)) {
+                $errors["$index"] = ['item' => 'Expected an object.'];
+                continue;
+            }
             $dto = new $class($item);
             if ($validator !== null) {
                 $itemErrors = $validator->validate($dto);
