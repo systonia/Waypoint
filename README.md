@@ -850,14 +850,14 @@ public function invoice(): \SplFileInfo
 
 Configure `JWTOptions` before calling `useJwt()`. **The signing secret has no default** — it's an
 uninitialized typed property, so using it unconfigured throws immediately rather than silently signing
-tokens with a guessable value:
+tokens with a guessable value. Tokens are always HS256, and a token is only valid with a numeric `exp`
+in the future (`JWT::encode()` always sets one):
 
 ```php
 use Waypoint\Options\JWTOptions;
 
 $app->configure(function (JWTOptions $opts, Environment $env) {
     $opts->secret = $env->get('JWT_SECRET'); // required -- no default
-    $opts->alg = 'HS256';                // default
     $opts->ttl = 3600;                   // default, seconds
     $opts->tokenType = 'Bearer';         // default
     $opts->header = 'Authorization';     // default
@@ -1322,7 +1322,6 @@ Configuration mainly happens through `load(?string $dir = null)`, not a plain pr
 | Setting | Default | Description |
 |---|---|---|
 | `secret` | *(required — uninitialized)* | Signing secret. Accessing it unconfigured throws immediately rather than signing with a guessable default. |
-| `alg` | `'HS256'` | Signing algorithm. |
 | `ttl` | `3600` | Token lifetime, in seconds. |
 | `tokenType` | `'Bearer'` | Expected prefix on the `Authorization` header value. |
 | `header` | `'Authorization'` | Request header the token is read from. |

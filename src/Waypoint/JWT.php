@@ -15,12 +15,12 @@ class JWT
         $opts = Waypoint::getConfig(JWTOptions::class);
         $payload['exp'] = time() + ($ttl ?? $opts->ttl);
 
-        $h = Base64Url::encodeJson(['alg' => $opts->alg, 'typ' => 'JWT']);
+        $h = Base64Url::encodeJson(['alg' => 'HS256', 'typ' => 'JWT']);
         $p = Base64Url::encodeJson($payload);
         return "$h.$p." . Base64Url::sign("$h.$p", $opts->secret);
     }
 
-    /** @return array<string, mixed>|null The payload, or null for a malformed, wrongly-signed, or expired token. */
+    /** @return array<string, mixed>|null The payload, or null for a malformed, wrongly-signed, non-HS256, expired or never-expiring token. */
     #[\NoDiscard('Ignoring the result silently skips checking whether the token actually verified.')]
     public static function decode(string $jwt): ?array
     {
@@ -31,6 +31,10 @@ class JWT
         if (!hash_equals(Base64Url::sign("$h.$p", Waypoint::getConfig(JWTOptions::class)->secret), $s)) {
             return null;
         }
+        $header = json_decode(Base64Url::decode($h), true);
+        if (!is_array($header) || ($header['alg'] ?? null) !== 'HS256') {
+            return null;
+        }
         $decoded = json_decode(Base64Url::decode($p), true);
         if (!is_array($decoded)) {
             // @codeCoverageIgnoreStart
@@ -39,8 +43,9 @@ class JWT
             // @codeCoverageIgnoreEnd
         }
         $payload = Arr::stringKeyed($decoded);
+        // A token without a numeric expiry would be valid forever: encode() always sets one
         $exp = $payload['exp'] ?? null;
-        return is_int($exp) && $exp < time() ? null : $payload;
+        return (is_int($exp) || is_float($exp)) && $exp > time() ? $payload : null;
     }
 
     /**

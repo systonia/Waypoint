@@ -11,7 +11,6 @@ final class JWTOptionsTest extends TestCase
     public function testDefaults(): void
     {
         $opts = new JWTOptions();
-        $this->assertSame('HS256', $opts->alg);
         $this->assertSame(3600, $opts->ttl);
         $this->assertSame('Bearer', $opts->tokenType);
         $this->assertSame('Authorization', $opts->header);

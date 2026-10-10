@@ -76,6 +76,35 @@ final class JWTTest extends TestCase
         $this->assertNull(JWT::decode($token));
     }
 
+    /** A validly signed token with any header and payload, as someone holding the secret (or a buggy issuer) could write it. */
+    private static function signed(array $header, array $payload): string
+    {
+        $h = \Waypoint\Support\Base64Url::encodeJson($header);
+        $p = \Waypoint\Support\Base64Url::encodeJson($payload);
+        return "$h.$p." . \Waypoint\Support\Base64Url::sign("$h.$p", 'test-secret');
+    }
+
+    public function testDecodeRejectsATokenThatNeverExpires(): void
+    {
+        $header = ['alg' => 'HS256', 'typ' => 'JWT'];
+
+        $this->assertNull(JWT::decode(self::signed($header, ['sub' => '1'])), 'no exp');
+        $this->assertNull(JWT::decode(self::signed($header, ['sub' => '1', 'exp' => 'never'])), 'text exp');
+        $this->assertNull(JWT::decode(self::signed($header, ['sub' => '1', 'exp' => time() - 0.5])), 'fractional past exp');
+        $this->assertNull(JWT::decode(self::signed($header, ['sub' => '1', 'exp' => time()])), 'exp is now');
+        $this->assertSame('1', JWT::decode(self::signed($header, ['sub' => '1', 'exp' => time() + 60.5]))['sub'] ?? null);
+    }
+
+    public function testDecodeAcceptsOnlyTheHs256ItSigns(): void
+    {
+        $payload = ['sub' => '1', 'exp' => time() + 60];
+
+        $this->assertNull(JWT::decode(self::signed(['alg' => 'none', 'typ' => 'JWT'], $payload)));
+        $this->assertNull(JWT::decode(self::signed(['alg' => 'RS256', 'typ' => 'JWT'], $payload)));
+        $this->assertNull(JWT::decode(self::signed(['typ' => 'JWT'], $payload)));
+        $this->assertNotNull(JWT::decode(self::signed(['alg' => 'HS256', 'typ' => 'JWT'], $payload)));
+    }
+
     public function testEncodeTtlOverridesTheConfiguredDefault(): void
     {
         $token = JWT::encode(['sub' => '1'], ttl: 3600);

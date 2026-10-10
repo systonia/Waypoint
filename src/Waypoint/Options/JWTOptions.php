@@ -8,8 +8,6 @@ class JWTOptions
     /** Signing secret. Deliberately uninitialized: reading it unset throws instead of signing with a guessable default. */
     public string $secret;
 
-    public string $alg = 'HS256';
-
     /** Token lifetime in seconds. */
     public int $ttl = 3600;
 
