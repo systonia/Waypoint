@@ -43,6 +43,19 @@ abstract class IntegrationTestCase extends TestCase
         return preg_match('#(?:href|src)="/assets/([0-9a-f]{12}\.' . preg_quote($extension, '#') . ')"#', $html, $match) === 1 ? $match[1] : null;
     }
 
+    /** @return list<string> "Name: value" lines of the last dispatch(), Set-Cookie included, as a SAPI would list them */
+    protected function sentHeaderLines(): array
+    {
+        $lines = [];
+        foreach ($this->lastResponse?->headers() ?? [] as $name => $value) {
+            $lines[] = "$name: $value";
+        }
+        foreach ($this->lastResponse?->cookies() ?? [] as $cookie) {
+            $lines[] = "set-cookie: $cookie";
+        }
+        return $lines;
+    }
+
     /** @return array<string, string> lower-cased header name => value of the last dispatch() */
     protected function sentHeaders(): array
     {

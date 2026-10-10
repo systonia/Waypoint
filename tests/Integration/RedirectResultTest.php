@@ -29,7 +29,7 @@ final class RedirectResultTest extends IntegrationTestCase
         $output = $this->dispatch('GET', '/redirects/default');
 
         $this->assertSame('', $output);
-        $this->assertSame(302, http_response_code());
+        $this->assertSame(302, $this->lastResponse?->status());
         $this->assertSame('/landed', $this->sentHeaders()['location'] ?? null);
     }
 
@@ -37,7 +37,7 @@ final class RedirectResultTest extends IntegrationTestCase
     {
         $this->dispatch('GET', '/redirects/permanent');
 
-        $this->assertSame(301, http_response_code());
+        $this->assertSame(301, $this->lastResponse?->status());
         $this->assertSame('https://example.com/moved', $this->sentHeaders()['location'] ?? null);
     }
 
@@ -46,7 +46,7 @@ final class RedirectResultTest extends IntegrationTestCase
         $output = $this->dispatch('POST', '/redirects/form');
 
         $this->assertSame('', $output);
-        $this->assertSame(303, http_response_code());
+        $this->assertSame(303, $this->lastResponse?->status());
         $this->assertSame('/landed', $this->sentHeaders()['location'] ?? null);
         $this->assertStringStartsWith('session=abc', $this->sentHeaders()['set-cookie'] ?? '');
     }
@@ -56,7 +56,7 @@ final class RedirectResultTest extends IntegrationTestCase
         $output = $this->dispatch('POST', '/redirects/form?fail=1');
 
         $this->assertStringContainsString('testview hit', $output);
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
         $this->assertArrayNotHasKey('location', $this->sentHeaders());
     }
 
@@ -65,7 +65,7 @@ final class RedirectResultTest extends IntegrationTestCase
         $output = $this->dispatch('GET', '/redirects/formatted');
 
         $this->assertSame('', $output);
-        $this->assertSame(302, http_response_code());
+        $this->assertSame(302, $this->lastResponse?->status());
         $this->assertArrayNotHasKey('content-type', $this->sentHeaders());
     }
 

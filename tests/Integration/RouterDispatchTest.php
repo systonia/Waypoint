@@ -114,7 +114,7 @@ final class RouterDispatchTest extends IntegrationTestCase
     {
         $output = $this->dispatch('HEAD', '/products/report.txt');
 
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
         $this->assertSame('', $output);
         $this->assertSame('attachment; filename="report.txt"', $this->sentHeaders()['content-disposition'] ?? null);
     }
@@ -122,15 +122,15 @@ final class RouterDispatchTest extends IntegrationTestCase
     public function testAKnownPathWithTheWrongMethodIs405WithTheAllowedMethods(): void
     {
         $this->dispatch('DELETE', '/products/report.txt');
-        $this->assertSame(405, http_response_code());
+        $this->assertSame(405, $this->lastResponse?->status());
         $this->assertSame('GET, HEAD', $this->sentHeaders()['allow'] ?? null);
 
         $this->dispatch('GET', '/products');
-        $this->assertSame(405, http_response_code());
+        $this->assertSame(405, $this->lastResponse?->status());
         $this->assertSame('POST', $this->sentHeaders()['allow'] ?? null);
 
         $this->dispatch('DELETE', '/products/nothing-here');
-        $this->assertSame(404, http_response_code());
+        $this->assertSame(404, $this->lastResponse?->status());
     }
 
     public function testXmlFormatterWrapsArrayInRootElement(): void

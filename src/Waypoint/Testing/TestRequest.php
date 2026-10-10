@@ -3,12 +3,14 @@
 namespace Waypoint\Testing;
 
 use Waypoint\{Csrf, JWT, Waypoint};
+use Waypoint\Http\Request;
 use Waypoint\Options\{CsrfOptions, JWTOptions};
 use Waypoint\Support\Arr;
 
 /**
- * Builds one request and runs it through App::handleHttp() via the
- * superglobals, exactly as a SAPI would. Every with*() returns $this.
+ * Builds one request and runs it through App::handle() via Request::fromParts(): no superglobals, no
+ * header()/echo. Cookies a test put into $_COOKIE and $_SERVER['HTTPS'] still apply, as defaults.
+ * Every with*() returns $this.
  */
 final class TestRequest
 {
@@ -24,6 +26,8 @@ final class TestRequest
     private array $cookies = [];
 
     private bool $csrf = false;
+
+    private ?bool $https = null;
 
     public function __construct(private string $method, private string $uri)
     {
@@ -84,6 +88,13 @@ final class TestRequest
         return $this;
     }
 
+    /** A request that arrived over HTTPS (or, with false, explicitly not). */
+    public function withHttps(bool $https = true): self
+    {
+        $this->https = $https;
+        return $this;
+    }
+
     /** What a browser sends for a top-level navigation (typed URL, link, reload). */
     public function asNavigation(): self
     {
@@ -92,45 +103,45 @@ final class TestRequest
 
     public function send(): TestResponse
     {
-        $_SERVER['REQUEST_METHOD'] = strtoupper($this->method);
-        $_SERVER['REQUEST_URI'] = $this->uri;
-        parse_str((string) parse_url($this->uri, PHP_URL_QUERY), $_GET);
-        $_POST = $this->body;
-        // Cookies a test set in $_COOKIE itself stay for every request; the builder's own apply to this one only.
-        $testCookies = $_COOKIE;
-        $_COOKIE = [...$testCookies, ...$this->cookies];
+        // Cookies a test set in $_COOKIE itself apply to every request; the builder's own to this one only
+        $cookies = [...array_filter($_COOKIE, fn (mixed $value, mixed $name): bool => is_string($name) && is_string($value), ARRAY_FILTER_USE_BOTH), ...$this->cookies];
+        $headers = $this->headers;
         if ($this->csrf) {
             $opts = Waypoint::getConfig(CsrfOptions::class);
             if (isset($opts->secret)) {
                 // Minted after the cookies are in place: the token is bound to the session cookie this request carries
                 $sessionCookie = Waypoint::getConfig(JWTOptions::class)->cookieName;
-                $session = $sessionCookie !== null ? $_COOKIE[$sessionCookie] ?? '' : '';
-                $token = Csrf::generateToken(is_string($session) ? $session : '');
-                $_COOKIE[$opts->cookieName] = $token;
-                $this->headers[$opts->headerName] = $token;
+                $token = Csrf::generateToken($sessionCookie !== null ? $cookies[$sessionCookie] ?? '' : '');
+                $cookies[$opts->cookieName] = $token;
+                $headers[$opts->headerName] = $token;
             }
         }
-        foreach (array_keys($_SERVER) as $key) {
-            if (str_starts_with($key, 'HTTP_')) {
-                unset($_SERVER[$key]);
-            }
-        }
-        unset($_SERVER['CONTENT_TYPE'], $_SERVER['CONTENT_LENGTH']);
-        foreach ($this->headers as $name => $value) {
-            // Like a real server: Content-Type/-Length go into $_SERVER without the HTTP_ prefix
-            $key = strtoupper(str_replace('-', '_', $name));
-            $_SERVER[in_array($key, ['CONTENT_TYPE', 'CONTENT_LENGTH'], true) ? $key : "HTTP_$key"] = $value;
-        }
+        $https = $_SERVER['HTTPS'] ?? null;
+        $request = Request::fromParts(
+            $this->method,
+            $this->uri,
+            $headers,
+            $this->rawBody ?? '',
+            $cookies,
+            $this->https ?? (is_string($https) && $https !== '' && strtolower($https) !== 'off'),
+            $this->body,
+        );
 
-        // PHP tracks sent headers process-wide under the CLI too; start clean so the response only reports its own.
-        header_remove();
+        // Output a controller echoed itself lands in front of the body, as it would under a SAPI
         ob_start();
-        Waypoint::create()->handleHttp($this->rawBody);
-        $body = (string) ob_get_clean();
-        $_COOKIE = $testCookies;
+        try {
+            $response = Waypoint::create()->handle($request);
+        } finally {
+            $stray = (string) ob_get_clean();
+        }
 
-        $raw = Arr::stringList(function_exists('xdebug_get_headers') ? xdebug_get_headers() : headers_list());
-        $status = http_response_code();
-        return new TestResponse(is_int($status) ? $status : 200, $raw, $body);
+        $lines = [];
+        foreach ($response->getHeaders() as $name => $value) {
+            $lines[] = "$name: $value";
+        }
+        foreach ($response->getCookies() as $cookie) {
+            $lines[] = "Set-Cookie: $cookie";
+        }
+        return new TestResponse($response->getStatus(), $lines, $stray . $response->getBody());
     }
 }

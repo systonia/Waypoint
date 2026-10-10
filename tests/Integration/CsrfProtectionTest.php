@@ -55,7 +55,7 @@ final class CsrfProtectionTest extends IntegrationTestCase
         }
 
         $this->assertSame('"submitted"', $output);
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
     }
 
     public function testPostWithMatchingCookieAndHeaderSucceeds(): void
@@ -71,7 +71,7 @@ final class CsrfProtectionTest extends IntegrationTestCase
         }
 
         $this->assertSame('"submitted"', $output);
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
     }
 
     public function testPostWithoutAnyCsrfTokenIsRejectedWith403(): void
@@ -80,7 +80,7 @@ final class CsrfProtectionTest extends IntegrationTestCase
 
         $output = $this->dispatch('POST', '/csrf/submit');
 
-        $this->assertSame(403, http_response_code());
+        $this->assertSame(403, $this->lastResponse?->status());
         $this->assertSame(
             ['type' => 'about:blank', 'title' => 'Forbidden', 'status' => 403, 'detail' => 'Invalid or missing CSRF token'],
             json_decode($output, true)
@@ -99,7 +99,7 @@ final class CsrfProtectionTest extends IntegrationTestCase
             unset($_COOKIE['csrf_token']);
         }
 
-        $this->assertSame(403, http_response_code());
+        $this->assertSame(403, $this->lastResponse?->status());
         $this->assertSame(
             ['type' => 'about:blank', 'title' => 'Forbidden', 'status' => 403, 'detail' => 'Invalid or missing CSRF token'],
             json_decode($output, true)
@@ -117,7 +117,7 @@ final class CsrfProtectionTest extends IntegrationTestCase
             unset($_COOKIE['csrf_token']);
         }
 
-        $this->assertSame(403, http_response_code());
+        $this->assertSame(403, $this->lastResponse?->status());
         $this->assertSame(
             ['type' => 'about:blank', 'title' => 'Forbidden', 'status' => 403, 'detail' => 'Invalid or missing CSRF token'],
             json_decode($output, true)
@@ -139,7 +139,7 @@ final class CsrfProtectionTest extends IntegrationTestCase
             unset($_COOKIE['csrf_token']);
         }
 
-        $this->assertSame(403, http_response_code());
+        $this->assertSame(403, $this->lastResponse?->status());
     }
 
     public function testSkipCsrfRouteAcceptsAPostWithNoTokenAtAll(): void
@@ -149,7 +149,7 @@ final class CsrfProtectionTest extends IntegrationTestCase
         $output = $this->dispatch('POST', '/csrf/submit-unprotected');
 
         $this->assertSame('"submitted without csrf"', $output);
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
     }
 
     public function testCsrfIsNotEnforcedWhenCsrfOptionsWasNeverConfigured(): void
@@ -161,12 +161,12 @@ final class CsrfProtectionTest extends IntegrationTestCase
         $output = $this->dispatch('POST', '/csrf/submit');
 
         $this->assertSame('"submitted"', $output);
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
     }
 
     private function sentCookieLine(string $name): ?string
     {
-        $raw = function_exists('xdebug_get_headers') ? xdebug_get_headers() : headers_list();
+        $raw = $this->sentHeaderLines();
         foreach ($raw as $line) {
             if (stripos($line, 'Set-Cookie:') === 0 && str_contains($line, "$name=")) {
                 return trim(substr($line, strlen('Set-Cookie:')));

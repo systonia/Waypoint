@@ -66,7 +66,7 @@ final class NestedViewsTest extends IntegrationTestCase
     {
         $output = $this->dispatch('GET', '/nested/by-name?name=' . rawurlencode('../../../composer'));
 
-        $this->assertSame(500, http_response_code());
+        $this->assertSame(500, $this->lastResponse?->status());
         $this->assertStringNotContainsString('systonia', $output);
     }
 
@@ -75,7 +75,7 @@ final class NestedViewsTest extends IntegrationTestCase
         $level = ob_get_level();
         $output = $this->dispatch('GET', '/nested/by-name?name=Throwing');
 
-        $this->assertSame(500, http_response_code());
+        $this->assertSame(500, $this->lastResponse?->status());
         $this->assertStringNotContainsString('PARTIAL-TEMPLATE-OUTPUT', $output);
         $this->assertStringNotContainsString('PARTIAL-SECTION-OUTPUT', $output);
         // A buffer left open would swallow or leak the next request's output in a persistent worker
@@ -86,7 +86,7 @@ final class NestedViewsTest extends IntegrationTestCase
     {
         $this->dispatch('GET', '/nested/by-name?name=' . rawurlencode('/etc/passwd'));
 
-        $this->assertSame(500, http_response_code());
+        $this->assertSame(500, $this->lastResponse?->status());
     }
 
 }

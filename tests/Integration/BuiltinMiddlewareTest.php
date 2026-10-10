@@ -41,7 +41,7 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
 
         $this->dispatch('OPTIONS', '/orders');
 
-        $this->assertSame(204, http_response_code());
+        $this->assertSame(204, $this->lastResponse?->status());
         $this->assertSame('*', $this->sentHeaders()['access-control-allow-origin'] ?? null);
     }
 
@@ -115,14 +115,22 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
         $app->attach([WhoAmIController::class]);
         $app->useJwt();
 
+        // The real SAPI path, not the test kit: capture() reads $_SERVER, send() writes through header()/echo
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['REQUEST_URI'] = '/whoami';
         $_SERVER['AUTHORIZATION'] = "Bearer $token";
+        header_remove();
+        ob_start();
         try {
-            $output = $this->dispatch('GET', '/whoami');
+            $app->handleHttp();
         } finally {
+            $output = (string) ob_get_clean();
             unset($_SERVER['AUTHORIZATION']);
         }
 
         $this->assertSame('7', json_decode($output, true)['jwt']['sub']);
+        $this->assertSame(200, http_response_code());
+        $this->assertContains('Content-Length: ' . strlen($output), function_exists('xdebug_get_headers') ? xdebug_get_headers() : headers_list());
     }
 
     public function testJwtCookieAuthenticationWithoutACsrfSecretFailsEveryRequest(): void
@@ -138,7 +146,7 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
 
         $output = $this->dispatch('GET', '/whoami');
 
-        $this->assertSame(500, http_response_code());
+        $this->assertSame(500, $this->lastResponse?->status());
         $this->assertSame('Internal Server Error', json_decode($output, true)['title'] ?? null);
     }
 

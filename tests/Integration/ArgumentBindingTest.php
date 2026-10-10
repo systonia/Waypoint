@@ -29,7 +29,7 @@ final class ArgumentBindingTest extends IntegrationTestCase
         $output = $this->dispatch('GET', '/argbinding/response-param');
 
         $this->assertSame(['ok' => true], json_decode($output, true));
-        $headers = function_exists('xdebug_get_headers') ? xdebug_get_headers() : headers_list();
+        $headers = $this->sentHeaderLines();
         $this->assertTrue(
             (bool) array_filter($headers, fn($h) => str_starts_with(strtolower($h), 'x-from-param:'))
         );
@@ -69,7 +69,7 @@ final class ArgumentBindingTest extends IntegrationTestCase
     {
         $output = $this->dispatch('GET', "/argbinding/typed?{$query}");
 
-        $this->assertSame(422, http_response_code());
+        $this->assertSame(422, $this->lastResponse?->status());
         $decoded = json_decode($output, true);
         $this->assertSame('Validation failed', $decoded['title']);
         $this->assertArrayHasKey($field, $decoded['errors']);
@@ -92,13 +92,13 @@ final class ArgumentBindingTest extends IntegrationTestCase
 
         // '.' is a dot, not any character
         $this->dispatch('GET', '/argbinding/file/reportxjson');
-        $this->assertSame(404, http_response_code());
+        $this->assertSame(404, $this->lastResponse?->status());
 
         // '+' is a plus, not a repetition
         $output = $this->dispatch('GET', '/argbinding/tag/c++/php');
         $this->assertSame(['tag' => 'php'], json_decode($output, true));
         $this->dispatch('GET', '/argbinding/tag/ccc/php');
-        $this->assertSame(404, http_response_code());
+        $this->assertSame(404, $this->lastResponse?->status());
     }
 
     public function testUnrecognizedClassParameterAlwaysBindsToNull(): void
@@ -146,7 +146,7 @@ final class ArgumentBindingTest extends IntegrationTestCase
     {
         $output = $this->dispatch('POST', '/documented/bulk-products', [], $body);
 
-        $this->assertSame(422, http_response_code());
+        $this->assertSame(422, $this->lastResponse?->status());
         $decoded = json_decode($output, true);
         $this->assertSame('Validation failed', $decoded['title']);
         $this->assertArrayHasKey($errorKey, $decoded['errors']);

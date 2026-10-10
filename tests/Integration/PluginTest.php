@@ -69,7 +69,7 @@ final class PluginTest extends IntegrationTestCase
 
         $output = $this->dispatch('GET', '/echo/forbidden');
 
-        $this->assertSame(403, http_response_code());
+        $this->assertSame(403, $this->lastResponse?->status());
         $this->assertSame('tagged forbidden', json_decode($output, true)['detail']);
     }
 

@@ -676,8 +676,8 @@ the built-in `HttpException`/`Throwable` defaults above.
 
 A handler only needs to build `$res` (status/headers/body) and return — `App::handleHttp()` sends the
 response exactly once, itself, after the whole middleware pipe has unwound. `Response::send()` stays
-idempotent for compatibility — a handler that calls it itself doesn't break anything — but it's no longer
-the recommended shape for a new handler.
+harmless for compatibility — inside `App::handle()` it does nothing, the caller sends the finished
+response — but it's no longer the recommended shape for a new handler.
 
 ---
 
@@ -1122,7 +1122,9 @@ Available plugins:
 ## Testing
 
 `Waypoint\Testing\TestCase` (needs `phpunit/phpunit` as a dev dependency) drives a real request through
-the app the way a SAPI would, with a fresh `Waypoint` and clean superglobals per test:
+the app with `Request::fromParts()` and `App::handle()`, so nothing goes through the superglobals or
+`header()`/`echo`. Every test gets a fresh `Waypoint` and clean superglobals; cookies a test puts into
+`$_COOKIE` and `$_SERVER['HTTPS']` still apply as defaults:
 
 ```php
 use Waypoint\Testing\TestCase;
@@ -1153,7 +1155,7 @@ final class LoginTest extends TestCase
 ```
 
 - Requests: `get()`, `post()` (form fields), `json()` (raw JSON body), or `request()` for the builder:
-  `withHeader()`, `withCookie()`, `withJwt($payload)`, `withCsrf()` (a valid cookie + header pair),
+  `withHeader()`, `withCookie()`, `withJwt($payload)`, `withCsrf()` (a valid cookie + header pair), `withHttps()`,
   `asNavigation()` (what a browser sends), then `send()`.
 - Responses: `status()`, `header()`, `cookie()`, `body()`, `json('errors.email')`, and fluent
   `assertStatus/Ok/Redirect/Header/HeaderMissing/ContentType/Cookie/See/DontSee/Body/Json/JsonPath`.

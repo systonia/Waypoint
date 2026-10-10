@@ -29,7 +29,7 @@ final class AppMiddlewareExceptionTest extends IntegrationTestCase
     {
         $output = $this->dispatch('GET', '/unauthorized');
 
-        $this->assertSame(401, http_response_code());
+        $this->assertSame(401, $this->lastResponse?->status());
         $this->assertSame('application/problem+json', $this->sentHeaders()['content-type'] ?? null);
         $this->assertSame(401, json_decode($output, true)['status'] ?? null);
     }
@@ -38,7 +38,7 @@ final class AppMiddlewareExceptionTest extends IntegrationTestCase
     {
         $output = $this->dispatch('GET', '/broken');
 
-        $this->assertSame(500, http_response_code());
+        $this->assertSame(500, $this->lastResponse?->status());
         $this->assertStringNotContainsString('password', $output);
         $this->assertSame('Internal Server Error', json_decode($output, true)['title'] ?? null);
     }

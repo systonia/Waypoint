@@ -159,7 +159,11 @@ class Response
         return $this;
     }
 
-    /** Ties the response to $req: HEAD drops the body, its Accept-Encoding decides gzip. App::handle() does this. */
+    /**
+     * Ties the response to $req: HEAD drops the body, its Accept-Encoding decides gzip. App::handle() does this.
+     * Until finalize() a bound response ignores send(): an exception handler calling it itself must not write
+     * through header()/echo when the caller of handle() writes the response out on its own.
+     */
     public function forRequest(Request $req): self
     {
         $this->request = $req;
@@ -210,7 +214,7 @@ class Response
     /** Finalizes, then sends status, headers, cookies and body. A second call does nothing. */
     public function send(): void
     {
-        if ($this->sent) {
+        if ($this->sent || ($this->request !== null && !$this->finalized)) {
             return;
         }
         $this->sent = true;

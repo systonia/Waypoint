@@ -25,7 +25,7 @@ final class AuthorizationTest extends IntegrationTestCase
     {
         $output = $this->dispatch('GET', '/authz/public');
 
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
         $this->assertSame(['ok' => true], json_decode($output, true));
     }
 
@@ -33,7 +33,7 @@ final class AuthorizationTest extends IntegrationTestCase
     {
         $output = $this->dispatch('GET', '/authz/authenticated');
 
-        $this->assertSame(401, http_response_code());
+        $this->assertSame(401, $this->lastResponse?->status());
         $this->assertSame('Unauthorized', json_decode($output, true)['title'] ?? null);
     }
 
@@ -43,7 +43,7 @@ final class AuthorizationTest extends IntegrationTestCase
 
         $output = $this->dispatch('GET', '/authz/authenticated', ['Authorization' => "Bearer $token"]);
 
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
         $this->assertSame(['ok' => true], json_decode($output, true));
     }
 
@@ -51,14 +51,14 @@ final class AuthorizationTest extends IntegrationTestCase
     {
         $output = $this->dispatch('GET', '/authz-class/plain');
 
-        $this->assertSame(401, http_response_code());
+        $this->assertSame(401, $this->lastResponse?->status());
         $this->assertSame('Unauthorized', json_decode($output, true)['title'] ?? null);
     }
 
     public function testGuardsAndMiddlewaresOfBaseControllersApplyToTheirSubclasses(): void
     {
         $output = $this->dispatch('GET', '/inherited/secret');
-        $this->assertSame(401, http_response_code(), 'an #[Authenticated] on a base controller left the route open');
+        $this->assertSame(401, $this->lastResponse?->status(), 'an #[Authenticated] on a base controller left the route open');
         $this->assertSame('Unauthorized', json_decode($output, true)['title'] ?? null);
 
         $token = JWT::encode(['sub' => '1']);
@@ -71,7 +71,7 @@ final class AuthorizationTest extends IntegrationTestCase
     {
         $this->dispatch('GET', '/authz/admin-role');
 
-        $this->assertSame(401, http_response_code());
+        $this->assertSame(401, $this->lastResponse?->status());
     }
 
     public function testRoleRouteRejectsAMismatchedRoleWith403(): void
@@ -80,7 +80,7 @@ final class AuthorizationTest extends IntegrationTestCase
 
         $output = $this->dispatch('GET', '/authz/admin-role', ['Authorization' => "Bearer $token"]);
 
-        $this->assertSame(403, http_response_code());
+        $this->assertSame(403, $this->lastResponse?->status());
         $this->assertSame('Forbidden', json_decode($output, true)['title'] ?? null);
     }
 
@@ -90,7 +90,7 @@ final class AuthorizationTest extends IntegrationTestCase
 
         $output = $this->dispatch('GET', '/authz/admin-role', ['Authorization' => "Bearer $token"]);
 
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
         $this->assertSame(['ok' => true], json_decode($output, true));
     }
 
@@ -103,14 +103,14 @@ final class AuthorizationTest extends IntegrationTestCase
         // editor token must now be rejected on this specific route, even
         // though it satisfies every *other* route on the same class.
         $this->dispatch('GET', '/authz-role/override', ['Authorization' => "Bearer $editorToken"]);
-        $this->assertSame(403, http_response_code());
+        $this->assertSame(403, $this->lastResponse?->status());
 
         $output = $this->dispatch('GET', '/authz-role/override', ['Authorization' => "Bearer $adminToken"]);
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
         $this->assertSame(['ok' => true], json_decode($output, true));
 
         $output = $this->dispatch('GET', '/authz-role/plain', ['Authorization' => "Bearer $editorToken"]);
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
         $this->assertSame(['ok' => true], json_decode($output, true));
     }
 
@@ -120,7 +120,7 @@ final class AuthorizationTest extends IntegrationTestCase
 
         $output = $this->dispatch('GET', '/authz/manage-users', ['Authorization' => "Bearer $token"]);
 
-        $this->assertSame(403, http_response_code());
+        $this->assertSame(403, $this->lastResponse?->status());
         $this->assertSame('Forbidden', json_decode($output, true)['title'] ?? null);
     }
 
@@ -135,7 +135,7 @@ final class AuthorizationTest extends IntegrationTestCase
 
         $output = $this->dispatch('GET', '/authz/manage-users', ['Authorization' => "Bearer $token"]);
 
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
         $this->assertSame(['ok' => true], json_decode($output, true));
     }
 
@@ -150,7 +150,7 @@ final class AuthorizationTest extends IntegrationTestCase
 
         $output = $this->dispatch('GET', '/authz/manage-users', ['Authorization' => "Bearer $token"]);
 
-        $this->assertSame(403, http_response_code());
+        $this->assertSame(403, $this->lastResponse?->status());
     }
 
     public function testUnauthenticatedRequestStaysPlainJsonWithNoLoginRedirectUrlConfigured(): void
@@ -160,7 +160,7 @@ final class AuthorizationTest extends IntegrationTestCase
         // surprise redirect nothing asked for.
         $output = $this->dispatch('GET', '/authz/authenticated', ['Sec-Fetch-Mode' => 'navigate']);
 
-        $this->assertSame(401, http_response_code());
+        $this->assertSame(401, $this->lastResponse?->status());
         $this->assertSame('Unauthorized', json_decode($output, true)['title'] ?? null);
     }
 
@@ -172,7 +172,7 @@ final class AuthorizationTest extends IntegrationTestCase
 
         $this->dispatch('GET', '/authz/authenticated', ['Sec-Fetch-Mode' => 'navigate']);
 
-        $this->assertSame(302, http_response_code());
+        $this->assertSame(302, $this->lastResponse?->status());
         $this->assertSame('/login', $this->sentHeaders()['location'] ?? null);
     }
 
@@ -187,7 +187,7 @@ final class AuthorizationTest extends IntegrationTestCase
         // through to the plain 401 below regardless of the option.
         $output = $this->dispatch('GET', '/authz/authenticated', ['Sec-Fetch-Mode' => 'same-origin']);
 
-        $this->assertSame(401, http_response_code());
+        $this->assertSame(401, $this->lastResponse?->status());
         $this->assertSame('Unauthorized', json_decode($output, true)['title'] ?? null);
     }
 
@@ -202,7 +202,7 @@ final class AuthorizationTest extends IntegrationTestCase
         // default.
         $output = $this->dispatch('GET', '/authz/authenticated');
 
-        $this->assertSame(401, http_response_code());
+        $this->assertSame(401, $this->lastResponse?->status());
         $this->assertSame('Unauthorized', json_decode($output, true)['title'] ?? null);
     }
 
@@ -216,11 +216,11 @@ final class AuthorizationTest extends IntegrationTestCase
         $token = JWT::encode(['sub' => '1']);
 
         $this->dispatch('GET', '/authz/multi-permission', ['Authorization' => "Bearer $token"]);
-        $this->assertSame(403, http_response_code());
+        $this->assertSame(403, $this->lastResponse?->status());
 
         $provider->granted = ['users.manage', 'users.delete'];
         $output = $this->dispatch('GET', '/authz/multi-permission', ['Authorization' => "Bearer $token"]);
-        $this->assertSame(200, http_response_code());
+        $this->assertSame(200, $this->lastResponse?->status());
         $this->assertSame(['ok' => true], json_decode($output, true));
     }
 
