@@ -2,9 +2,13 @@
 
 namespace Waypoint\Tests\Integration;
 
+use InvalidArgumentException;
+use Waypoint\RouteCompiler;
 use Waypoint\Waypoint;
 use Waypoint\Tests\Fixtures\Controllers\ClassMiddlewareController;
 use Waypoint\Tests\Fixtures\Controllers\MiddlewareController;
+use Waypoint\Tests\Fixtures\Controllers\NotMiddlewareBaseController;
+use Waypoint\Tests\Fixtures\Controllers\UnknownMiddlewareController;
 use Waypoint\Tests\Fixtures\DTO\CreateProductDTO;
 use Waypoint\Tests\Fixtures\Middlewares\InjectingMiddleware;
 use Waypoint\Tests\Fixtures\Services\ExampleService;
@@ -83,26 +87,19 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
         $this->assertSame(['error' => 'blocked by middleware'], json_decode($output, true));
     }
 
-    public function testMiddlewareReferencingANonexistentClassIsSkippedAtCompileTime(): void
+    public function testMiddlewareReferencingANonexistentClassFailsTheCompile(): void
     {
-        // Must not crash app boot; the controller just runs with no
-        // middleware wrapped around it.
-        $output = $this->dispatch('GET', '/middleware/bad-middleware');
-
-        $this->assertSame(['ok' => true], json_decode($output, true));
+        // Skipping it would run the route without the check it was declared to have.
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Totally\\Fake\\MiddlewareClass');
+        (new RouteCompiler())->compile([UnknownMiddlewareController::class]);
     }
 
-    public function testMiddlewareNotExtendingMiddlewareBaseIsSkippedAtCompileTime(): void
+    public function testMiddlewareNotExtendingMiddlewareBaseFailsTheCompile(): void
     {
-        // MiddlewareBase is mandatory now: an existing class with a
-        // matching handle() signature but no MiddlewareBase parent must
-        // be rejected the same way a nonexistent class is -- the
-        // controller runs with no middleware wrapped around it, app boot
-        // doesn't crash.
-        $output = $this->dispatch('GET', '/middleware/not-middleware-base');
-
-        $this->assertSame(['controller'], CallTracker::$calls);
-        $this->assertSame(['ok' => true], json_decode($output, true));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(NotMiddlewareBaseController::class);
+        (new RouteCompiler())->compile([NotMiddlewareBaseController::class]);
     }
 
     public function testRequestBodyDtoIsSetBeforeAnAfterHookRuns(): void

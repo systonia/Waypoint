@@ -5,6 +5,7 @@ namespace Waypoint;
 use DateTimeImmutable;
 use DateTimeZone;
 use Deprecated;
+use InvalidArgumentException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
@@ -74,7 +75,7 @@ final class RouteCompiler
     private function compileController(ReflectionClass $rc, string $controller, string $prefixPath, array &$staticRoutes, array &$dynamicRoutes): void
     {
         $propInject = $this->collectPropertyInjections($rc);
-        $classMiddlewares = $this->collectMiddlewares($rc->getAttributes(Middleware::class));
+        $classMiddlewares = $this->collectMiddlewares($rc->getAttributes(Middleware::class), $controller);
 
         foreach ($rc->getMethods() as $method) {
             $routeAttr = self::lastAttribute($method, RouteAttribute::class, ReflectionAttribute::IS_INSTANCEOF);
@@ -105,7 +106,7 @@ final class RouteCompiler
                 'argPlan' => $this->buildArgPlan($method),
                 'propInject' => $propInject,
                 'formatter' => self::normalizeFormatter(self::findFormatter($method)),
-                'middlewares' => [...$classMiddlewares, ...$this->collectMiddlewares($method->getAttributes(Middleware::class))],
+                'middlewares' => [...$classMiddlewares, ...$this->collectMiddlewares($method->getAttributes(Middleware::class), "{$controller}::{$method->getName()}()")],
                 'gzip' => !self::hasEither($rc, $method, NoGzip::class),
                 'skipCsrf' => self::hasEither($rc, $method, SkipCsrf::class),
                 'version' => $version,
@@ -280,23 +281,24 @@ final class RouteCompiler
     }
 
     /**
-     * #[Middleware(...)] entries in declaration order. Only a MiddlewareBase subclass via its
-     * final handle() is accepted; anything else is skipped at compile time rather than crashing boot.
+     * #[Middleware(...)] entries in declaration order, each run through its MiddlewareBase::handle().
+     * A class that doesn't exist or doesn't extend MiddlewareBase fails the compile: skipping it would
+     * leave the route running without the check it was declared to have (often authentication).
      *
      * @param ReflectionAttribute<Middleware>[] $attributes
      * @return array<int, MiddlewareEntry>
      */
-    private function collectMiddlewares(array $attributes): array
+    private function collectMiddlewares(array $attributes, string $where): array
     {
         $middlewares = [];
         foreach ($attributes as $attr) {
-            [$class, $method] = $attr->newInstance()->callable + [1 => 'handle'];
-            if ($method !== 'handle' || !class_exists($class) || !self::extendsMiddlewareBase($class)) {
-                continue;
+            $class = $attr->newInstance()->class;
+            if (!class_exists($class) || !self::extendsMiddlewareBase($class)) {
+                throw new InvalidArgumentException("#[Middleware({$class})] on {$where}: the class must exist and extend " . MiddlewareBase::class . '.');
             }
             $middlewares[] = [
                 'class' => $class,
-                'method' => $method,
+                'method' => 'handle',
                 'propInject' => $this->collectPropertyInjections(new ReflectionClass($class)),
             ];
         }

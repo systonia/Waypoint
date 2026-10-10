@@ -31,17 +31,22 @@ class MetadataAttributes_ClassFixture
     public string $email = '';
 }
 
+class MetadataAttributes_AuthMiddleware extends \Waypoint\Http\MiddlewareBase
+{
+}
+
+class MetadataAttributes_LogMiddleware extends \Waypoint\Http\MiddlewareBase
+{
+}
+
 class MetadataAttributes_MethodFixture
 {
     #[Summary('Does the thing')]
     #[Tags(['widgets', 'admin'])]
     #[Throws(exception: NotFoundException::class, status: 404, description: 'Widget missing')]
-    #[Middleware([self::class, 'auth'])]
-    #[Middleware([self::class, 'log'])]
+    #[Middleware(MetadataAttributes_AuthMiddleware::class)]
+    #[Middleware(MetadataAttributes_LogMiddleware::class)]
     public function handle() {}
-
-    public function auth() {}
-    public function log() {}
 }
 
 /**
@@ -165,19 +170,13 @@ final class MetadataAttributesTest extends TestCase
         $this->assertSame('Widget missing', $attr->description);
     }
 
-    public function testMiddlewareIsRepeatableAndStoresCallable(): void
+    public function testMiddlewareIsRepeatableAndStoresTheClass(): void
     {
         $method = (new ReflectionClass(MetadataAttributes_MethodFixture::class))->getMethod('handle');
         $attrs = $method->getAttributes(Middleware::class);
 
         $this->assertCount(2, $attrs);
-        $this->assertSame(
-            [MetadataAttributes_MethodFixture::class, 'auth'],
-            $attrs[0]->newInstance()->callable
-        );
-        $this->assertSame(
-            [MetadataAttributes_MethodFixture::class, 'log'],
-            $attrs[1]->newInstance()->callable
-        );
+        $this->assertSame(MetadataAttributes_AuthMiddleware::class, $attrs[0]->newInstance()->class);
+        $this->assertSame(MetadataAttributes_LogMiddleware::class, $attrs[1]->newInstance()->class);
     }
 }

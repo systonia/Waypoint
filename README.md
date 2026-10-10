@@ -417,9 +417,9 @@ $app->use(function ($req, $res, $next) {
 `useCors()` and `useJwt()` (see below) are both just built-in middleware registered this way.
 
 Per-route middleware is declared with `#[Middleware(Class::class)]` directly on a controller method
-(repeatable). **The class must extend `Waypoint\Http\MiddlewareBase`** — any `#[Middleware(...)]` class
-that doesn't is silently skipped at compile time (the same treatment a nonexistent class already gets),
-so this isn't optional. `MiddlewareBase::handle()` is `final` and always runs `before()` → `$next()` →
+(repeatable). **The class must extend `Waypoint\Http\MiddlewareBase`**: its `handle()` is what runs, and a
+`#[Middleware(...)]` naming a class that doesn't exist or doesn't extend it fails the route compile with an
+`InvalidArgumentException` -- a skipped middleware would leave the route running without its check. `MiddlewareBase::handle()` is `final` and always runs `before()` → `$next()` →
 `after()`, in that fixed order; override `before()`/`after()` instead of reimplementing that plumbing
 yourself:
 
