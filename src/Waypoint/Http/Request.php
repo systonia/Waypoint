@@ -87,7 +87,8 @@ class Request
     private static function resolveRequestId(array $headers): string
     {
         foreach (['X-Request-Id', 'X-Correlation-Id'] as $name) {
-            if (($headers[$name] ?? '') !== '') {
+            // Comes from anyone: only a short id of plain characters goes into logs and the response header
+            if (preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $headers[$name] ?? '') === 1) {
                 return $headers[$name];
             }
         }

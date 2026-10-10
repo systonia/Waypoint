@@ -43,6 +43,30 @@ final class RequestIdTest extends IntegrationTestCase
         $this->assertSame('upstream-not-a-uuid', $this->sentHeaders()['x-request-id'] ?? null);
     }
 
+    /** @return array<string, array{string}> */
+    public static function unusableIds(): array
+    {
+        return [
+            'too long' => [str_repeat('a', 129)],
+            'log injection' => ["abc\" level=error msg=\"forged"],
+            'spaces' => ['a b'],
+            'markup' => ['<script>'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unusableIds')]
+    public function testAnUnusableIncomingIdIsReplacedByAFreshOne(string $incoming): void
+    {
+        $app = Waypoint::create();
+        $app->attach([WhoAmIController::class]);
+
+        $output = $this->dispatch('GET', '/whoami', ['X-Request-Id' => $incoming]);
+
+        $id = json_decode($output, true)['id'];
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $id);
+        $this->assertSame($id, $this->sentHeaders()['x-request-id'] ?? null);
+    }
+
     public function testResponseFallsBackToXCorrelationIdWhenNoXRequestIdIsSent(): void
     {
         $app = Waypoint::create();
