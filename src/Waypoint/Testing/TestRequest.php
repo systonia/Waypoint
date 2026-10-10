@@ -119,8 +119,11 @@ final class TestRequest
                 unset($_SERVER[$key]);
             }
         }
+        unset($_SERVER['CONTENT_TYPE'], $_SERVER['CONTENT_LENGTH']);
         foreach ($this->headers as $name => $value) {
-            $_SERVER['HTTP_' . strtoupper(str_replace('-', '_', $name))] = $value;
+            // Like a real server: Content-Type/-Length go into $_SERVER without the HTTP_ prefix
+            $key = strtoupper(str_replace('-', '_', $name));
+            $_SERVER[in_array($key, ['CONTENT_TYPE', 'CONTENT_LENGTH'], true) ? $key : "HTTP_$key"] = $value;
         }
 
         // PHP tracks sent headers process-wide under the CLI too; start clean so the response only reports its own.

@@ -3,7 +3,7 @@
 namespace Waypoint\Tests\Integration;
 
 use Waypoint\{Waypoint, JWT};
-use Waypoint\Options\{JWTOptions, CorsOptions};
+use Waypoint\Options\{JWTOptions, CorsOptions, CsrfOptions};
 use Waypoint\Tests\Fixtures\Controllers\{OrdersController, WhoAmIController};
 
 final class BuiltinMiddlewareTest extends IntegrationTestCase
@@ -125,12 +125,30 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
         $this->assertSame('7', json_decode($output, true)['jwt']['sub']);
     }
 
-    public function testJwtMiddlewareFallsBackToTheConfiguredCookieWithoutAnAuthorizationHeader(): void
+    public function testJwtCookieAuthenticationWithoutACsrfSecretFailsEveryRequest(): void
     {
+        // A cookie rides along on cross-site requests: signing in by cookie without CSRF protection is refused, loudly
         $app = Waypoint::create();
         $app->configure(function (JWTOptions $opts) {
             $opts->secret = 'test-secret';
             $opts->cookieName = 'auth_token';
+        });
+        $app->attach([WhoAmIController::class]);
+        $app->useJwt();
+
+        $output = $this->dispatch('GET', '/whoami');
+
+        $this->assertSame(500, http_response_code());
+        $this->assertSame('Internal Server Error', json_decode($output, true)['title'] ?? null);
+    }
+
+    public function testJwtMiddlewareFallsBackToTheConfiguredCookieWithoutAnAuthorizationHeader(): void
+    {
+        $app = Waypoint::create();
+        $app->configure(function (JWTOptions $opts, CsrfOptions $csrf) {
+            $opts->secret = 'test-secret';
+            $opts->cookieName = 'auth_token';
+            $csrf->secret = 'csrf-secret';
         });
         $token = JWT::encode(['sub' => '42']);
         $app->attach([WhoAmIController::class]);
@@ -149,9 +167,10 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
     public function testJwtMiddlewarePrefersTheAuthorizationHeaderOverTheCookie(): void
     {
         $app = Waypoint::create();
-        $app->configure(function (JWTOptions $opts) {
+        $app->configure(function (JWTOptions $opts, CsrfOptions $csrf) {
             $opts->secret = 'test-secret';
             $opts->cookieName = 'auth_token';
+            $csrf->secret = 'csrf-secret';
         });
         $headerToken = JWT::encode(['sub' => '1']);
         $cookieToken = JWT::encode(['sub' => '2']);
@@ -191,9 +210,10 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
     public function testJwtMiddlewareIgnoresAnInvalidCookieToken(): void
     {
         $app = Waypoint::create();
-        $app->configure(function (JWTOptions $opts) {
+        $app->configure(function (JWTOptions $opts, CsrfOptions $csrf) {
             $opts->secret = 'test-secret';
             $opts->cookieName = 'auth_token';
+            $csrf->secret = 'csrf-secret';
         });
         $app->attach([WhoAmIController::class]);
         $app->useJwt();

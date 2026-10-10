@@ -173,7 +173,7 @@ depending on where the value comes from:
 |-------------|-------------------------------------------------------------------|---------------------------------------|
 | `#[Param]`  | Binds a route placeholder (e.g. `{customerId}`)                  | `#[Param] string $customerId`         |
 | `#[Query]`  | Binds a query string (`?foo=`) parameter                         | `#[Query] string $search`             |
-| `#[Body]`   | Binds the request body (JSON or form) to a DTO                   | `#[Body] UserDTO $user`               |
+| `#[Body]`   | Binds the request body to a DTO: JSON for a JSON `Content-Type` (`application/json`, `application/*+json`), form fields otherwise | `#[Body] UserDTO $user`               |
 
 An unattributed scalar-typed parameter (`string`/`int`/`float`/`bool`) is bound implicitly: Waypoint
 tries the route placeholder first, then falls back to the query string. `Request`/`Response`
@@ -843,11 +843,16 @@ out of a same-named cookie whenever the header didn't already produce one, so a 
 load too:
 
 ```php
-$app->configure(function (JWTOptions $opts) {
+$app->configure(function (JWTOptions $opts, CsrfOptions $csrf) {
     $opts->secret = $_ENV['JWT_SECRET'];
     $opts->cookieName = 'auth_token';
+    $csrf->secret = $_ENV['CSRF_SECRET'];
 });
 ```
+
+A browser attaches that cookie to cross-site requests too, so signing in by cookie needs CSRF
+protection: with `cookieName` set and no `CsrfOptions::$secret`, `useJwt()` fails every request with a
+500 instead of running unprotected.
 
 Issue that cookie from your own login endpoint with `Response::withCookie()` (HttpOnly and
 `SameSite=Lax` by default), and clear it on logout with `withoutCookie()`:

@@ -71,10 +71,28 @@ final class RequestTest extends TestCase
     public function testCapturePrefersJsonBodyOverPostWhenBothArePresent(): void
     {
         $_POST = ['name' => 'from-post'];
+        $_SERVER['CONTENT_TYPE'] = 'application/json; charset=utf-8';
 
         $req = Request::capture(rawBody: json_encode(['name' => 'from-json']));
 
         $this->assertSame(['name' => 'from-json'], $req->body());
+        $this->assertSame('application/json; charset=utf-8', $req->headers['Content-Type']);
+    }
+
+    public function testCaptureParsesJsonOnlyForAJsonContentType(): void
+    {
+        // A cross-site <form enctype="text/plain"> can send exactly this body without a CORS preflight
+        $_SERVER['CONTENT_TYPE'] = 'text/plain';
+        $this->assertSame([], Request::capture(rawBody: '{"name":"forged"}')->body());
+
+        unset($_SERVER['CONTENT_TYPE']);
+        $this->assertSame([], Request::capture(rawBody: '{"name":"no-type"}')->body());
+
+        $_SERVER['CONTENT_TYPE'] = 'application/vnd.api+json';
+        $this->assertSame(['name' => 'suffix'], Request::capture(rawBody: '{"name":"suffix"}')->body());
+
+        $_SERVER['CONTENT_TYPE'] = 'application/jsonp';
+        $this->assertSame([], Request::capture(rawBody: '{"name":"not-json"}')->body());
     }
 
     public function testCaptureFallsBackToPostWhenNoJsonBodyPresent(): void

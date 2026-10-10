@@ -51,20 +51,36 @@ class Request
                 $req->headers[$name] = $value;
             }
         }
+        // The two request headers PHP puts into $_SERVER without the HTTP_ prefix
+        foreach (['CONTENT_TYPE' => 'Content-Type', 'CONTENT_LENGTH' => 'Content-Length'] as $key => $name) {
+            $value = $_SERVER[$key] ?? null;
+            if (is_string($value) && $value !== '') {
+                $req->headers[$name] = $value;
+            }
+        }
 
         $req->id = self::resolveRequestId($req->headers);
         $req->acceptPartial = strcasecmp($req->headers['X-Waypoint-Accept'] ?? '', 'partial') === 0;
         $req->query = Arr::stringKeyed($_GET);
 
-        // JSON wins over form data when both could apply.
-        $raw = $rawBody ?? file_get_contents('php://input');
-        if ($raw && is_array($data = json_decode($raw, true))) {
-            $req->body = $data;
+        // JSON only when the client says so: a cross-site <form> can send a JSON-looking text/plain body
+        // without a preflight, and that must not be read as a JSON request.
+        if (self::isJson($req->headers['Content-Type'] ?? '')) {
+            $raw = $rawBody ?? file_get_contents('php://input');
+            if ($raw && is_array($data = json_decode($raw, true))) {
+                $req->body = $data;
+            }
         } elseif ($_POST) {
             $req->body = $_POST;
         }
 
         return $req;
+    }
+
+    /** application/json or any application/*+json, parameters (charset) allowed. */
+    private static function isJson(string $contentType): bool
+    {
+        return preg_match('#^application/([a-z0-9.+-]+\+)?json\s*(;|$)#i', trim($contentType)) === 1;
     }
 
     /** @param array<string, string> $headers */

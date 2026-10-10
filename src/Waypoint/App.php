@@ -4,12 +4,13 @@ namespace Waypoint;
 
 use Closure;
 use InvalidArgumentException;
+use LogicException;
 use ReflectionFunction;
 use ReflectionNamedType;
 use Throwable;
 use Waypoint\Exceptions\{HttpException, UnauthorizedException};
 use Waypoint\Http\{Request, Response};
-use Waypoint\Options\{CompressionOptions, CorsOptions, FileSystemOptions, JWTOptions};
+use Waypoint\Options\{CompressionOptions, CorsOptions, CsrfOptions, FileSystemOptions, JWTOptions};
 use Waypoint\Plugin\{Plugin, PluginRegistry};
 use Waypoint\Routing\{PropertyInjector, ServiceDiscovery};
 
@@ -123,10 +124,17 @@ class App
         });
     }
 
-    /** Decodes a bearer token from JWTOptions::$header (or, as a fallback, the JWTOptions::$cookieName cookie) into $req->jwt. */
+    /**
+     * Decodes a bearer token from JWTOptions::$header (or, as a fallback, the JWTOptions::$cookieName cookie) into $req->jwt.
+     * A cookie the browser sends on its own needs CSRF protection: with a cookie name but no CsrfOptions::$secret,
+     * every request fails until one is configured, instead of quietly accepting cross-site requests.
+     */
     public function useJwt(): void
     {
         $this->use(function (Request $req, Response $res, callable $next): mixed {
+            if ($this->container->get(JWTOptions::class)->cookieName !== null && !isset($this->container->get(CsrfOptions::class)->secret)) {
+                throw new LogicException('JWTOptions::$cookieName signs requests in by cookie, which needs CSRF protection: set CsrfOptions::$secret.');
+            }
             $serverAuth = $_SERVER['AUTHORIZATION'] ?? null;
             if (is_string($serverAuth) && !isset($req->headers['Authorization'])) {
                 $req->headers['Authorization'] = $serverAuth;
