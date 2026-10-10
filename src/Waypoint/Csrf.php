@@ -3,7 +3,7 @@
 namespace Waypoint;
 
 use Waypoint\Http\{Request, Response};
-use Waypoint\Options\CsrfOptions;
+use Waypoint\Options\{CsrfOptions, JWTOptions};
 use Waypoint\Support\Base64Url;
 
 /**
@@ -13,6 +13,11 @@ use Waypoint\Support\Base64Url;
  * in CsrfOptions::$headerName (AJAX) or $fieldName (plain form). A forged
  * cross-site request rides the cookie jar but can't read the cookie to
  * repeat it, so the two values never match.
+ *
+ * The signature also covers the session cookie (JWTOptions::$cookieName): a
+ * token someone fetched for themselves and planted in a victim's cookie jar
+ * (from a sibling subdomain, say) doesn't verify against the victim's session.
+ * A login or logout changes the session, so the next rendered view mints a new token.
  *
  * A container singleton: $currentToken is per-request state set by
  * issueFor() (Router::renderView) and read by token()/field() from inside
@@ -95,10 +100,18 @@ class Csrf
     {
         $opts = Waypoint::getConfig(CsrfOptions::class);
         $p = Base64Url::encodeJson(['exp' => time() + $opts->ttl, 'nonce' => bin2hex(random_bytes(16))]);
-        return "$p." . Base64Url::sign($p, $opts->secret);
+        return "$p." . Base64Url::sign(self::signedContent($p), $opts->secret);
     }
 
-    /** True if $token was signed against the current secret and its 'exp' hasn't passed. */
+    /** The payload plus the session it belongs to; '|' never occurs in base64url, so the two can't be shifted into each other. */
+    private static function signedContent(string $payload): string
+    {
+        $sessionCookie = Waypoint::getConfig(JWTOptions::class)->cookieName;
+        $session = $sessionCookie !== null ? ($_COOKIE[$sessionCookie] ?? '') : '';
+        return $payload . '|' . (is_string($session) ? $session : '');
+    }
+
+    /** True if $token was signed against the current secret for the current session and its 'exp' hasn't passed. */
     #[\NoDiscard('Ignoring the result silently skips checking whether the token actually verified.')]
     public static function isValidToken(?string $token): bool
     {
@@ -106,7 +119,7 @@ class Csrf
             return false;
         }
         [$p, $s] = explode('.', $token);
-        if (!hash_equals(Base64Url::sign($p, Waypoint::getConfig(CsrfOptions::class)->secret), $s)) {
+        if (!hash_equals(Base64Url::sign(self::signedContent($p), Waypoint::getConfig(CsrfOptions::class)->secret), $s)) {
             return false;
         }
         $decoded = json_decode(Base64Url::decode($p), true);

@@ -5,7 +5,7 @@ namespace Waypoint\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use Waypoint\{Waypoint, Csrf};
 use Waypoint\Http\{Request, Response};
-use Waypoint\Options\CsrfOptions;
+use Waypoint\Options\{CsrfOptions, JWTOptions};
 
 final class CsrfTest extends TestCase
 {
@@ -92,6 +92,35 @@ final class CsrfTest extends TestCase
         });
 
         $this->assertFalse(Csrf::isValidToken($token));
+    }
+
+    public function testATokenIsBoundToTheSessionCookieItWasMintedFor(): void
+    {
+        Waypoint::create()->configure(function (JWTOptions $opts) {
+            $opts->cookieName = 'auth_token';
+        });
+
+        // The attacker's own session: a valid token for them
+        $_COOKIE['auth_token'] = 'attacker-session';
+        $attackerToken = Csrf::generateToken();
+        $this->assertTrue(Csrf::isValidToken($attackerToken));
+
+        // Planted into the victim's cookie jar and repeated in the forged form: it fails against the victim's session
+        $_COOKIE['auth_token'] = 'victim-session';
+        $_COOKIE['csrf_token'] = $attackerToken;
+        $_SERVER['HTTP_X_CSRF_TOKEN'] = $attackerToken;
+        $this->assertFalse(Csrf::isValidToken($attackerToken));
+        $this->assertFalse((new Csrf())->verify($this->captureRequest()));
+
+        // The victim's own token still works
+        $victimToken = Csrf::generateToken();
+        $_COOKIE['csrf_token'] = $victimToken;
+        $_SERVER['HTTP_X_CSRF_TOKEN'] = $victimToken;
+        $this->assertTrue((new Csrf())->verify($this->captureRequest()));
+
+        // Signing in or out changes the session: the old token is no longer valid
+        unset($_COOKIE['auth_token']);
+        $this->assertFalse(Csrf::isValidToken($victimToken));
     }
 
     // -- verify() --

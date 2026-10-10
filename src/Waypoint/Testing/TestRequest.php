@@ -98,15 +98,6 @@ final class TestRequest
 
     public function send(): TestResponse
     {
-        if ($this->csrf) {
-            $opts = Waypoint::getConfig(CsrfOptions::class);
-            if (isset($opts->secret)) {
-                $token = Csrf::generateToken();
-                $this->cookies[$opts->cookieName] = $token;
-                $this->headers[$opts->headerName] = $token;
-            }
-        }
-
         $_SERVER['REQUEST_METHOD'] = strtoupper($this->method);
         $_SERVER['REQUEST_URI'] = $this->uri;
         parse_str((string) parse_url($this->uri, PHP_URL_QUERY), $_GET);
@@ -114,6 +105,15 @@ final class TestRequest
         // Cookies a test set in $_COOKIE itself stay for every request; the builder's own apply to this one only.
         $testCookies = $_COOKIE;
         $_COOKIE = [...$testCookies, ...$this->cookies];
+        if ($this->csrf) {
+            $opts = Waypoint::getConfig(CsrfOptions::class);
+            if (isset($opts->secret)) {
+                // Minted after the cookies are in place: the token is bound to the session cookie this request carries
+                $token = Csrf::generateToken();
+                $_COOKIE[$opts->cookieName] = $token;
+                $this->headers[$opts->headerName] = $token;
+            }
+        }
         foreach (array_keys($_SERVER) as $key) {
             if (str_starts_with($key, 'HTTP_')) {
                 unset($_SERVER[$key]);

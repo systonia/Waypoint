@@ -529,6 +529,11 @@ cookie (`CsrfOptions::$cookieName`, default `csrf_token`) on every rendered `Vie
 (`CsrfOptions::$fieldName`, default `_csrf` — a classic no-JS `<form>`). A mismatch, missing token, or
 expired token throws `ForbiddenException` (403).
 
+With `JWTOptions::$cookieName` set, each token is signed for the session cookie it was issued with. A
+token someone fetched for their own session and planted in another browser (from a sibling subdomain,
+say) is rejected there. Signing in or out changes the session, so the next rendered view issues a new
+token.
+
 Inside a view template, `$this->csrf` renders the classic no-JS `<form>` half of that pattern:
 
 ```php
