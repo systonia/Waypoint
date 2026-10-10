@@ -93,7 +93,7 @@ class App
             if (!class_exists($cls)) {
                 continue;
             }
-            $instances[] = $this->container->isRegistered($cls) ? $this->container->get($cls) : $this->container->get($cls);
+            $instances[] = $this->container->get($cls);
         }
         foreach ($instances as $instance) {
             $this->injector->injectReflected($instance);
