@@ -4,9 +4,12 @@ namespace Waypoint;
 
 /**
  * The array constructor #[Body] DTOs need (Router constructs them as
- * `new $class($req->body())`): each key that names a property is assigned,
- * unknown keys are ignored, and a value that doesn't fit the property's type
- * is skipped so the Validator can report it as a 422 instead of a TypeError 500.
+ * `new $class($req->body())`): each key that names a publicly writable
+ * instance property is assigned, unknown keys are ignored, and a value that
+ * doesn't fit the property's type is skipped so the Validator can report it
+ * as a 422 instead of a TypeError 500. Private, protected, protected(set)/
+ * private(set) and static properties are never touched: the data comes from
+ * the request, and those are the DTO's own state.
  *
  * Validation is read straight off the DTO: `$dto->isValid` and `$dto->errors`
  * apply the rule attributes on every read, and `fail()` adds a failure a
@@ -50,7 +53,7 @@ trait FromArray
             if (in_array($key, $excludes, true)) {
                 continue;
             }
-            if (!property_exists($this, $key)) {
+            if (!self::isWritableFromInput($this, $key)) {
                 continue;
             }
             try {
@@ -59,6 +62,16 @@ trait FromArray
                 continue;
             }
         }
+    }
+
+    /** True for a public, non-static property whose set visibility is public too (no protected(set)/private(set)). */
+    private static function isWritableFromInput(object $target, string $name): bool
+    {
+        if (!property_exists($target, $name)) {
+            return false;
+        }
+        $property = new \ReflectionProperty($target, $name);
+        return $property->isPublic() && !$property->isStatic() && !$property->isProtectedSet() && !$property->isPrivateSet();
     }
 
     /**

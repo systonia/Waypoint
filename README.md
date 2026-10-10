@@ -292,7 +292,8 @@ class CreateProductDTO
 }
 ```
 
-Unknown keys in the input array are silently ignored. A property that must never be settable this way
+Unknown keys in the input array are silently ignored, and so are keys naming a private, protected,
+`protected(set)`/`private(set)` or static property: those are the DTO's own state, never request input. A property that must never be settable this way
 (e.g. a server-computed or nested value — `#[Body]` hydration is flat, so assigning a raw array straight
 to a typed object property would `TypeError` instead of recursively hydrating it) can be excluded by
 overriding `fromArrayExcludes()`:

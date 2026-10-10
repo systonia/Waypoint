@@ -4,6 +4,7 @@ namespace Waypoint\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Waypoint\Tests\Fixtures\Support\FromArrayDTO;
+use Waypoint\Tests\Fixtures\Support\FromArrayInternalsDTO;
 
 final class FromArrayTest extends TestCase
 {
@@ -59,6 +60,18 @@ final class FromArrayTest extends TestCase
         $dto = new FromArrayDTO(['name' => 'Ada', 'doesNotExist' => 'x']);
 
         $this->assertSame('Ada', $dto->name);
+    }
+
+    public function testOnlyPubliclyWritableInstancePropertiesAreHydrated(): void
+    {
+        // The data is the request body: a DTO's private/protected state or restricted-set properties are not input.
+        $dto = new FromArrayInternalsDTO(['name' => 'Ada', 'isAdmin' => true, 'credits' => 9999, 'owner' => 'attacker', 'verified' => true, 'shared' => 'attacker']);
+
+        $this->assertSame('Ada', $dto->name);
+        $this->assertSame(['isAdmin' => false, 'credits' => 0], $dto->internals());
+        $this->assertSame('server', $dto->owner);
+        $this->assertFalse($dto->verified);
+        $this->assertSame('static', FromArrayInternalsDTO::$shared);
     }
 
     public function testExcludedPropertiesAreNeverAssignedEvenWhenPresentInData(): void
