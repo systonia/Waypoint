@@ -333,6 +333,34 @@ final class ResponseTest extends TestCase
         $this->assertSame($body, gzdecode($output));
     }
 
+    /** @return array<string, array{string, bool}> */
+    public static function acceptEncodings(): array
+    {
+        return [
+            'plain gzip' => ['gzip, deflate, br', true],
+            'gzip with quality' => ['br;q=1.0, gzip;q=0.8', true],
+            'gzip refused' => ['gzip;q=0', false],
+            'gzip refused with spaces' => ['br, gzip ; q=0.0', false],
+            'wildcard' => ['*', true],
+            'wildcard but gzip refused' => ['*, gzip;q=0', false],
+            'something else' => ['br', false],
+            'not a coding named gzip' => ['gzipped', false],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('acceptEncodings')]
+    public function testCompressesOnlyWhenAcceptEncodingReallyAllowsGzip(string $acceptEncoding, bool $compressed): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = $acceptEncoding;
+        $res = (new Response())->write(str_repeat('a', 2000));
+
+        ob_start();
+        $res->send();
+        ob_end_clean();
+
+        $this->assertSame($compressed ? 'gzip' : null, $this->sentHeaderValue('Content-Encoding'));
+    }
+
     public function testCompressedResponseGetsAVaryAcceptEncodingHeader(): void
     {
         $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';

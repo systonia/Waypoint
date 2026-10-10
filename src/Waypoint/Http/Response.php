@@ -169,6 +169,29 @@ class Response
         }
     }
 
+    /** Whether Accept-Encoding allows gzip: named (or by `*`) with a quality above 0; `gzip;q=0` refuses it outright. */
+    private static function acceptsGzip(string $acceptEncoding): bool
+    {
+        $wildcard = null;
+        foreach (explode(',', $acceptEncoding) as $entry) {
+            $parts = array_map('trim', explode(';', $entry));
+            $coding = strtolower($parts[0]);
+            $quality = 1.0;
+            foreach (array_slice($parts, 1) as $parameter) {
+                if (preg_match('/^q\s*=\s*([0-9.]+)$/i', $parameter, $match) === 1) {
+                    $quality = (float) $match[1];
+                }
+            }
+            if ($coding === 'gzip' || $coding === 'x-gzip') {
+                return $quality > 0;
+            }
+            if ($coding === '*') {
+                $wildcard = $quality > 0;
+            }
+        }
+        return $wildcard ?? false;
+    }
+
     /** gzip when: not disabled, enabled in options, the client accepts it, the body is big enough, and it isn't already encoded. */
     private function maybeCompress(string $body): string
     {
@@ -179,7 +202,7 @@ class Response
             || strlen($body) < $this->compressionOptions->minBytes
             || isset($this->headers['Content-Encoding'])
             || !is_string($acceptEncoding)
-            || !str_contains($acceptEncoding, 'gzip')
+            || !self::acceptsGzip($acceptEncoding)
         ) {
             return $body;
         }

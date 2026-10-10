@@ -797,7 +797,7 @@ the same directory without its source ever being handed out. `.css`/`.js`/`.mjs`
 ## Gzip Compression
 
 Every response funnels through `Response::send()`, which gzips the body when the client's
-`Accept-Encoding` header includes `gzip` and the body meets a configurable size threshold — compressing
+`Accept-Encoding` header allows `gzip` (named or by `*`, with a quality above 0, so `gzip;q=0` refuses it) and the body meets a configurable size threshold — compressing
 a tiny response is a net loss once gzip's own framing overhead is counted, so anything shorter than
 `CompressionOptions::$minBytes` (default `1024` bytes) is always sent uncompressed. On by default, no
 setup required:
