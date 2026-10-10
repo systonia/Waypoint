@@ -419,10 +419,52 @@ Notes:
 - A class only gets auto-registered if it's reachable via `#[Inject]` from a controller you registered
   (directly, or transitively through another injected service).
 - `#[Inject]` also works on middleware classes registered via `#[Middleware]` (see below).
+- `Request`, `Response` and `Router` can be injected into controllers and `#[Middleware]` classes; they are
+  set per request, never taken from the container.
 - Container-managed classes are constructed with no arguments and populated purely through
   `#[Inject]`-marked properties — there is currently no constructor-argument resolution; a
   constructor parameter marked `#[Inject]` is *discovered* (so its type is pulled into the container
   graph) but not itself resolved/passed as a constructor argument. Prefer property injection.
+
+### Controllers per request, services shared
+
+Controllers and `#[Middleware]` classes are created fresh for every request, so an `#[Inject] Request`
+or `#[Inject] Response` on them always belongs to the request being handled. A controller you registered
+in the container yourself (one with constructor arguments) is cloned per request, keeping what its
+constructor set up. Under FPM nothing changes: there a controller never outlived its request anyway.
+
+Services are the opposite: one instance per process, shared by every request. On a long-lived worker
+(FrankenPHP worker mode, RoadRunner, nope), and on one that runs requests interleaved while they wait
+on I/O, anything a service keeps in a property is visible to every other request. So **a service must
+not keep per-request state in its properties**:
+
+```php
+class AuthService
+{
+    private ?User $user = null;
+
+    public function signIn(Request $req): void { $this->user = User::fromJwt($req->jwt); } // wrong
+    public function user(): ?User { return $this->user; }                                  // another request's user
+}
+```
+
+The same goes for memoizing per request (`$this->current ??= ...` survives into the next request),
+switching shared state per request (`$translator->setLocale(...)`, `$db->setTenant(...)`), collecting per
+request (a list of messages, a query counter) and half-built objects (set fields, wait, then `build()`).
+
+Fine in a service: configuration and dependencies that never change after boot, caches whose content
+holds for everyone (compiled templates, exchange rates; nothing user-specific unless the user is part of
+the key), and stateless helpers that get everything they need as arguments.
+
+Instead of per-request state in a service:
+
+- pass it along as an argument: `$auth->user($req)` rather than `$auth->user()`;
+- keep it on the request, as `useJwt()` does with `$req->jwt`;
+- or, for a value that really has to be implicitly "current" (a request id for log lines), hold it in a
+  `Waypoint\Support\FiberLocal`, as `RequestContext` and `Csrf` do.
+
+Waypoint can't enforce this rule; under FPM breaking it goes unnoticed, since every request starts with a
+fresh process.
 
 ---
 

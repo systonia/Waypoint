@@ -353,7 +353,7 @@ class Router
             return;
             // @codeCoverageIgnoreEnd
         }
-        $controller = $this->resolve($controllerRef);
+        $controller = $this->perRequest($controllerRef);
         $this->injector->injectPlanned($controller, $route['propInject'] ?? null, $req, $res);
 
         $this->buildRouteHandler($route, $controller, $params)($req, $res);
@@ -413,7 +413,7 @@ class Router
                     return $next($req, $res);
                     // @codeCoverageIgnoreEnd
                 }
-                $middleware = $this->resolve($class);
+                $middleware = $this->perRequest($class);
                 $this->injector->injectPlanned($middleware, $mw['propInject'] ?? null, $req, $res);
                 return $middleware->{$method}($req, $res, $next);
             },
@@ -485,6 +485,28 @@ class Router
     private function respondNotFound(Response $res): void
     {
         $res->status(404)->withHeader('Content-Type', 'application/json')->write('{"error":"Not found"}');
+    }
+
+    /**
+     * A fresh controller or #[Middleware] instance for one request: #[Inject] Request/Response land on it, and
+     * on a long-lived worker running requests interleaved (in Fibers) a shared instance would hand one
+     * request's Request to another. An instance registered in the container (one with constructor
+     * arguments) is cloned, keeping what its constructor set up.
+     *
+     * @template T of object
+     * @param class-string<T> $class
+     * @return T
+     */
+    private function perRequest(string $class): object
+    {
+        if ($this->container === null) {
+            return new $class();
+        }
+        if ($this->container->isRegistered($class) || !$this->container->has($class)) {
+            // Not registered and not constructible: get() throws the container's NotFoundException
+            return clone $this->container->get($class);
+        }
+        return new $class();
     }
 
     /** @param class-string $class */
