@@ -48,6 +48,26 @@ class Csrf
         $res->withCookie($opts->cookieName, $this->currentToken, maxAge: $opts->ttl, secure: $opts->cookieSecure, httpOnly: false, sameSite: $opts->cookieSameSite);
     }
 
+    /**
+     * A response that signs someone in or out (it sets JWTOptions::$cookieName) also gets a CSRF token for that new
+     * session: the old one is bound to the old session, and a fetch() right after a login would otherwise get a 403.
+     * ponytail: a page rendered into that same response still embeds the old token; a login answers with a redirect.
+     */
+    public function followSession(Response $res): void
+    {
+        $opts = Waypoint::getConfig(CsrfOptions::class);
+        $sessionCookie = Waypoint::getConfig(JWTOptions::class)->cookieName;
+        if (!isset($opts->secret) || $sessionCookie === null) {
+            return;
+        }
+        $session = $res->queuedCookie($sessionCookie);
+        if ($session === null) {
+            return;
+        }
+        $this->currentToken = self::generateToken($session);
+        $res->withCookie($opts->cookieName, $this->currentToken, maxAge: $opts->ttl, secure: $opts->cookieSecure, httpOnly: false, sameSite: $opts->cookieSameSite);
+    }
+
     /** The current request's token, or '' if issueFor() never ran. */
     public function token(): string
     {
@@ -96,19 +116,25 @@ class Csrf
 
     /** A fresh signed token; the nonce only keeps two tokens minted in the same second distinct. */
     #[\NoDiscard('The generated token is the entire point of calling generateToken().')]
-    public static function generateToken(): string
+    public static function generateToken(?string $session = null): string
     {
         $opts = Waypoint::getConfig(CsrfOptions::class);
         $p = Base64Url::encodeJson(['exp' => time() + $opts->ttl, 'nonce' => bin2hex(random_bytes(16))]);
-        return "$p." . Base64Url::sign(self::signedContent($p), $opts->secret);
+        return "$p." . Base64Url::sign(self::signedContent($p, $session), $opts->secret);
     }
 
-    /** The payload plus the session it belongs to; '|' never occurs in base64url, so the two can't be shifted into each other. */
-    private static function signedContent(string $payload): string
+    /**
+     * The payload plus the session it belongs to: $session, or the session cookie of this request.
+     * '|' never occurs in base64url, so the two can't be shifted into each other.
+     */
+    private static function signedContent(string $payload, ?string $session = null): string
     {
-        $sessionCookie = Waypoint::getConfig(JWTOptions::class)->cookieName;
-        $session = $sessionCookie !== null ? ($_COOKIE[$sessionCookie] ?? '') : '';
-        return $payload . '|' . (is_string($session) ? $session : '');
+        if ($session === null) {
+            $sessionCookie = Waypoint::getConfig(JWTOptions::class)->cookieName;
+            $fromRequest = $sessionCookie !== null ? ($_COOKIE[$sessionCookie] ?? '') : '';
+            $session = is_string($fromRequest) ? $fromRequest : '';
+        }
+        return $payload . '|' . $session;
     }
 
     /** True if $token was signed against the current secret for the current session and its 'exp' hasn't passed. */

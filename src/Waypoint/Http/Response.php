@@ -20,6 +20,9 @@ class Response
     /** @var string[] One raw Set-Cookie value each; kept apart from $headers so several cookies can stack. */
     private array $cookies = [];
 
+    /** @var array<string, string> name => value of each queued cookie, the last one per name; '' for a removal. */
+    private array $cookieValues = [];
+
     /** Makes send() idempotent: a custom exception handler may call it itself, and handleHttp() always calls it afterwards. */
     private bool $sent = false;
 
@@ -118,7 +121,14 @@ class Response
             $parts[] = "SameSite=$sameSite";
         }
         $this->cookies[] = implode('; ', $parts);
+        $this->cookieValues[$name] = $maxAge === 0 ? '' : $value;
         return $this;
+    }
+
+    /** The value this response sets $name to ('' when it removes it), or null when it doesn't touch that cookie. */
+    public function queuedCookie(string $name): ?string
+    {
+        return $this->cookieValues[$name] ?? null;
     }
 
     /** Expires $name immediately (Max-Age=0); $path/$domain must match how it was set. */

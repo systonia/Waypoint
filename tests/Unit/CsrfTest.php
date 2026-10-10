@@ -123,6 +123,35 @@ final class CsrfTest extends TestCase
         $this->assertFalse(Csrf::isValidToken($victimToken));
     }
 
+    public function testAResponseThatSignsSomeoneInCarriesATokenForTheNewSession(): void
+    {
+        Waypoint::create()->configure(function (JWTOptions $opts) {
+            $opts->cookieName = 'auth_token';
+        });
+        $_COOKIE['auth_token'] = 'old-session';
+
+        // A login: the response sets the new session cookie
+        $res = (new Response())->withCookie('auth_token', 'new-session');
+        (new Csrf())->followSession($res);
+        $issued = $res->queuedCookie('csrf_token');
+        $this->assertNotNull($issued);
+
+        // The next request carries both new cookies: the token verifies there
+        $_COOKIE['auth_token'] = 'new-session';
+        $this->assertTrue(Csrf::isValidToken($issued));
+
+        // Logging out removes the session cookie: the token follows to "no session"
+        $res = (new Response())->withoutCookie('auth_token');
+        (new Csrf())->followSession($res);
+        unset($_COOKIE['auth_token']);
+        $this->assertTrue(Csrf::isValidToken($res->queuedCookie('csrf_token')));
+
+        // A response that leaves the session alone issues nothing
+        $res = new Response();
+        (new Csrf())->followSession($res);
+        $this->assertNull($res->queuedCookie('csrf_token'));
+    }
+
     // -- verify() --
 
     public function testVerifyAcceptsAMatchingCookieAndHeaderToken(): void

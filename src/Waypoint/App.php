@@ -222,6 +222,7 @@ class App
                 // An app-level middleware threw (a route's own exceptions were already handled in handle()).
                 ($this->resolveExceptionHandler($e))($e, $req, $res);
             }
+            $this->container->get(Csrf::class)->followSession($res);
             $res->send();
         } finally {
             // Per-request singleton state must not leak into a later request on a persistent worker.
