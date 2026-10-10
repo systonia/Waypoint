@@ -183,7 +183,8 @@ parameter in `errors` instead of silently becoming `0`. `Request`/`Response`
 type-hinted parameters (or properties) are injected directly, no attribute needed.
 
 Placeholder values arrive URL-decoded: `/user/J%C3%BCrgen` binds `Jürgen`, and an encoded `%2F`
-stays inside its own segment.
+stays inside its own segment. Everything around the placeholders matches literally, so
+`/file/{name}.json` matches `/file/report.json` but not `/file/reportxjson`.
 
 ```php
 use Waypoint\Attributes\{Get, Post, Param, Query, Body};

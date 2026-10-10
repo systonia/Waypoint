@@ -100,7 +100,7 @@ final class RouteCompiler
             $plan = [
                 'httpMethod' => $httpMethod,
                 'path' => $path,
-                'regex' => $dynamic ? '#^' . preg_replace('#\{(\w+)\}#', '(?P<\1>[^/]+)', $path) . '$#' : null,
+                'regex' => $dynamic ? self::pathRegex($path) : null,
                 'controller' => $controller,
                 'method' => $method->getName(),
                 'argPlan' => $this->buildArgPlan($method),
@@ -312,6 +312,19 @@ final class RouteCompiler
     private static function extendsMiddlewareBase(string $class): bool
     {
         return is_subclass_of($class, MiddlewareBase::class);
+    }
+
+    /** The match pattern for a path with {placeholders}: everything else matches literally ('.' is a dot, '#' is no delimiter). */
+    private static function pathRegex(string $path): string
+    {
+        $pieces = preg_split('#(\{\w+\})#', $path, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [$path];
+        $pattern = '';
+        foreach ($pieces as $piece) {
+            $pattern .= preg_match('#^\{(\w+)\}$#', $piece, $placeholder)
+                ? "(?P<{$placeholder[1]}>[^/]+)"
+                : preg_quote($piece, '#');
+        }
+        return "#^{$pattern}$#";
     }
 
     /**

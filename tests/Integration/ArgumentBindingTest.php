@@ -85,6 +85,22 @@ final class ArgumentBindingTest extends IntegrationTestCase
         $this->assertSame(['name' => 'a/b'], json_decode($output, true));
     }
 
+    public function testTheLiteralPartsOfARoutePathMatchLiterally(): void
+    {
+        $output = $this->dispatch('GET', '/argbinding/file/report.json');
+        $this->assertSame(['file' => 'report'], json_decode($output, true));
+
+        // '.' is a dot, not any character
+        $this->dispatch('GET', '/argbinding/file/reportxjson');
+        $this->assertSame(404, http_response_code());
+
+        // '+' is a plus, not a repetition
+        $output = $this->dispatch('GET', '/argbinding/tag/c++/php');
+        $this->assertSame(['tag' => 'php'], json_decode($output, true));
+        $this->dispatch('GET', '/argbinding/tag/ccc/php');
+        $this->assertSame(404, http_response_code());
+    }
+
     public function testUnrecognizedClassParameterAlwaysBindsToNull(): void
     {
         $output = $this->dispatch('GET', '/argbinding/unknown');

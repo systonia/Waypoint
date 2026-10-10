@@ -56,6 +56,18 @@ class ArgBindingController
         return ['name' => $name];
     }
 
+    #[Get('/file/{name}.json')]
+    public function fileBinding(string $name): array
+    {
+        return ['file' => $name];
+    }
+
+    #[Get('/tag/c++/{name}')]
+    public function hashBinding(string $name): array
+    {
+        return ['tag' => $name];
+    }
+
     #[Get('/typed')]
     public function typedQuery(bool $active, int $page, float $ratio): array
     {
