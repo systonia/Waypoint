@@ -3,6 +3,7 @@
 namespace Waypoint;
 
 use ReflectionClass;
+use RuntimeException;
 use Waypoint\Options\FileSystemOptions;
 use Waypoint\Support\Arr;
 
@@ -193,13 +194,11 @@ final class FileSystem
             return [];
         }
         $dir = $this->getAssetsDirectory();
-        if (!is_dir($dir)) {
-            mkdir($dir, 0777, true);
-        }
+        self::ensureDirectory($dir);
         $mimes = [];
         foreach ($files as $filename => $asset) {
             if (!is_file("$dir/$filename")) {
-                file_put_contents("$dir/$filename", $asset['content']);
+                self::writeAtomically("$dir/$filename", $asset['content']);
             }
             $mimes[$filename] = $asset['mime'];
         }
@@ -224,9 +223,28 @@ final class FileSystem
     private function writePhpArray(string $filename, array $data): void
     {
         $dir = $this->options->getCacheDirectory();
-        if (!is_dir($dir)) {
-            mkdir($dir, 0777, true);
+        self::ensureDirectory($dir);
+        self::writeAtomically("$dir/$filename", "<?php\n// AUTO-GENERATED FILE - DO NOT EDIT\n\nreturn " . var_export($data, true) . ';');
+    }
+
+    /** Two processes may create it at the same moment: only a directory that still doesn't exist afterwards is an error. */
+    private static function ensureDirectory(string $dir): void
+    {
+        if (!is_dir($dir) && !@mkdir($dir, 0777, true) && !is_dir($dir)) {
+            throw new RuntimeException("Cannot create the cache directory {$dir}.");
         }
-        file_put_contents("$dir/$filename", "<?php\n// AUTO-GENERATED FILE - DO NOT EDIT\n\nreturn " . var_export($data, true) . ';');
+    }
+
+    /**
+     * Writes next to the target and renames over it: a concurrent request reads the old file or the new one, never half
+     * of one (a half-written routes.php would be a parse error in someone else's request).
+     */
+    private static function writeAtomically(string $path, string $content): void
+    {
+        $temporary = $path . '.' . bin2hex(random_bytes(6)) . '.tmp';
+        if (file_put_contents($temporary, $content) === false || !rename($temporary, $path)) {
+            @unlink($temporary);
+            throw new RuntimeException("Cannot write the cache file {$path}.");
+        }
     }
 }

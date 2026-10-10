@@ -136,6 +136,25 @@ final class FileSystemCacheTest extends IntegrationTestCase
         $this->assertSame([], $fileSystem->loadAttributes());
     }
 
+    public function testCacheFilesAreReplacedWholeNeverRewrittenInPlace(): void
+    {
+        [, $fileSystem] = $this->fileSystem();
+        $fileSystem->storeAttributes([CustomersController::class]);
+        $file = $fileSystem->getAttributesFile();
+
+        // A second name for the same file: an in-place write would show up through it, a rename leaves it alone,
+        // just like the file a concurrent request already opened
+        $reader = "{$this->tempDir}/reader.php";
+        link($file, $reader);
+        $before = file_get_contents($reader);
+
+        $fileSystem->storeAttributes([CustomersController::class, OrdersController::class]);
+
+        $this->assertSame($before, file_get_contents($reader));
+        $this->assertArrayHasKey(OrdersController::class, $fileSystem->loadAttributes());
+        $this->assertSame([], glob("{$this->tempDir}/*.tmp"), 'a temporary file was left behind');
+    }
+
     public function testStoreAttributesThenLoadAttributesRoundTrips(): void
     {
         [, $fileSystem] = $this->fileSystem();
