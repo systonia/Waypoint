@@ -57,6 +57,36 @@ final class FileSystemCacheTest extends IntegrationTestCase
         return new Router($controllers, $services, null, null, $options);
     }
 
+    public function testWithoutACacheDirectoryNothingIsReadFromOrWrittenToTheSystemTempDirectory(): void
+    {
+        // The old fallback: sys_get_temp_dir()/cache, which anyone on the machine can write to. A file planted
+        // there must never be require()d, and a Router without a cache directory must not write there either.
+        $shared = sys_get_temp_dir() . '/cache';
+        $backup = [];
+        if (!is_dir($shared)) {
+            mkdir($shared, 0777, true);
+        }
+        foreach (['meta.php', 'routes.php', 'attributes.php'] as $file) {
+            $path = "$shared/$file";
+            $backup[$file] = is_file($path) ? file_get_contents($path) : null;
+            file_put_contents($path, "<?php define('WAYPOINT_PLANTED_CACHE_RAN', true); return [];");
+        }
+        try {
+            $router = new Router([CustomersController::class], [], null, null, new FileSystemOptions());
+
+            $this->assertFalse(defined('WAYPOINT_PLANTED_CACHE_RAN'), 'a planted cache file was executed');
+            $this->assertNotEmpty($router->getRoutes());
+            $this->assertArrayHasKey(CustomersController::class, $router->compiledAttributes());
+            foreach (['meta.php', 'routes.php', 'attributes.php'] as $file) {
+                $this->assertStringContainsString('WAYPOINT_PLANTED_CACHE_RAN', (string) file_get_contents("$shared/$file"), "$file was overwritten");
+            }
+        } finally {
+            foreach ($backup as $file => $content) {
+                $content === null ? unlink("$shared/$file") : file_put_contents("$shared/$file", $content);
+            }
+        }
+    }
+
     public function testIsAvailableIsFalseBeforeAnythingIsStored(): void
     {
         [, $fileSystem] = $this->fileSystem();

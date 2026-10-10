@@ -38,11 +38,14 @@ final class FileSystemOptionsTest extends TestCase
         $this->assertSame(dirname(realpath(__FILE__)) . '/views', $opts->buildPath('views'));
     }
 
-    public function testCacheDirectoryDefaultsToSystemTempWhenUnconfigured(): void
+    public function testHasNoCacheDirectoryUntilOneIsConfigured(): void
     {
+        // No fallback to the system temp directory: other users or apps could plant files there that get require()d.
         $opts = new FileSystemOptions();
-        $this->assertSame(sys_get_temp_dir() . '/cache', $opts->getCacheDirectory());
         $this->assertNull($opts->cacheDirectory);
+        $this->assertFalse($opts->isCacheEnabled());
+        $this->expectException(RuntimeException::class);
+        $opts->getCacheDirectory();
     }
 
     public function testAssigningCacheDirectoryNormalizesItAndReportsThePath(): void

@@ -46,6 +46,12 @@ class Router
     /** @var list<string> Content-hashed filenames of plugin assets (Plugin\ClientAsset), in plugin order. */
     private array $pluginAssetFiles = [];
 
+    /** @var array<string, string> filename => content, when there is no cache directory to keep compiled assets in. */
+    private array $viewAssetContents = [];
+
+    /** @var class-string[] The attached controllers, for the in-memory attribute export without a cache. */
+    private array $controllers;
+
     private ?Container $container;
     private FileSystemOptions $fileSystemOptions;
     private FileSystem $fileSystem;
@@ -87,6 +93,7 @@ class Router
         ?PluginRegistry $plugins = null
     ) {
         $this->container = $container;
+        $this->controllers = $controllers;
         $this->fileSystemOptions = $fileSystemOptions ?? $container?->get(FileSystemOptions::class) ?? new FileSystemOptions();
         $this->fileSystem = new FileSystem($this->fileSystemOptions);
         $this->resultRenderer = new ResultRenderer();
@@ -109,18 +116,18 @@ class Router
             return;
         }
 
-        // Trust mode: one stat call, no per-controller reflection.
-        $trusted = $this->fileSystemOptions->cacheDirectory !== null && !$this->fileSystemOptions->cacheValidate;
-        if ($trusted && $this->fileSystem->hasCachedRoutes()) {
-            $this->fileSystem->loadToRouter($this);
-            return;
-        }
-
         $viewsDir = $container?->get(RendererOptions::class)->directory;
-        $viewAssetMeta = ($viewsDir !== null ? ViewAssets::discoverMeta($viewsDir) : []) + $this->pluginMeta();
-        if ($this->fileSystem->isAvailable($controllers, $viewAssetMeta)) {
-            $this->fileSystem->loadToRouter($this);
-            return;
+        if ($this->fileSystemOptions->isCacheEnabled()) {
+            // Trust mode: one stat call, no per-controller reflection.
+            if (!$this->fileSystemOptions->cacheValidate && $this->fileSystem->hasCachedRoutes()) {
+                $this->fileSystem->loadToRouter($this);
+                return;
+            }
+            $viewAssetMeta = ($viewsDir !== null ? ViewAssets::discoverMeta($viewsDir) : []) + $this->pluginMeta();
+            if ($this->fileSystem->isAvailable($controllers, $viewAssetMeta)) {
+                $this->fileSystem->loadToRouter($this);
+                return;
+            }
         }
 
         $this->compile($controllers, $serviceClasses, $viewsDir);
@@ -172,10 +179,26 @@ class Router
                 $this->pluginAssetFiles[] = $filename;
             }
         }
+        if (!$this->fileSystemOptions->isCacheEnabled()) {
+            // No cache directory: the compiled assets stay in memory, nothing touches the disk.
+            $this->viewAssetFiles = array_map(fn(array $asset): string => $asset['mime'], $assets['files']);
+            $this->viewAssetContents = array_map(fn(array $asset): string => $asset['content'], $assets['files']);
+            return;
+        }
         $assets['meta'] += $this->pluginMeta();
         // File contents go to disk; routes.php only keeps {filename => mime}.
         $this->viewAssetFiles = $this->fileSystem->storeViewAssetFiles($assets['files']);
         $this->fileSystem->storeFromRouter($this, $controllers, $serviceClasses, $assets['meta']);
+    }
+
+    /**
+     * Every attribute on every attached controller (RouteCompiler::exportAllAttributes()) for OpenAPIGenerator:
+     * from the cache's attributes.php when there is a cache, else exported live.
+     * @return array<class-string, mixed>
+     */
+    public function compiledAttributes(): array
+    {
+        return $this->fileSystemOptions->isCacheEnabled() ? $this->fileSystem->loadAttributes() : RouteCompiler::exportAllAttributes($this->controllers);
     }
 
     /**
@@ -419,7 +442,7 @@ class Router
         }
         $filename = substr($path, strlen($prefix));
         $mime = $this->viewAssetFiles[$filename] ?? null;
-        $content = $mime !== null ? $this->fileSystem->readViewAssetFile($filename) : null;
+        $content = $mime === null ? null : ($this->viewAssetContents[$filename] ?? ($this->fileSystemOptions->isCacheEnabled() ? $this->fileSystem->readViewAssetFile($filename) : null));
         if ($mime === null || $content === null) {
             return false;
         }

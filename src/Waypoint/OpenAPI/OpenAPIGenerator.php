@@ -4,10 +4,10 @@ namespace Waypoint\OpenAPI;
 
 use Deprecated;
 use stdClass;
-use Waypoint\{FileSystem, Logger, Router, Waypoint};
+use Waypoint\{Logger, Router, Waypoint};
 use Waypoint\Attributes\{Body, Ignore, Param, Query, Summary, Tags, Throws};
 use Waypoint\Enums\Message;
-use Waypoint\Options\{FileSystemOptions, OpenAPIOptions};
+use Waypoint\Options\OpenAPIOptions;
 use Waypoint\Plugin\OpenApiExtension;
 use Waypoint\Support\Arr;
 
@@ -32,7 +32,7 @@ class OpenAPIGenerator
     {
         $this->logger = new Logger();
         $this->schemas = new SchemaBuilder($this->logger);
-        $this->attributeCache = (new FileSystem(Waypoint::getConfig(FileSystemOptions::class)))->loadAttributes();
+        $this->attributeCache = $router->compiledAttributes();
         $this->extensions = $router->pluginHooks(OpenApiExtension::class);
     }
 

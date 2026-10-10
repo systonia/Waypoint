@@ -4,7 +4,11 @@ namespace Waypoint\Options;
 
 use RuntimeException;
 
-/** Where the compiled route/DI cache lives and where public static files are served from. Relative paths resolve against the front controller's directory. */
+/**
+ * Where the compiled route/DI cache lives and where public static files are served from. Relative paths
+ * resolve against the front controller's directory. Without a cacheDirectory nothing is written to or
+ * `require`d from disk: routes compile in memory on every boot (set one in production).
+ */
 class FileSystemOptions
 {
     public ?string $cacheDirectory = null {
@@ -46,9 +50,18 @@ class FileSystemOptions
         return ($resolved !== false ? dirname($resolved) : getcwd()) . '/' . $clean;
     }
 
+    public function isCacheEnabled(): bool
+    {
+        return $this->cacheDirectory !== null;
+    }
+
+    /**
+     * The configured cache directory. There is deliberately no fallback such as the system temp
+     * directory: a cache other users or other apps can write to would be `require`d as code.
+     */
     public function getCacheDirectory(): string
     {
-        return $this->cacheDirectory ?? (sys_get_temp_dir() . '/cache');
+        return $this->cacheDirectory ?? throw new RuntimeException('FileSystemOptions::$cacheDirectory is not configured.');
     }
 
     public function getPublicDirectory(): string

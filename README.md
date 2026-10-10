@@ -707,7 +707,7 @@ either role) — nothing to register. Views can live in subdirectories: `views/A
 contains a `..` segment is rejected at construction, so a view name built from request input can never
 reach outside the views directory. The layout is still resolved from the root of the directory only.
 Compiled, content-hashed copies are written under
-`{cacheDirectory}/assets/` (see [Route/DI Compilation Caching](#routedi-compilation-caching--production-performance)
+`{cacheDirectory}/assets/` (kept in memory without a cache directory; see [Route/DI Compilation Caching](#routedi-compilation-caching--production-performance)
 below) and served through `GET /assets/{hash}.css`/`.js` with a year-long, immutable `Cache-Control`
 header.
 
@@ -1171,8 +1171,11 @@ Missing files at any layer are silently skipped — nothing is required to exist
 
 ## Route/DI Compilation Caching & Production Performance
 
-`attach()` normally discovers routes/DI/attributes via Reflection on every boot. `FileSystemOptions`,
-configured like any other Options class via `configure()`, compiles that once to disk instead:
+`attach()` normally discovers routes/DI/attributes via Reflection on every boot and keeps the result
+in memory -- without a `cacheDirectory` nothing is written to or `require`d from disk (there is
+deliberately no fallback to the system temp directory, where anyone on the machine could plant a file
+that would then run as code). `FileSystemOptions`, configured like any other Options class via
+`configure()`, compiles that once to disk instead; set it in production:
 
 ```php
 use Waypoint\Options\FileSystemOptions;
@@ -1268,7 +1271,7 @@ Configuration mainly happens through `load(?string $dir = null)`, not a plain pr
 
 | Setting | Default | Description |
 |---|---|---|
-| `cacheDirectory` | `null` (→ system temp dir) | Where the compiled route/DI/attribute cache and compiled view assets are written. See [Route/DI Compilation Caching](#routedi-compilation-caching--production-performance). |
+| `cacheDirectory` | `null` (no disk cache, compiled in memory) | Where the compiled route/DI/attribute cache and compiled view assets are written. See [Route/DI Compilation Caching](#routedi-compilation-caching--production-performance). |
 | `publicDirectory` | `null` (disabled) | A plain directory served as static files ahead of routing. See [Static Files](#static-files). |
 | `assetsPath` | `'/assets'` | URL path prefix compiled view/layout CSS/JS is served under, e.g. `GET {assetsPath}/{hash}.css`. See [Views](#views). |
 | `cacheValidate` | `true` | Re-verify the cache is fresh (reflect + compare mtimes) on every request; `false` is "trust mode". |
