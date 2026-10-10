@@ -5,7 +5,7 @@ namespace Waypoint\Tests\Integration;
 use RuntimeException;
 use Waypoint\{Waypoint, FileSystem, Router};
 use Waypoint\Options\{FileSystemOptions, RendererOptions};
-use Waypoint\Tests\Fixtures\Controllers\{CustomersController, OrdersController};
+use Waypoint\Tests\Fixtures\Controllers\{CacheBaseController, CacheChildController, CustomersController, OrdersController};
 
 final class FileSystemCacheTest extends IntegrationTestCase
 {
@@ -119,6 +119,32 @@ final class FileSystemCacheTest extends IntegrationTestCase
         // for just one of them -- otherwise the removed controller's routes
         // would keep being served from the stale cache.
         $this->assertFalse($fileSystem->isAvailable([CustomersController::class]));
+    }
+
+    public function testIsAvailableInvalidatesWhenABaseControllerOrTheFrameworkChanges(): void
+    {
+        [$options, $fileSystem] = $this->fileSystem();
+        $this->router([CacheChildController::class], [], $options);
+        $this->assertTrue($fileSystem->isAvailable([CacheChildController::class]));
+
+        // The base class's attributes are inherited: editing it must recompile the child's routes
+        $base = (new \ReflectionClass(CacheBaseController::class))->getFileName();
+        $original = filemtime($base);
+        touch($base, $original + 10);
+        clearstatcache();
+        try {
+            $this->assertFalse($fileSystem->isAvailable([CacheChildController::class]));
+        } finally {
+            touch($base, $original);
+            clearstatcache();
+        }
+        $this->assertTrue($fileSystem->isAvailable([CacheChildController::class]));
+
+        // A framework update may change what the cache holds: a cache stored by another framework build is stale
+        $meta = require $fileSystem->getMetaFile();
+        $meta[dirname((new \ReflectionClass(FileSystem::class))->getFileName())] = 1;
+        file_put_contents($fileSystem->getMetaFile(), '<?php return ' . var_export($meta, true) . ';');
+        $this->assertFalse($fileSystem->isAvailable([CacheChildController::class]));
     }
 
     public function testIsAvailableInvalidatesWhenTheControllerSetGrows(): void

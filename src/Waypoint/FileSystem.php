@@ -21,6 +21,8 @@ final class FileSystem
     private const ATTRIBUTES_FILE = 'attributes.php';
     private const ASSETS_DIR = 'assets';
 
+    private static ?int $frameworkMtime = null;
+
     public function __construct(private FileSystemOptions $options = new FileSystemOptions())
     {
     }
@@ -107,8 +109,9 @@ final class FileSystem
     }
 
     /**
-     * Everything the compiled cache depends on: $extraMeta, the framework's own client bundle, and each
-     * controller's source file mtime -- or null if a controller's file is gone.
+     * Everything the compiled cache depends on: $extraMeta, the framework's own client bundle and sources (an update
+     * may change what the cache holds), and the source file mtime of each controller and its base classes (their
+     * attributes are inherited) -- or null if a controller's file is gone.
      * @param class-string[] $controllers
      * @param array<string, int> $extraMeta
      * @return array<string, int>|null
@@ -117,24 +120,47 @@ final class FileSystem
     {
         $meta = $extraMeta;
         $meta[ViewAssets::WAYPOINT_JS] = filemtime(ViewAssets::WAYPOINT_JS) ?: 0;
+        $meta[__DIR__] = self::frameworkMtime();
         foreach ($controllers as $controller) {
             if (!class_exists($controller)) {
                 continue;
             }
-            $file = (new ReflectionClass($controller))->getFileName();
-            if (!$file || !file_exists($file)) {
-                return null;
+            for ($class = new ReflectionClass($controller); $class !== false; $class = $class->getParentClass()) {
+                $file = $class->getFileName();
+                if ($file === false && $class->getName() !== $controller) {
+                    // A built-in parent class has no source file to watch
+                    continue;
+                }
+                if (!$file || !file_exists($file)) {
+                    return null;
+                }
+                $mtime = filemtime($file);
+                if ($mtime === false) {
+                    // @codeCoverageIgnoreStart
+                    // only a delete race after file_exists().
+                    return null;
+                    // @codeCoverageIgnoreEnd
+                }
+                $meta[$file] = $mtime;
             }
-            $mtime = filemtime($file);
-            if ($mtime === false) {
-                // @codeCoverageIgnoreStart
-                // only a delete race after file_exists().
-                return null;
-                // @codeCoverageIgnoreEnd
-            }
-            $meta[$file] = $mtime;
         }
         return $meta;
+    }
+
+    /** The newest mtime among the framework's own PHP files; once per process, they only change with a deploy. */
+    private static function frameworkMtime(): int
+    {
+        if (self::$frameworkMtime === null) {
+            $newest = 0;
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(__DIR__, \FilesystemIterator::SKIP_DOTS));
+            foreach ($files as $file) {
+                if ($file instanceof \SplFileInfo && $file->getExtension() === 'php') {
+                    $newest = max($newest, $file->getMTime() ?: 0);
+                }
+            }
+            self::$frameworkMtime = $newest;
+        }
+        return self::$frameworkMtime;
     }
 
     /**
