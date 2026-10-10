@@ -2,6 +2,7 @@
 
 namespace Waypoint\Http;
 
+use SimpleXMLElement;
 use SplFileInfo;
 use Waypoint\Attributes\{FileFormatter, SimpleXmlFormatter};
 
@@ -51,22 +52,39 @@ final class ResultRenderer
     private function renderXml(mixed $result, Response $res): void
     {
         $res->withHeader('Content-Type', 'application/xml');
-        $xml = simplexml_load_string('<root/>');
-        if ($xml === false) {
-            // @codeCoverageIgnoreStart
-            // a fixed literal can't fail to parse.
-            $res->write('<root/>');
-            return;
-            // @codeCoverageIgnoreEnd
-        }
-        $values = is_array($result) ? $result : (array) $result;
-        array_walk_recursive($values, function (mixed $v, int|string $k) use ($xml): void {
-            $xml->addChild((string) $k, is_scalar($v) ? (string) $v : null);
-        });
+        $xml = new SimpleXMLElement('<root/>');
+        self::appendXml($xml, is_object($result) ? get_object_vars($result) : (is_array($result) ? $result : ['value' => $result]));
         // @codeCoverageIgnoreStart
         // asXML() on a document we just built can't fail.
         $res->write($xml->asXML() ?: '<root/>');
         // @codeCoverageIgnoreEnd
+    }
+
+    /**
+     * Nested arrays and objects become nested elements. A key that is no valid element name (a list index, a space)
+     * becomes `<item key="…">`; text is escaped by assigning it, never parsed as markup.
+     * @param array<array-key, mixed> $values
+     */
+    private static function appendXml(SimpleXMLElement $parent, array $values): void
+    {
+        foreach ($values as $key => $value) {
+            $name = (string) $key;
+            $validName = preg_match('/^[A-Za-z_][A-Za-z0-9._-]*$/', $name) === 1 && stripos($name, 'xml') !== 0;
+            $child = $parent->addChild($validName ? $name : 'item');
+            if (!$validName) {
+                $child->addAttribute('key', $name);
+            }
+            if (is_object($value)) {
+                $value = get_object_vars($value);
+            }
+            if (is_array($value)) {
+                self::appendXml($child, $value);
+            } elseif (is_bool($value)) {
+                $child[0] = $value ? 'true' : 'false';
+            } elseif (is_scalar($value)) {
+                $child[0] = (string) $value;
+            }
+        }
     }
 
     private static function json(mixed $value): string

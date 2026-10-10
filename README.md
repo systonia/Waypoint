@@ -834,6 +834,12 @@ class DownloadsController
 }
 ```
 
+### XML Responses
+
+`#[SimpleXmlFormatter]` sends the return value as XML under `<root>`. Nested arrays and objects become
+nested elements, text is escaped, and a key that is no valid element name (a list index, say) becomes
+`<item key="…">`.
+
 ### File Responses
 
 `#[FileFormatter]` sends the return value as a raw body instead of JSON. Return an `SplFileInfo` to send
