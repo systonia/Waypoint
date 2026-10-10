@@ -4,7 +4,7 @@ namespace Waypoint;
 
 use Waypoint\Http\{Request, Response};
 use Waypoint\Options\{CsrfOptions, JWTOptions};
-use Waypoint\Support\Base64Url;
+use Waypoint\Support\{Base64Url, FiberLocal};
 
 /**
  * Stateless double-submit-cookie CSRF protection. A token is a self-contained
@@ -21,14 +21,21 @@ use Waypoint\Support\Base64Url;
  *
  * A container singleton: $currentToken is per-request state set by
  * issueFor() (Router::renderView) and read by token()/field() from inside
- * a template via `$this->csrf`; App::handleHttp() reset()s it afterwards.
+ * a template via `$this->csrf`; App::handle() reset()s it afterwards. It is
+ * kept per Fiber, so requests running interleaved in Fibers keep their own.
  *
  * Every check is a no-op when CsrfOptions::$secret was never configured --
  * an app that never opted in must keep rendering views and accepting POSTs.
  */
 class Csrf
 {
-    private ?string $currentToken = null;
+    /** @var FiberLocal<string> */
+    private FiberLocal $currentToken;
+
+    public function __construct()
+    {
+        $this->currentToken = new FiberLocal();
+    }
 
     /** Reuses the request's still-valid cookie token, or mints a fresh one and sets it (not HttpOnly: JS must be able to read it). */
     public function issueFor(Request $req, Response $res): void
@@ -40,12 +47,13 @@ class Csrf
 
         $existing = $req->cookies[$opts->cookieName] ?? null;
         if (self::isValidToken($existing, self::session($req))) {
-            $this->currentToken = $existing;
+            $this->currentToken->set($existing);
             return;
         }
 
-        $this->currentToken = self::generateToken(self::session($req));
-        $res->withCookie($opts->cookieName, $this->currentToken, maxAge: $opts->ttl, secure: $opts->cookieSecure, httpOnly: false, sameSite: $opts->cookieSameSite);
+        $token = self::generateToken(self::session($req));
+        $this->currentToken->set($token);
+        $res->withCookie($opts->cookieName, $token, maxAge: $opts->ttl, secure: $opts->cookieSecure, httpOnly: false, sameSite: $opts->cookieSameSite);
     }
 
     /**
@@ -64,19 +72,20 @@ class Csrf
         if ($session === null) {
             return;
         }
-        $this->currentToken = self::generateToken($session);
-        $res->withCookie($opts->cookieName, $this->currentToken, maxAge: $opts->ttl, secure: $opts->cookieSecure, httpOnly: false, sameSite: $opts->cookieSameSite);
+        $token = self::generateToken($session);
+        $this->currentToken->set($token);
+        $res->withCookie($opts->cookieName, $token, maxAge: $opts->ttl, secure: $opts->cookieSecure, httpOnly: false, sameSite: $opts->cookieSameSite);
     }
 
     /** The current request's token, or '' if issueFor() never ran. */
     public function token(): string
     {
-        return $this->currentToken ?? '';
+        return $this->currentToken->get() ?? '';
     }
 
     public function reset(): void
     {
-        $this->currentToken = null;
+        $this->currentToken->set(null);
     }
 
     /** `<input type="hidden" name="{fieldName}" value="{token}">` for a plain <form>. */

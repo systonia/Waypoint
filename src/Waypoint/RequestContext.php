@@ -2,24 +2,32 @@
 
 namespace Waypoint;
 
+use Waypoint\Support\FiberLocal;
+
 /**
  * The current request's correlation id (Request::$id), held as a container
  * singleton for the duration of one request so Logger can stamp it onto
  * every line without call sites passing it around. Set/cleared by
- * App::handleHttp().
+ * App::handle(); per Fiber, so requests running interleaved in Fibers keep their own.
  */
 class RequestContext
 {
-    private ?string $requestId = null;
+    /** @var FiberLocal<string> */
+    private FiberLocal $requestId;
+
+    public function __construct()
+    {
+        $this->requestId = new FiberLocal();
+    }
 
     public function setRequestId(?string $id): void
     {
-        $this->requestId = $id;
+        $this->requestId->set($id);
     }
 
-    /** Null outside of a request (CLI task, or before handleHttp() ran). */
+    /** Null outside of a request (CLI task, or before handle() ran). */
     public function getRequestId(): ?string
     {
-        return $this->requestId;
+        return $this->requestId->get();
     }
 }
