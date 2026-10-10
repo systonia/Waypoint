@@ -75,7 +75,11 @@ final class RouteCompiler
     private function compileController(ReflectionClass $rc, string $controller, string $prefixPath, array &$staticRoutes, array &$dynamicRoutes): void
     {
         $propInject = $this->collectPropertyInjections($rc);
-        $classMiddlewares = $this->collectMiddlewares($rc->getAttributes(Middleware::class), $controller);
+        // A base controller's middlewares wrap its subclasses' routes too, the base's outermost
+        $classMiddlewares = [];
+        foreach (array_reverse(self::lineage($rc)) as $ancestor) {
+            $classMiddlewares = [...$classMiddlewares, ...$this->collectMiddlewares($ancestor->getAttributes(Middleware::class), $ancestor->getName())];
+        }
 
         foreach ($rc->getMethods() as $method) {
             $routeAttr = self::lastAttribute($method, RouteAttribute::class, ReflectionAttribute::IS_INSTANCEOF);
@@ -207,7 +211,44 @@ final class RouteCompiler
      */
     private static function inherited(ReflectionClass $rc, ReflectionMethod $method, string $attribute): ?object
     {
-        return self::attribute($method, $attribute) ?? self::attribute($rc, $attribute);
+        $attrs = $method->getAttributes($attribute);
+        if ($attrs === []) {
+            $attrs = self::classAttributes($rc, $attribute);
+        }
+        return $attrs === [] ? null : $attrs[0]->newInstance();
+    }
+
+    /**
+     * The class and its parents, nearest first.
+     * @param ReflectionClass<object> $rc
+     * @return list<ReflectionClass<object>>
+     */
+    private static function lineage(ReflectionClass $rc): array
+    {
+        $lineage = [];
+        for ($class = $rc; $class !== false; $class = $class->getParentClass()) {
+            $lineage[] = $class;
+        }
+        return $lineage;
+    }
+
+    /**
+     * $attribute on the nearest class of the lineage that declares it. PHP doesn't inherit attributes, so without this
+     * an #[Authenticated] on a base controller would leave every subclass route open.
+     * @template T of object
+     * @param ReflectionClass<object> $rc
+     * @param class-string<T> $attribute
+     * @return list<\ReflectionAttribute<T>>
+     */
+    private static function classAttributes(ReflectionClass $rc, string $attribute): array
+    {
+        foreach (self::lineage($rc) as $class) {
+            $attrs = $class->getAttributes($attribute);
+            if ($attrs !== []) {
+                return $attrs;
+            }
+        }
+        return [];
     }
 
     /**
@@ -216,7 +257,7 @@ final class RouteCompiler
      */
     private static function hasEither(ReflectionClass $rc, ReflectionMethod $method, string $attribute): bool
     {
-        return $method->getAttributes($attribute) !== [] || $rc->getAttributes($attribute) !== [];
+        return $method->getAttributes($attribute) !== [] || self::classAttributes($rc, $attribute) !== [];
     }
 
     /** The last formatter attribute on $method, if any. */
@@ -371,6 +412,29 @@ final class RouteCompiler
     }
 
     /**
+     * Every class attribute of the lineage, a parent's only where no nearer class declares the same one.
+     * @param ReflectionClass<object> $rc
+     * @return list<\ReflectionAttribute<object>>
+     */
+    private static function lineageAttributes(ReflectionClass $rc): array
+    {
+        $found = [];
+        $declared = [];
+        foreach (self::lineage($rc) as $class) {
+            $own = $class->getAttributes();
+            foreach ($own as $attr) {
+                if (!isset($declared[$attr->getName()])) {
+                    $found[] = $attr;
+                }
+            }
+            foreach ($own as $attr) {
+                $declared[$attr->getName()] = true;
+            }
+        }
+        return $found;
+    }
+
+    /**
      * Every attribute on every controller, property, method and parameter, as
      * plain {name, args} entries plus each parameter's type -- what
      * OpenAPIGenerator reads instead of reflecting at request time.
@@ -386,7 +450,7 @@ final class RouteCompiler
                 continue;
             }
             $rc = new ReflectionClass($className);
-            $result[$className]['__class'] = self::attributeEntries($rc->getAttributes());
+            $result[$className]['__class'] = self::attributeEntries(self::lineageAttributes($rc));
 
             foreach ($rc->getProperties() as $prop) {
                 $result[$className]['properties'][$prop->getName()] = self::attributeEntries($prop->getAttributes());

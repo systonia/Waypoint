@@ -4,7 +4,7 @@ namespace Waypoint\Tests\Integration;
 
 use Waypoint\{Waypoint, JWT};
 use Waypoint\Options\{JWTOptions, PermissionOptions};
-use Waypoint\Tests\Fixtures\Controllers\{AuthorizationController, ClassAuthenticatedController, ClassRoleController};
+use Waypoint\Tests\Fixtures\Controllers\{AuthorizationController, ClassAuthenticatedController, ClassRoleController, InheritedGuardsController};
 use Waypoint\Tests\Fixtures\Support\FakePermissionProvider;
 
 final class AuthorizationTest extends IntegrationTestCase
@@ -17,7 +17,7 @@ final class AuthorizationTest extends IntegrationTestCase
         $app->configure(function (JWTOptions $opts) {
             $opts->secret = 'test-secret';
         });
-        $app->attach([AuthorizationController::class, ClassAuthenticatedController::class, ClassRoleController::class]);
+        $app->attach([AuthorizationController::class, ClassAuthenticatedController::class, ClassRoleController::class, InheritedGuardsController::class]);
         $app->useJwt();
     }
 
@@ -53,6 +53,18 @@ final class AuthorizationTest extends IntegrationTestCase
 
         $this->assertSame(401, http_response_code());
         $this->assertSame('Unauthorized', json_decode($output, true)['title'] ?? null);
+    }
+
+    public function testGuardsAndMiddlewaresOfBaseControllersApplyToTheirSubclasses(): void
+    {
+        $output = $this->dispatch('GET', '/inherited/secret');
+        $this->assertSame(401, http_response_code(), 'an #[Authenticated] on a base controller left the route open');
+        $this->assertSame('Unauthorized', json_decode($output, true)['title'] ?? null);
+
+        $token = JWT::encode(['sub' => '1']);
+        $output = $this->dispatch('GET', '/inherited/secret', ['Authorization' => "Bearer $token"]);
+        $this->assertSame(['secret' => true], json_decode($output, true));
+        $this->assertSame('yes', $this->sentHeaders()['x-traced'] ?? null);
     }
 
     public function testRoleRouteImpliesAuthenticationAndRejectsAMissingJwtWith401(): void

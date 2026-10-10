@@ -213,6 +213,11 @@ By default `#[Param]`/`#[Query]` match the parameter's own name; pass a name to 
 differently-named placeholder or query key: `#[Param('uuid')] string $userId`, `#[Query('q')] string
 $queryTerm`.
 
+Class-level attributes are inherited from base controllers, although PHP itself doesn't inherit
+attributes: an `#[Authenticated]`, `#[Role]`, `#[Middleware]` or `#[Version]` on an abstract base
+controller applies to every subclass route. The nearest declaration wins, and a base controller's
+middlewares run outside the subclass's own. `#[Controller]` itself is never inherited.
+
 ### Array/collection request bodies
 
 `#[Body]` normally requires the parameter to be typed as a DTO class. For an endpoint whose body is a
