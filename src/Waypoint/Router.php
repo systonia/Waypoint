@@ -536,21 +536,7 @@ class Router
         );
 
         $assets = $this->getViewAssets($view->getViewName());
-        $view->setAssets($assets); // the layout renders the tags itself on a full page load
-
-        // A partial-swap client applies these instead: the name is what data-view/CSS scoping keys on.
-        if ($assets['css'] !== null || $assets['js'] !== null) {
-            $res->withHeader('X-Waypoint-View-Name', $view->getViewName());
-            if ($assets['css'] !== null) {
-                $res->withHeader('X-Waypoint-View-Css', $assets['css']);
-            }
-            if ($assets['js'] !== null) {
-                $res->withHeader('X-Waypoint-View-Js', $assets['js']);
-            }
-        }
-
-        // The same address answers with a bare fragment for waypoint.js and a whole page otherwise: caches must keep both apart
-        $res->addVary('X-Waypoint-Accept');
+        $view->setAssets($assets); // the layout renders the tags
         $res->withHeader('Content-Type', 'text/html')->write($view->render());
     }
 

@@ -262,9 +262,8 @@ class App
             }
         });
 
-        // 401: a page navigation -- a real browser navigation, or a waypoint.js partial one, which
-        // follows the redirect like a browser would -- goes to JWTOptions::$loginRedirectUrl (if set);
-        // any other fetch()/XHR call, or a non-browser client, gets the 401 body it can act on.
+        // 401: a browser page navigation goes to JWTOptions::$loginRedirectUrl (if set); any
+        // fetch()/XHR call, or a non-browser client, gets the 401 body it can act on.
         $this->useExceptionHandler(UnauthorizedException::class, function (Throwable $e, Request $req, Response $res): void {
             if (!$e instanceof UnauthorizedException) {
                 // @codeCoverageIgnoreStart
@@ -272,7 +271,7 @@ class App
                 // @codeCoverageIgnoreEnd
             }
             $loginRedirectUrl = $this->container->get(JWTOptions::class)->loginRedirectUrl;
-            if ($loginRedirectUrl !== null && ($req->acceptPartial || self::isBrowserNavigation($req))) {
+            if ($loginRedirectUrl !== null && self::isBrowserNavigation($req)) {
                 $res->status(302)->withHeader('Location', $loginRedirectUrl);
                 return;
             }

@@ -388,13 +388,13 @@ final class ResponseTest extends TestCase
     public function testAddVaryKeepsListedHeadersAndNeverRepeatsOne(): void
     {
         $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';
-        $res = (new Response())->withHeader('Vary', 'Cookie')->addVary('X-Waypoint-Accept')->addVary('cookie')->write(str_repeat('a', 2000));
+        $res = (new Response())->withHeader('Vary', 'Cookie')->addVary('Accept-Language')->addVary('cookie')->write(str_repeat('a', 2000));
 
         ob_start();
         $res->send();
         ob_end_clean();
 
-        $this->assertSame('Cookie, X-Waypoint-Accept, Accept-Encoding', $this->sentHeaderValue('Vary'));
+        $this->assertSame('Cookie, Accept-Language, Accept-Encoding', $this->sentHeaderValue('Vary'));
     }
 
     public function testContentLengthReflectsTheCompressedBodyNotTheOriginal(): void

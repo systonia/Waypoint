@@ -115,12 +115,6 @@ final class RequestTest extends TestCase
         $this->assertSame($req->body('email'), $req->input('email'));
     }
 
-    public function testAcceptPartialDefaultsToFalse(): void
-    {
-        $req = Request::capture();
-        $this->assertFalse($req->acceptPartial);
-    }
-
     public function testCaptureGeneratesAUuidV4IdWhenNoRequestIdHeaderIsSent(): void
     {
         $req = Request::capture();

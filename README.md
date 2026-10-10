@@ -9,16 +9,14 @@
 
 # Waypoint
 
-A lightweight PHP framework for building APIs and progressively enhanced UIs, with attribute-based
-routing and partial HTML views over AJAX.
+A lightweight PHP framework for building APIs and server-rendered UIs, with attribute-based routing.
 
 ---
 
 ## Overview
 
 Waypoint is for a team that wants **one small framework covering both sides of a typical app** — a JSON
-API and a server-rendered, progressively-enhanced UI (partial HTML swaps over AJAX, no separate frontend
-build) — without reaching for a full-stack framework's config files, service definitions, or implicit
+API and a server-rendered UI (plain pages and forms, no separate frontend build) — without reaching for a full-stack framework's config files, service definitions, or implicit
 magic. Routing, dependency injection, validation, and the OpenAPI spec are all driven directly off PHP
 attributes on your own classes; there's nothing else to wire up or keep in sync.
 
@@ -52,7 +50,7 @@ through your app or plugin from PHPUnit.
   log line for the duration of that request
 - JWT authentication (`useJwt()`), with a required (never-defaulted) signing secret
 - An HTML-rendering MVC view layer, with layouts, sections, views in subdirectories, automatic scoped
-  CSS/JS per view, `Redirect` results, and the bundled `waypoint.js` client for partial navigation
+  CSS/JS per view, `Redirect` results, and the bundled `waypoint.js` client for CSRF headers and `wp-*` handlers
 - Static file serving from a configured public directory
 - Gzip response compression, size-thresholded, with an opt-out `#[NoGzip]` attribute per controller/route
 - PSR-3 compatible logging (plug in any PSR-3 logger, or use `LoggerOptions::addMono()` for Monolog)
@@ -683,10 +681,10 @@ layouts, named sections, and per-view/per-layout scoped CSS/JS:
 use Waypoint\Http\View;
 
 #[Get('/products/{id}')]
-public function show(#[Param] string $id, Request $req): View
+public function show(#[Param] string $id): View
 {
     $product = Product::find($id);
-    return new View('ProductDetail', $product, partial: $req->acceptPartial);
+    return new View('ProductDetail', $product);
 }
 ```
 
@@ -717,8 +715,8 @@ array, e.g. `$model['product']`), and `$this` is the `View` instance itself:
   `[data-view="..."]` nesting selector, so plain rules in `ProductDetail.css` only ever apply where that
   attribute is present.
 
-The client half, `waypoint.js` (partial navigation via `wp-target`, form enhancement, automatic CSRF
-headers), ships inside the package and is compiled into the same asset pipeline as view CSS/JS: served at
+The client half, `waypoint.js` (automatic CSRF headers, `wp-onclick`/`wp-onsubmit` handlers and
+directives for plugin scripts), ships inside the package and is compiled into the same asset pipeline as view CSS/JS: served at
 `{assetsPath}/waypoint.{hash}.js` with immutable caching, rebuilt when the framework is upgraded. The
 layout emits the tag with `<?= $this->waypointJsTag() ?>`; when `CsrfOptions` was changed from its
 defaults the tag also carries `data-csrf-cookie`/`data-csrf-header` for the client, so nothing is
@@ -727,7 +725,7 @@ duplicated in the template.
 A view or layout's sibling `.css`/`.js` is discovered automatically (same basename, same directory,
 either role) — nothing to register. Views can live in subdirectories: `views/Admin/Users.php` is
 `new View('Admin/Users')`, always `/`-separated, and its `Admin/Users.css` is found, scoped
-(`[data-view="Admin/Users"]`) and announced under that same name. A name that starts with `/` or
+(`[data-view="Admin/Users"]`) under that same name. A name that starts with `/` or
 contains a `..` segment is rejected at construction, so a view name built from request input can never
 reach outside the views directory. The layout is still resolved from the root of the directory only.
 Compiled, content-hashed copies are written under
@@ -735,12 +733,9 @@ Compiled, content-hashed copies are written under
 below) and served through `GET /assets/{hash}.css`/`.js` with a year-long, immutable `Cache-Control`
 header.
 
-Passing `partial: true` (typically driven by a request header your client sets — `$req->acceptPartial`
-is true when the request carried `X-Waypoint-Accept: partial`) skips the layout
-entirely and renders just the view. The response also carries `X-Waypoint-View-Name`/`-Css`/`-Js`
-headers describing what was rendered, for a client-side router to apply without a full page reload.
-Every view response also sends `Vary: X-Waypoint-Accept`, so browser and proxy caches keep the
-fragment and the whole page of one address apart. Add your own with `Response::addVary()`.
+Passing `partial: true` skips the layout entirely and renders just the view, for a bare HTML fragment.
+Navigation between pages is plain browser navigation: links and forms load whole pages. For smooth
+transitions between them, CSS covers it without JavaScript: `@view-transition { navigation: auto; }`.
 
 ### Redirects
 
@@ -1150,7 +1145,7 @@ final class LoginTest extends TestCase
 
 - Requests: `get()`, `post()` (form fields), `json()` (raw JSON body), or `request()` for the builder:
   `withHeader()`, `withCookie()`, `withJwt($payload)`, `withCsrf()` (a valid cookie + header pair),
-  `asPartial()` (what waypoint.js sends), `asNavigation()` (what a browser sends), then `send()`.
+  `asNavigation()` (what a browser sends), then `send()`.
 - Responses: `status()`, `header()`, `cookie()`, `body()`, `json('errors.email')`, and fluent
   `assertStatus/Ok/Redirect/Header/HeaderMissing/ContentType/Cookie/See/DontSee/Body/Json/JsonPath`.
 - `tempDir()` gives a directory that is removed after the test, e.g. for `FileSystemOptions::$cacheDirectory`.
@@ -1343,7 +1338,7 @@ Configuration mainly happens through `load(?string $dir = null)`, not a plain pr
 | `tokenType` | `'Bearer'` | Expected prefix on the `Authorization` header value. |
 | `header` | `'Authorization'` | Request header the token is read from. |
 | `cookieName` | `null` (disabled) | Cookie name to additionally read the token from when the header didn't produce one — lets a signed-in session survive a plain page load, not just fetch()/XHR calls. |
-| `loginRedirectUrl` | `null` (disabled) | Where an `UnauthorizedException` (e.g. `#[Authenticated]` with no/expired JWT) sends a page navigation — a real browser navigation (`Sec-Fetch-Mode: navigate`) or a `waypoint.js` partial one (`X-Waypoint-Accept: partial`) — as a `302` instead of `401` JSON. Any other `fetch()`/XHR call still gets the `401`. |
+| `loginRedirectUrl` | `null` (disabled) | Where an `UnauthorizedException` (e.g. `#[Authenticated]` with no/expired JWT) sends a browser page navigation (`Sec-Fetch-Mode: navigate`) as a `302` instead of `401` JSON. Any other `fetch()`/XHR call still gets the `401`. |
 
 ### [LoggerOptions](#logging)
 

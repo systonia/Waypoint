@@ -4,6 +4,7 @@
 <head>
     <title>Bakery 1</title>
     <?= $this->waypointJsTag() ?>
+    <?= $this->assetTags() ?>
     <?= $this->section('header-scripts') ?>
 </head>
 

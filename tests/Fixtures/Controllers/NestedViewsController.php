@@ -12,7 +12,7 @@ class NestedViewsController
     #[Get('/admin-users')]
     public function adminUsers(Request $req): View
     {
-        return new View('Admin/Users', null, partial: $req->acceptPartial);
+        return new View('Admin/Users');
     }
 
     /** Builds the view name from request input -- what View's constructor guards against. */

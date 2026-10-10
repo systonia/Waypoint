@@ -11,7 +11,7 @@ class CustomersController
     #[Get]
     public function index(Request $request): View
     {
-        return new View('HomePage', null, partial: $request->acceptPartial);
+        return new View('HomePage');
     }
 
     #[Get('/{customerId}/orders')]

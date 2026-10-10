@@ -2,7 +2,7 @@
     "name": "waypoint-ui",
     "version": "0.1.0",
     "private": true,
-    "description": "Waypoint's client half (waypoint.js): wp-* attributes for partial navigation, named handlers and automatic CSRF headers. Built into ../src/Waypoint/UI/waypoint.js and shipped with the PHP package.",
+    "description": "Waypoint's client half (waypoint.js): wp-* attributes for named handlers and directives, automatic CSRF headers. Built into ../src/Waypoint/UI/waypoint.js and shipped with the PHP package.",
     "type": "module",
     "scripts": {
         "build": "tsc --noEmit && esbuild src/index.ts --bundle --minify --outfile=../src/Waypoint/UI/waypoint.js --target=es2019",

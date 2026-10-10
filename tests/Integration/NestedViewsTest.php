@@ -35,30 +35,17 @@ final class NestedViewsTest extends IntegrationTestCase
         $this->assertStringContainsString('admin users view hit', $output);
     }
 
-    public function testEveryViewResponseTellsCachesItVariesByTheFragmentHeader(): void
+    public function testNestedViewsSiblingCssIsDiscoveredAndLinkedByThePage(): void
     {
-        // Same address: whole page on reload, bare fragment for waypoint.js -- a cache must not mix them up
-        $this->dispatch('GET', '/nested/admin-users');
-        $this->assertSame('X-Waypoint-Accept', $this->sentHeaders()['vary'] ?? null);
+        $output = $this->dispatch('GET', '/nested/admin-users');
 
-        $this->dispatch('GET', '/nested/admin-users', ['X-Waypoint-Accept' => 'partial']);
-        $this->assertSame('X-Waypoint-Accept', $this->sentHeaders()['vary'] ?? null);
-    }
-
-    public function testNestedViewsSiblingCssIsDiscoveredAndAnnouncedUnderItsSlashedName(): void
-    {
-        $this->dispatch('GET', '/nested/admin-users', ['X-Waypoint-Accept' => 'partial']);
-
-        $headers = $this->sentHeaders();
-        $this->assertSame('Admin/Users', $headers['x-waypoint-view-name'] ?? null);
-        $this->assertMatchesRegularExpression('/^[0-9a-f]{12}\.css$/', $headers['x-waypoint-view-css'] ?? '');
-        $this->assertArrayNotHasKey('x-waypoint-view-js', $headers);
+        $this->assertNotNull(self::linkedViewAsset($output, 'css'));
+        $this->assertNull(self::linkedViewAsset($output, 'js'));
     }
 
     public function testNestedViewsCssIsScopedToItsSlashedNameAndServed(): void
     {
-        $this->dispatch('GET', '/nested/admin-users', ['X-Waypoint-Accept' => 'partial']);
-        $css = $this->sentHeaders()['x-waypoint-view-css'];
+        $css = self::linkedViewAsset($this->dispatch('GET', '/nested/admin-users'), 'css');
 
         $assetsPath = Waypoint::getConfig(FileSystemOptions::class)->assetsPath;
         $output = $this->dispatch('GET', "$assetsPath/$css");

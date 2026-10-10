@@ -176,19 +176,6 @@ final class AuthorizationTest extends IntegrationTestCase
         $this->assertSame('/login', $this->sentHeaders()['location'] ?? null);
     }
 
-    public function testUnauthenticatedPartialNavigationRedirectsLikeABrowserNavigation(): void
-    {
-        Waypoint::create()->configure(function (JWTOptions $opts) {
-            $opts->loginRedirectUrl = '/login';
-        });
-
-        // A waypoint.js wp-target navigation: fetch() follows the 302 and swaps the login page in.
-        $this->dispatch('GET', '/authz/authenticated', ['X-Waypoint-Accept' => 'partial', 'Sec-Fetch-Mode' => 'same-origin']);
-
-        $this->assertSame(302, http_response_code());
-        $this->assertSame('/login', $this->sentHeaders()['location'] ?? null);
-    }
-
     public function testUnauthenticatedFetchCallStillGetsPlainJsonEvenWithLoginRedirectUrlConfigured(): void
     {
         Waypoint::create()->configure(function (JWTOptions $opts) {

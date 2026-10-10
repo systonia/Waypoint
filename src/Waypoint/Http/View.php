@@ -167,18 +167,15 @@ class View
         return $tag . "></script>\n";
     }
 
-    /**
-     * data-wp-asset must match what waypoint.js marks its own injected tags with, or a later swap would inject a duplicate.
-     * @param array{css: ?string, js: ?string} $assets
-     */
+    /** @param array{css: ?string, js: ?string} $assets */
     private function renderAssetTags(array $assets): string
     {
         $tags = '';
         if ($assets['css'] !== null) {
-            $tags .= sprintf("<link rel=\"stylesheet\" href=\"%s\" data-wp-asset=\"%s\">\n", htmlspecialchars("{$this->assetsPath}/{$assets['css']}", ENT_QUOTES), htmlspecialchars($assets['css'], ENT_QUOTES));
+            $tags .= sprintf("<link rel=\"stylesheet\" href=\"%s\">\n", htmlspecialchars("{$this->assetsPath}/{$assets['css']}", ENT_QUOTES));
         }
         if ($assets['js'] !== null) {
-            $tags .= sprintf("<script src=\"%s\" data-wp-asset=\"%s\"></script>\n", htmlspecialchars("{$this->assetsPath}/{$assets['js']}", ENT_QUOTES), htmlspecialchars($assets['js'], ENT_QUOTES));
+            $tags .= sprintf("<script src=\"%s\"></script>\n", htmlspecialchars("{$this->assetsPath}/{$assets['js']}", ENT_QUOTES));
         }
         return $tags;
     }

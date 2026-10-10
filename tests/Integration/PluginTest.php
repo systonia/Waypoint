@@ -106,7 +106,7 @@ final class PluginTest extends IntegrationTestCase
     {
         $this->boot();
 
-        $output = $this->dispatch('GET', '/echo/view', ['X-Waypoint-Accept' => 'partial']);
+        $output = $this->dispatch('GET', '/echo/view');
 
         $this->assertStringContainsString('<p>HELLO</p>', $output);
         $this->assertMatchesRegularExpression('#<link rel="stylesheet" href="/assets/echo\.echo\.[0-9a-f]{12}\.css">#', $output);
@@ -118,7 +118,7 @@ final class PluginTest extends IntegrationTestCase
     {
         $this->boot();
 
-        $output = $this->dispatch('GET', '/echo/view', ['X-Waypoint-Accept' => 'partial']);
+        $output = $this->dispatch('GET', '/echo/view');
         $this->assertStringContainsString('HELLO', $output);
 
         $view = new \Waypoint\Http\View('PluginView');

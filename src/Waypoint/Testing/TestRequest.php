@@ -84,12 +84,6 @@ final class TestRequest
         return $this;
     }
 
-    /** What waypoint.js sends for a partial navigation. */
-    public function asPartial(): self
-    {
-        return $this->withHeader('X-Waypoint-Accept', 'partial');
-    }
-
     /** What a browser sends for a top-level navigation (typed URL, link, reload). */
     public function asNavigation(): self
     {

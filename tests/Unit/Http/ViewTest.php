@@ -143,11 +143,11 @@ final class ViewTest extends TestCase
         // and the client injects a second, duplicate tag for the same
         // asset the next time this view's CSS/JS is needed.
         $this->assertStringContainsString(
-            '<link rel="stylesheet" href="/assets/abc123.css" data-wp-asset="abc123.css">',
+            '<link rel="stylesheet" href="/assets/abc123.css">',
             $tags
         );
         $this->assertStringContainsString(
-            '<script src="/assets/def456.js" data-wp-asset="def456.js"></script>',
+            '<script src="/assets/def456.js"></script>',
             $tags
         );
     }
@@ -160,7 +160,7 @@ final class ViewTest extends TestCase
         $tags = $view->assetTags();
 
         $this->assertStringContainsString(
-            '<link rel="stylesheet" href="/assets/abc123.css" data-wp-asset="abc123.css">',
+            '<link rel="stylesheet" href="/assets/abc123.css">',
             $tags
         );
         $this->assertStringNotContainsString('<script', $tags);
@@ -224,11 +224,11 @@ final class ViewTest extends TestCase
         $tags = $view->assetTags();
 
         $this->assertStringContainsString(
-            '<link rel="stylesheet" href="/static/abc123.css" data-wp-asset="abc123.css">',
+            '<link rel="stylesheet" href="/static/abc123.css">',
             $tags
         );
         $this->assertStringContainsString(
-            '<script src="/static/def456.js" data-wp-asset="def456.js"></script>',
+            '<script src="/static/def456.js"></script>',
             $tags
         );
     }

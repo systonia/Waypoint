@@ -32,11 +32,11 @@ final class LayoutAssetsTest extends IntegrationTestCase
         $output = $this->dispatch('GET', '/layout-assets');
 
         $this->assertMatchesRegularExpression(
-            '#<link rel="stylesheet" href="/assets/[a-f0-9]{12}\.css" data-wp-asset="[a-f0-9]{12}\.css">#',
+            '#<link rel="stylesheet" href="/assets/[a-f0-9]{12}\.css">#',
             $output
         );
         $this->assertMatchesRegularExpression(
-            '#<script src="/assets/[a-f0-9]{12}\.js" data-wp-asset="[a-f0-9]{12}\.js"></script>#',
+            '#<script src="/assets/[a-f0-9]{12}\.js"></script>#',
             $output
         );
     }

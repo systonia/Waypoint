@@ -43,6 +43,6 @@ class EchoPluginController
     #[Get('/view')]
     public function view(Request $req): View
     {
-        return new View('PluginView', partial: $req->acceptPartial);
+        return new View('PluginView', partial: true);
     }
 }

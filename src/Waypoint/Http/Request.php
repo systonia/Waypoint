@@ -25,8 +25,6 @@ class Request
     /** The #[Body] DTO the matched route built (set before validation runs, so present even when validation fails); null until routing has run. */
     public ?object $bodyDto = null;
 
-    /** True when the client sent `X-Waypoint-Accept: partial` (a waypoint.js navigation): render the view without its layout. */
-    public bool $acceptPartial = false;
 
     /** Correlation id: the incoming X-Request-Id (or X-Correlation-Id), else a fresh UUID v4. Echoed back as X-Request-ID and stamped onto log lines. */
     public string $id;
@@ -60,7 +58,6 @@ class Request
         }
 
         $req->id = self::resolveRequestId($req->headers);
-        $req->acceptPartial = strcasecmp($req->headers['X-Waypoint-Accept'] ?? '', 'partial') === 0;
         $req->query = Arr::stringKeyed($_GET);
 
         // JSON only when the client says so: a cross-site <form> can send a JSON-looking text/plain body

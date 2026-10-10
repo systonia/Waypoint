@@ -150,30 +150,19 @@ final class RouterDispatchTest extends IntegrationTestCase
         $this->assertStringContainsString('testview hit', $output);
     }
 
-    public function testViewRouteRendersPartialWhenWaypointAcceptHeaderRequestsIt(): void
-    {
-        $output = $this->dispatch('GET', '/customers', ['X-Waypoint-Accept' => 'partial']);
-
-        $this->assertStringNotContainsString('<html', $output);
-        $this->assertStringContainsString('testview hit', $output);
-    }
-
-    public function testViewWithSiblingCssAndJsEmitsAssetHeaders(): void
+    public function testViewWithSiblingCssAndJsLinksBothFromThePage(): void
     {
         // HomePage.css/HomePage.js are real sibling fixture files -- see
         // Tests/Fixtures/Views/.
-        $this->dispatch('GET', '/customers');
-        $headers = $this->sentHeaders();
+        $output = $this->dispatch('GET', '/customers');
 
-        $this->assertMatchesRegularExpression('/^[a-f0-9]{12}\.css$/', $headers['x-waypoint-view-css'] ?? '');
-        $this->assertMatchesRegularExpression('/^[a-f0-9]{12}\.js$/', $headers['x-waypoint-view-js'] ?? '');
-        $this->assertSame('HomePage', $headers['x-waypoint-view-name'] ?? null);
+        $this->assertNotNull(self::linkedViewAsset($output, 'css'));
+        $this->assertNotNull(self::linkedViewAsset($output, 'js'));
     }
 
     public function testViewAssetIsServedFromAssetsRouteWithLongLivedCacheHeaders(): void
     {
-        $this->dispatch('GET', '/customers');
-        $cssFilename = $this->sentHeaders()['x-waypoint-view-css'];
+        $cssFilename = self::linkedViewAsset($this->dispatch('GET', '/customers'), 'css');
 
         $output = $this->dispatch('GET', "/assets/$cssFilename");
         $headers = $this->sentHeaders();
@@ -187,8 +176,7 @@ final class RouterDispatchTest extends IntegrationTestCase
 
     public function testJsViewAssetIsServedWithTheJavascriptMimeType(): void
     {
-        $this->dispatch('GET', '/customers');
-        $jsFilename = $this->sentHeaders()['x-waypoint-view-js'];
+        $jsFilename = self::linkedViewAsset($this->dispatch('GET', '/customers'), 'js');
 
         $output = $this->dispatch('GET', "/assets/$jsFilename");
         $headers = $this->sentHeaders();
@@ -225,8 +213,7 @@ final class RouterDispatchTest extends IntegrationTestCase
             });
             $app->attach([CustomersController::class]);
 
-            $this->dispatch('GET', '/customers');
-            $cssFilename = $this->sentHeaders()['x-waypoint-view-css'];
+            $cssFilename = self::linkedViewAsset($this->dispatch('GET', '/customers'), 'css');
             unlink("$tempDir/assets/$cssFilename");
 
             $output = $this->dispatch('GET', "/assets/$cssFilename");

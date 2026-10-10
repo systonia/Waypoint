@@ -37,6 +37,12 @@ abstract class IntegrationTestCase extends TestCase
         return $this->lastResponse->body();
     }
 
+    /** The content-hashed file name of the view's own CSS or JS that a rendered page links, or null. */
+    protected static function linkedViewAsset(string $html, string $extension): ?string
+    {
+        return preg_match('#(?:href|src)="/assets/([0-9a-f]{12}\.' . preg_quote($extension, '#') . ')"#', $html, $match) === 1 ? $match[1] : null;
+    }
+
     /** @return array<string, string> lower-cased header name => value of the last dispatch() */
     protected function sentHeaders(): array
     {
