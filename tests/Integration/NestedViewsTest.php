@@ -73,6 +73,18 @@ final class NestedViewsTest extends IntegrationTestCase
         $this->assertStringNotContainsString('systonia', $output);
     }
 
+    public function testATemplateThrowingHalfWayLeavesNoOutputAndNoOpenBufferBehind(): void
+    {
+        $level = ob_get_level();
+        $output = $this->dispatch('GET', '/nested/by-name?name=Throwing');
+
+        $this->assertSame(500, http_response_code());
+        $this->assertStringNotContainsString('PARTIAL-TEMPLATE-OUTPUT', $output);
+        $this->assertStringNotContainsString('PARTIAL-SECTION-OUTPUT', $output);
+        // A buffer left open would swallow or leak the next request's output in a persistent worker
+        $this->assertSame($level, ob_get_level());
+    }
+
     public function testAnAbsoluteViewNameIsRejected(): void
     {
         $this->dispatch('GET', '/nested/by-name?name=' . rawurlencode('/etc/passwd'));

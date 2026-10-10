@@ -237,7 +237,26 @@ class View
         return '';
     }
 
+    /**
+     * Renders the view, then the layout around it. Should a template throw, every output buffer it
+     * opened (its own and any unfinished section) is discarded: the half-rendered page must neither
+     * end up in the error response nor stay open in a persistent worker for the next request.
+     */
     public function render(): string
+    {
+        $level = ob_get_level();
+        try {
+            return $this->renderUnguarded();
+        } catch (\Throwable $e) {
+            while (ob_get_level() > $level) {
+                ob_end_clean();
+            }
+            $this->currentSection = null;
+            throw $e;
+        }
+    }
+
+    private function renderUnguarded(): string
     {
         $model = $this->model;
         $options = Waypoint::getConfig(RendererOptions::class);
