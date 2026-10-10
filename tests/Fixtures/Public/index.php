@@ -1,0 +1,1 @@
+<?php $dbPassword = "geheim";

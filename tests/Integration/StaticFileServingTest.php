@@ -61,4 +61,29 @@ final class StaticFileServingTest extends IntegrationTestCase
         $this->assertSame(['error' => 'Not found'], json_decode($output, true));
     }
 
+    public function testServesFilesInSubdirectoriesOfThePublicDirectory(): void
+    {
+        $this->assertSame("nested asset\n", $this->dispatch('GET', '/assets/app.js'));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function neverServed(): iterable
+    {
+        yield 'PHP source of the front controller' => ['/index.php'];
+        yield 'a dotfile' => ['/.env'];
+        yield 'a file in a dot-directory' => ['/.hidden/config'];
+        yield 'a sibling directory sharing the name prefix' => ['/../Public-backup/secret.txt'];
+        yield 'a dot-segment that stays inside' => ['/./style.css'];
+        yield 'a symlinked directory pointing outside' => ['/linked-env/config.json'];
+        yield 'a symlink with a harmless name pointing at PHP source' => ['/innocent.txt'];
+        yield 'a backslash' => ['/assets\\app.js'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('neverServed')]
+    public function testNeverServesAnythingOutsideThePublicDirectoryDotfilesOrPhpSource(string $path): void
+    {
+        $output = $this->dispatch('GET', $path);
+        $this->assertSame(['error' => 'Not found'], json_decode($output, true), "served $path");
+    }
+
 }

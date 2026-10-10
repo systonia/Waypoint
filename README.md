@@ -759,9 +759,11 @@ $app->configure(function (FileSystemOptions $fs) {
 });
 ```
 
-Left unset (the default), no static directory is served at all. Requests are resolved with `realpath()`
-plus a containment check, so a path can never escape `publicDirectory` — `/../`-style traversal 404s
-instead of serving anything outside it. `.css`/`.js`/`.mjs`/`.json`/`.svg`/`.html` get a fixed
+Left unset (the default), no static directory is served at all. Only files inside that directory are
+served: a path with a `..` or `.` segment, a dotfile or dot-directory (`.env`, `.git/`) and PHP source
+(`.php`, `.phtml`, `.phar`, …) always 404, and the resolved file (symlinks followed) must lie inside the
+directory itself -- a sibling such as `public-backup` doesn't count. So the front controller can sit in
+the same directory without its source ever being handed out. `.css`/`.js`/`.mjs`/`.json`/`.svg`/`.html` get a fixed
 `Content-Type`; anything else falls back to `mime_content_type()`, then `application/octet-stream`.
 
 ---
