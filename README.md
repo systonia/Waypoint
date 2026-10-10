@@ -5,7 +5,7 @@
 ![PHPStan Level 10](https://github.com/systonia/Waypoint/actions/workflows/phpstan.yaml/badge.svg)
 [![PSR-3](https://img.shields.io/badge/PSR--3-compatible-brightgreen.svg)](https://www.php-fig.org/psr/psr-3/)
 [![PSR-4](https://github.com/Systonia/Waypoint/actions/workflows/psr-4.yaml/badge.svg)](https://www.php-fig.org/psr/psr-4/)
-![License](https://img.shields.io/github/license/Systonia/Waypoint)
+![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)
 
 # Waypoint
 
@@ -1404,7 +1404,8 @@ New features that go beyond the core belong in a plugin package (see [Plugins](#
 
 ## License
 
-MIT License
+Waypoint is licensed under either of [MIT](LICENSE-MIT) or
+[Apache-2.0](LICENSE-APACHE), at your option.
 
 ---
 

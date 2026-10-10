@@ -27,7 +27,8 @@
 /CHANGELOG.md       export-ignore
 
 # --- Bewusst NICHT ausgeschlossen (bleiben im installierten Paket) ---
-# /LICENSE
+# /LICENSE-MIT
+# /LICENSE-APACHE
 # /README.md
 # /composer.json
 # /src

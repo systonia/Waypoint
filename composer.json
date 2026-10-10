@@ -13,7 +13,7 @@
     "stateless"
   ],
   "type": "library",
-  "license": "MIT",
+  "license": ["MIT", "Apache-2.0"],
   "authors": [
     {
       "name": "Lento Leisenfeld",
