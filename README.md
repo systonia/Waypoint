@@ -1088,10 +1088,10 @@ declares what it adds and does nothing else:
 
 | Hook (`Waypoint\Plugin\...`) | When | Typical use |
 |---|---|---|
-| `Endpoint` | Before routing, after static files. | Health, metrics, an SSO callback. |
+| `Endpoint` | Before routing, after static files. Runs without route guards: no `#[Authenticated]`, no CSRF check, so an endpoint that changes state or shows private data checks the request itself. | Health, metrics, an SSO callback. |
 | `RouteAttributeCompiler` | At compile time, per route; result cached under the plugin's name. | A `#[RateLimit]` attribute. |
 | `Guard` | Per request before the controller, after auth/CSRF; gets that route's compiled data (`[]` if none). | Enforce the attribute. |
-| `ResponseHook` | After the result was rendered. | Audit, metrics, idempotency store. |
+| `ResponseHook` | After the result was rendered. Not when a guard or the controller threw: the exception handler writes that response afterwards, so count errors in an app-level middleware or exception handler. | Audit, metrics, idempotency store. |
 | `ArgumentBinder` | Own parameter attributes/types for controller methods, asked after the core attributes and before the implicit scalar binding. | `#[File]`, a table request. |
 | `Renderer` | Own return types, asked after `View`/`Redirect`. | Exports, PDFs. |
 | `OpenApiExtension` | Describes the plugin's bound parameters and rendered return types for the spec; without it they show as `string`/`object`. | `text/csv` for an export. |
