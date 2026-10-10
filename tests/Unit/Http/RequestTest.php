@@ -160,4 +160,58 @@ final class RequestTest extends TestCase
 
         $this->assertSame('request-id-wins', $req->id);
     }
+
+    // -- fromParts(): the same request without superglobals --
+
+    public function testFromPartsBuildsTheRequestWithoutTouchingTheSuperglobals(): void
+    {
+        $_SERVER = ['REQUEST_METHOD' => 'DELETE', 'REQUEST_URI' => '/elsewhere', 'HTTP_X_GLOBAL' => 'nein'];
+        $_GET = ['global' => '1'];
+
+        $req = Request::fromParts('post', '/orders/7?page=2&tags[]=a', ['content-type' => 'application/json', 'X_REQUEST_ID' => 'abc-123'], '{"qty":3}', ['sid' => 's1'], https: true);
+
+        $this->assertSame('POST', $req->method);
+        $this->assertSame('/orders/7', $req->path);
+        $this->assertSame(['page' => '2', 'tags' => ['a']], $req->query);
+        $this->assertSame(['Content-Type' => 'application/json', 'X-Request-Id' => 'abc-123'], $req->headers);
+        $this->assertSame('abc-123', $req->id);
+        $this->assertSame(['qty' => 3], $req->body);
+        $this->assertSame(['sid' => 's1'], $req->cookies);
+        $this->assertTrue($req->https);
+    }
+
+    public function testFromPartsDecodesAUrlencodedFormAndPrefersAlreadyParsedFields(): void
+    {
+        $form = Request::fromParts('POST', '/', ['Content-Type' => 'application/x-www-form-urlencoded'], 'name=Ada&roles[]=admin');
+        $this->assertSame(['name' => 'Ada', 'roles' => ['admin']], $form->body);
+
+        $multipart = Request::fromParts('POST', '/', ['Content-Type' => 'multipart/form-data; boundary=x'], '--x...', form: ['name' => 'Ada']);
+        $this->assertSame(['name' => 'Ada'], $multipart->body);
+    }
+
+    public function testFromPartsReadsAJsonLookingTextBodyAsNothing(): void
+    {
+        // A cross-site <form> can send this without a preflight: it must not count as JSON
+        $req = Request::fromParts('POST', '/', ['Content-Type' => 'text/plain'], '{"admin":true}');
+
+        $this->assertSame([], $req->body);
+    }
+
+    public function testCaptureCarriesCookiesHttpsAndTheBareAuthorizationVariable(): void
+    {
+        $cookieBackup = $_COOKIE;
+        $_SERVER['HTTPS'] = 'off';
+        $_SERVER['AUTHORIZATION'] = 'Bearer t';
+        $_COOKIE = ['sid' => 's1', 'list' => ['nested']];
+        try {
+            $req = Request::capture();
+        } finally {
+            $_COOKIE = $cookieBackup;
+        }
+
+        $this->assertFalse($req->https);
+        $this->assertSame('Bearer t', $req->headers['Authorization']);
+        // Only string cookies: PHP turns a[]=x into an array, which no cookie reader here expects
+        $this->assertSame(['sid' => 's1'], $req->cookies);
+    }
 }

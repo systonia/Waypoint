@@ -135,16 +135,11 @@ class App
             if ($this->container->get(JWTOptions::class)->cookieName !== null && !isset($this->container->get(CsrfOptions::class)->secret)) {
                 throw new LogicException('JWTOptions::$cookieName signs requests in by cookie, which needs CSRF protection: set CsrfOptions::$secret.');
             }
-            $serverAuth = $_SERVER['AUTHORIZATION'] ?? null;
-            if (is_string($serverAuth) && !isset($req->headers['Authorization'])) {
-                $req->headers['Authorization'] = $serverAuth;
-            }
-
             $payload = JWT::fromRequestHeaders($req->headers);
             if ($payload === null) {
                 $cookieName = $this->container->get(JWTOptions::class)->cookieName;
-                $cookie = $cookieName !== null ? ($_COOKIE[$cookieName] ?? null) : null;
-                if (is_string($cookie)) {
+                $cookie = $cookieName !== null ? ($req->cookies[$cookieName] ?? null) : null;
+                if ($cookie !== null) {
                     $payload = JWT::decode($cookie);
                 }
             }

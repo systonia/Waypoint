@@ -23,7 +23,7 @@ class SecurityHeadersMiddleware extends MiddlewareBase
             'X-Frame-Options' => $opts->frameOptionsEnabled ? $opts->frameOptions : null,
             'Referrer-Policy' => $opts->referrerPolicyEnabled ? $opts->referrerPolicy : null,
             // HSTS only makes sense (and only works) on a request that itself arrived over HTTPS.
-            'Strict-Transport-Security' => $opts->hstsEnabled && self::isHttps() ? $opts->hsts : null,
+            'Strict-Transport-Security' => $opts->hstsEnabled && $req->https ? $opts->hsts : null,
             'Content-Security-Policy' => $opts->cspEnabled ? $opts->csp : null,
         ];
         foreach ($headers as $name => $value) {
@@ -31,12 +31,5 @@ class SecurityHeadersMiddleware extends MiddlewareBase
                 $res->withHeader($name, $value);
             }
         }
-    }
-
-    /** $_SERVER['HTTPS'] only (IIS sets the literal 'off'); a reverse proxy's X-Forwarded-Proto is deliberately not trusted here. */
-    private static function isHttps(): bool
-    {
-        $https = $_SERVER['HTTPS'] ?? null;
-        return is_string($https) && $https !== '' && strtolower($https) !== 'off';
     }
 }

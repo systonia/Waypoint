@@ -38,13 +38,13 @@ class Csrf
             return;
         }
 
-        $existing = $_COOKIE[$opts->cookieName] ?? null;
-        if (is_string($existing) && self::isValidToken($existing)) {
+        $existing = $req->cookies[$opts->cookieName] ?? null;
+        if (self::isValidToken($existing, self::session($req))) {
             $this->currentToken = $existing;
             return;
         }
 
-        $this->currentToken = self::generateToken();
+        $this->currentToken = self::generateToken(self::session($req));
         $res->withCookie($opts->cookieName, $this->currentToken, maxAge: $opts->ttl, secure: $opts->cookieSecure, httpOnly: false, sameSite: $opts->cookieSameSite);
     }
 
@@ -95,12 +95,19 @@ class Csrf
             return true;
         }
 
-        $cookieToken = $_COOKIE[$opts->cookieName] ?? null;
+        $cookieToken = $req->cookies[$opts->cookieName] ?? '';
         $submitted = self::submittedToken($req, $opts);
-        if (!is_string($cookieToken) || $cookieToken === '' || $submitted === null) {
+        if ($cookieToken === '' || $submitted === null) {
             return false;
         }
-        return hash_equals($cookieToken, $submitted) && self::isValidToken($cookieToken);
+        return hash_equals($cookieToken, $submitted) && self::isValidToken($cookieToken, self::session($req));
+    }
+
+    /** The session cookie (JWTOptions::$cookieName) $req carries, '' without one: what its token is bound to. */
+    private static function session(Request $req): string
+    {
+        $sessionCookie = Waypoint::getConfig(JWTOptions::class)->cookieName;
+        return $sessionCookie !== null ? ($req->cookies[$sessionCookie] ?? '') : '';
     }
 
     private static function submittedToken(Request $req, CsrfOptions $opts): ?string
@@ -114,38 +121,33 @@ class Csrf
         return is_string($fromBody) && $fromBody !== '' ? $fromBody : null;
     }
 
-    /** A fresh signed token; the nonce only keeps two tokens minted in the same second distinct. */
+    /**
+     * A fresh signed token for $session (the value of the session cookie, '' without one); the nonce only keeps
+     * two tokens minted in the same second distinct.
+     */
     #[\NoDiscard('The generated token is the entire point of calling generateToken().')]
-    public static function generateToken(?string $session = null): string
+    public static function generateToken(string $session = ''): string
     {
         $opts = Waypoint::getConfig(CsrfOptions::class);
         $p = Base64Url::encodeJson(['exp' => time() + $opts->ttl, 'nonce' => bin2hex(random_bytes(16))]);
         return "$p." . Base64Url::sign(self::signedContent($p, $session), $opts->secret);
     }
 
-    /**
-     * The payload plus the session it belongs to: $session, or the session cookie of this request.
-     * '|' never occurs in base64url, so the two can't be shifted into each other.
-     */
-    private static function signedContent(string $payload, ?string $session = null): string
+    /** The payload plus the session it belongs to. '|' never occurs in base64url, so the two can't be shifted into each other. */
+    private static function signedContent(string $payload, string $session): string
     {
-        if ($session === null) {
-            $sessionCookie = Waypoint::getConfig(JWTOptions::class)->cookieName;
-            $fromRequest = $sessionCookie !== null ? ($_COOKIE[$sessionCookie] ?? '') : '';
-            $session = is_string($fromRequest) ? $fromRequest : '';
-        }
         return $payload . '|' . $session;
     }
 
-    /** True if $token was signed against the current secret for the current session and its 'exp' hasn't passed. */
+    /** True if $token was signed against the current secret for $session (see generateToken()) and its 'exp' hasn't passed. */
     #[\NoDiscard('Ignoring the result silently skips checking whether the token actually verified.')]
-    public static function isValidToken(?string $token): bool
+    public static function isValidToken(?string $token, string $session = ''): bool
     {
         if ($token === null || substr_count($token, '.') !== 1) {
             return false;
         }
         [$p, $s] = explode('.', $token);
-        if (!hash_equals(Base64Url::sign(self::signedContent($p), Waypoint::getConfig(CsrfOptions::class)->secret), $s)) {
+        if (!hash_equals(Base64Url::sign(self::signedContent($p, $session), Waypoint::getConfig(CsrfOptions::class)->secret), $s)) {
             return false;
         }
         $decoded = json_decode(Base64Url::decode($p), true);

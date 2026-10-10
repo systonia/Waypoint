@@ -101,25 +101,23 @@ final class CsrfTest extends TestCase
         });
 
         // The attacker's own session: a valid token for them
-        $_COOKIE['auth_token'] = 'attacker-session';
-        $attackerToken = Csrf::generateToken();
-        $this->assertTrue(Csrf::isValidToken($attackerToken));
+        $attackerToken = Csrf::generateToken('attacker-session');
+        $this->assertTrue(Csrf::isValidToken($attackerToken, 'attacker-session'));
 
         // Planted into the victim's cookie jar and repeated in the forged form: it fails against the victim's session
         $_COOKIE['auth_token'] = 'victim-session';
         $_COOKIE['csrf_token'] = $attackerToken;
         $_SERVER['HTTP_X_CSRF_TOKEN'] = $attackerToken;
-        $this->assertFalse(Csrf::isValidToken($attackerToken));
+        $this->assertFalse(Csrf::isValidToken($attackerToken, 'victim-session'));
         $this->assertFalse((new Csrf())->verify($this->captureRequest()));
 
         // The victim's own token still works
-        $victimToken = Csrf::generateToken();
+        $victimToken = Csrf::generateToken('victim-session');
         $_COOKIE['csrf_token'] = $victimToken;
         $_SERVER['HTTP_X_CSRF_TOKEN'] = $victimToken;
         $this->assertTrue((new Csrf())->verify($this->captureRequest()));
 
         // Signing in or out changes the session: the old token is no longer valid
-        unset($_COOKIE['auth_token']);
         $this->assertFalse(Csrf::isValidToken($victimToken));
     }
 
@@ -128,8 +126,6 @@ final class CsrfTest extends TestCase
         Waypoint::create()->configure(function (JWTOptions $opts) {
             $opts->cookieName = 'auth_token';
         });
-        $_COOKIE['auth_token'] = 'old-session';
-
         // A login: the response sets the new session cookie
         $res = (new Response())->withCookie('auth_token', 'new-session');
         (new Csrf())->followSession($res);
@@ -137,13 +133,11 @@ final class CsrfTest extends TestCase
         $this->assertNotNull($issued);
 
         // The next request carries both new cookies: the token verifies there
-        $_COOKIE['auth_token'] = 'new-session';
-        $this->assertTrue(Csrf::isValidToken($issued));
+        $this->assertTrue(Csrf::isValidToken($issued, 'new-session'));
 
         // Logging out removes the session cookie: the token follows to "no session"
         $res = (new Response())->withoutCookie('auth_token');
         (new Csrf())->followSession($res);
-        unset($_COOKIE['auth_token']);
         $this->assertTrue(Csrf::isValidToken($res->queuedCookie('csrf_token')));
 
         // A response that leaves the session alone issues nothing

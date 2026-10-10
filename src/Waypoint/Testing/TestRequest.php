@@ -103,7 +103,9 @@ final class TestRequest
             $opts = Waypoint::getConfig(CsrfOptions::class);
             if (isset($opts->secret)) {
                 // Minted after the cookies are in place: the token is bound to the session cookie this request carries
-                $token = Csrf::generateToken();
+                $sessionCookie = Waypoint::getConfig(JWTOptions::class)->cookieName;
+                $session = $sessionCookie !== null ? $_COOKIE[$sessionCookie] ?? '' : '';
+                $token = Csrf::generateToken(is_string($session) ? $session : '');
                 $_COOKIE[$opts->cookieName] = $token;
                 $this->headers[$opts->headerName] = $token;
             }
