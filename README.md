@@ -147,6 +147,23 @@ $res = $app->handle(Request::fromParts('GET', '/customers/7?tab=orders', $header
 // $res->getStatus(), $res->getHeaders(), $res->getCookies() (one Set-Cookie value each), $res->getBody()
 ```
 
+Under nope (PHP with a Node-style event loop) `Waypoint\Nope\Server` does exactly
+that: one process serves every request, each in a Fiber of its own, interleaved while they wait on I/O.
+The request id and the CSRF token follow a request into the tasks it starts (`Nope\async()`); files under
+the `static` prefixes are served by nope itself, without PHP:
+
+```php
+if (function_exists('nope_listen')) {
+    Waypoint\Nope\Server::serve($app, 8080, static: ['/assets' => __DIR__ . '/public/assets']);
+} else {
+    $app->run();
+}
+```
+
+A controller may then wait on nope's async I/O (`Nope\Db`, `Nope\Http\fetch()`, `Nope\all()`) while the
+process serves other requests. Read [Controllers per request, services shared](#controllers-per-request-services-shared)
+first. In a template, don't wait: fetch the data in the controller before `render()`.
+
 A minimal controller:
 
 ```php

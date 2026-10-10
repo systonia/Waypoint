@@ -36,14 +36,14 @@ abstract class LiveServerTestCase extends TestCase
         $docroot = __DIR__ . '/server';
         $router = $docroot . '/index.php';
 
-        $command = [PHP_BINARY, '-S', self::$host . ':' . self::$port, '-t', $docroot, $router];
+        $command = static::serverCommand(self::$host, self::$port, $docroot, $router);
         $descriptors = [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
 
-        self::$process = proc_open($command, $descriptors, $pipes, $docroot);
+        self::$process = proc_open($command, $descriptors, $pipes, $docroot, [...getenv(), 'E2E_PORT' => (string) self::$port]);
         if (!is_resource(self::$process)) {
             self::fail('Could not start the built-in PHP server for end-to-end tests.');
         }
@@ -61,6 +61,15 @@ abstract class LiveServerTestCase extends TestCase
             proc_terminate(self::$process);
             proc_close(self::$process);
         }
+    }
+
+    /**
+     * The server process: PHP's built-in web server; a subclass runs the same front controller elsewhere.
+     * @return list<string>
+     */
+    protected static function serverCommand(string $host, int $port, string $docroot, string $router): array
+    {
+        return [PHP_BINARY, '-S', "$host:$port", '-t', $docroot, $router];
     }
 
     private static function removeDirectory(string $dir): void

@@ -13,7 +13,7 @@ use Waypoint\Options\JWTOptions;
  * can prove -- the SAPI's own query-string/body handling, headers as
  * actually transmitted, and cross-process route-cache reuse.
  */
-final class FullAppLiveTest extends LiveServerTestCase
+class FullAppLiveTest extends LiveServerTestCase
 {
     /** Signs a token with the same secret Tests/EndToEnd/server/index.php configures, without touching the live server's own state (it's a separate process). */
     private function signToken(array $payload): string

@@ -4,6 +4,8 @@ parameters:
         - src
     excludePaths:
         - tests
+    scanFiles:
+        - stubs/nope.stub
     typeAliases:
         # Shapes RouteCompiler produces and Router/FileSystem/OpenAPIGenerator consume.
         # Optional RoutePlan keys match Router's `?? default` reads: a routes.php cached by an

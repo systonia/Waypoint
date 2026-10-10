@@ -49,7 +49,9 @@ $app->configure(function (CorsOptions $opts) {
 $app->useCors();
 $app->useJwt();
 
+// attach() takes the whole set at once; the nope-only controller joins it under nope
 $app->attach([
+    ...(function_exists('nope_listen') ? [\Waypoint\Tests\Fixtures\Controllers\NopeController::class] : []),
     CustomersController::class,
     OrdersController::class,
     ProductsController::class,
@@ -60,4 +62,9 @@ $app->attach([
     MaintenanceManager::class,
 ]);
 
-$app->run();
+// Under nope (NopeLiveTest) one process serves every request; under php -S each request runs this file anew
+if (function_exists('nope_listen')) {
+    \Waypoint\Nope\Server::serve($app, (int) getenv('E2E_PORT'));
+} else {
+    $app->run();
+}

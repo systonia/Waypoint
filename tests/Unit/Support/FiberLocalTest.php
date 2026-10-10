@@ -77,7 +77,7 @@ final class FiberLocalTest extends TestCase
         $this->assertSame('', $csrf->token());
     }
 
-    public function testARuntimesStorageTakesOverForFiberLocalsUsedAfterwards(): void
+    public function testARuntimesStorageTakesOverEveryFiberLocal(): void
     {
         $before = new FiberLocal();
         $before->get();
@@ -104,8 +104,8 @@ final class FiberLocalTest extends TestCase
 
         $this->assertSame('request-1', $child->getReturn());
         $this->assertSame('request-1', $shared->value);
-        // A FiberLocal already in use keeps its own storage
+        // A FiberLocal already used before (while the app booted) switches over too
         $before->set('own');
-        $this->assertSame('request-1', $shared->value);
+        $this->assertSame('own', $shared->value);
     }
 }

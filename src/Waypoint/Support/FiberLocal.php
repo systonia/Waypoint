@@ -21,10 +21,8 @@ final class FiberLocal implements LocalStorage
     /** @var (Closure(): LocalStorage)|null */
     private static ?Closure $storage = null;
 
-    /** Set on first use: the runtime's storage, or null for the per-Fiber map below. */
+    /** The runtime's storage, created on first use after useStorage(); until then the per-Fiber map below. */
     private ?LocalStorage $delegate = null;
-
-    private bool $resolved = false;
 
     /** @var WeakMap<object, T> Fiber => value, gone with the Fiber. */
     private WeakMap $byFiber;
@@ -38,8 +36,8 @@ final class FiberLocal implements LocalStorage
     }
 
     /**
-     * Keeps the values of every FiberLocal used from now on in what $create returns, e.g. a runtime's async
-     * context that follows a request into the tasks it starts; null goes back to one value per Fiber.
+     * Keeps the values of every FiberLocal in what $create returns from now on, e.g. a runtime's async context
+     * that follows a request into the tasks it starts. Call it before the first request.
      *
      *   FiberLocal::useStorage(fn () => new class implements LocalStorage { ... Nope\AsyncLocal ... });
      *
@@ -50,11 +48,14 @@ final class FiberLocal implements LocalStorage
         self::$storage = $create;
     }
 
+    /**
+     * Switches over as soon as a storage is configured, even for a FiberLocal already used while the app
+     * booted (the Logger reads the request id then); values it held in its own map stay behind.
+     */
     private function delegate(): ?LocalStorage
     {
-        if (!$this->resolved) {
-            $this->resolved = true;
-            $this->delegate = self::$storage !== null ? (self::$storage)() : null;
+        if ($this->delegate === null && self::$storage !== null) {
+            $this->delegate = (self::$storage)();
         }
         return $this->delegate;
     }
