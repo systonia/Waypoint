@@ -727,6 +727,8 @@ Passing `partial: true` (typically driven by a request header your client sets â
 is true when the request carried `X-Waypoint-Accept: partial`) skips the layout
 entirely and renders just the view. The response also carries `X-Waypoint-View-Name`/`-Css`/`-Js`
 headers describing what was rendered, for a client-side router to apply without a full page reload.
+Every view response also sends `Vary: X-Waypoint-Accept`, so browser and proxy caches keep the
+fragment and the whole page of one address apart. Add your own with `Response::addVary()`.
 
 ### Redirects
 

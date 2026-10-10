@@ -39,6 +39,17 @@ class Response
         return $this;
     }
 
+    /** Adds a request header to `Vary`, keeping the ones already listed: caches then keep one copy per value. */
+    public function addVary(string $header): self
+    {
+        $listed = array_filter(array_map('trim', explode(',', $this->headers['Vary'] ?? '')));
+        if (!in_array(strtolower($header), array_map('strtolower', $listed), true)) {
+            $listed[] = $header;
+        }
+        $this->headers['Vary'] = implode(', ', $listed);
+        return $this;
+    }
+
     /** Case-insensitive -- lets an after() middleware fill in a header only if the controller didn't set it. */
     public function hasHeader(string $name): bool
     {
@@ -179,7 +190,7 @@ class Response
         }
 
         $this->headers['Content-Encoding'] = 'gzip';
-        $this->headers['Vary'] = isset($this->headers['Vary']) ? $this->headers['Vary'] . ', Accept-Encoding' : 'Accept-Encoding';
+        $this->addVary('Accept-Encoding');
         return $compressed;
     }
 }

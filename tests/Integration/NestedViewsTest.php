@@ -35,6 +35,16 @@ final class NestedViewsTest extends IntegrationTestCase
         $this->assertStringContainsString('admin users view hit', $output);
     }
 
+    public function testEveryViewResponseTellsCachesItVariesByTheFragmentHeader(): void
+    {
+        // Same address: whole page on reload, bare fragment for waypoint.js -- a cache must not mix them up
+        $this->dispatch('GET', '/nested/admin-users');
+        $this->assertSame('X-Waypoint-Accept', $this->sentHeaders()['vary'] ?? null);
+
+        $this->dispatch('GET', '/nested/admin-users', ['X-Waypoint-Accept' => 'partial']);
+        $this->assertSame('X-Waypoint-Accept', $this->sentHeaders()['vary'] ?? null);
+    }
+
     public function testNestedViewsSiblingCssIsDiscoveredAndAnnouncedUnderItsSlashedName(): void
     {
         $this->dispatch('GET', '/nested/admin-users', ['X-Waypoint-Accept' => 'partial']);

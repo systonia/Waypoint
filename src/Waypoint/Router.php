@@ -521,6 +521,8 @@ class Router
             }
         }
 
+        // The same address answers with a bare fragment for waypoint.js and a whole page otherwise: caches must keep both apart
+        $res->addVary('X-Waypoint-Accept');
         $res->withHeader('Content-Type', 'text/html')->write($view->render());
     }
 
