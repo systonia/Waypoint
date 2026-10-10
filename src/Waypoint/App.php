@@ -17,7 +17,8 @@ use Waypoint\Routing\{PropertyInjector, ServiceDiscovery};
  * The application: owns the container, the app-level middleware pipe, the
  * exception handlers, and (after attach()) the Router. Response::send() is
  * called exactly once per request, at the very end of handleHttp(), so every
- * middleware's after() can still shape the response.
+ * middleware's after() can still shape the response. An exception from an
+ * app-level middleware goes through the same handlers as one from a route.
  */
 class App
 {
@@ -207,7 +208,12 @@ class App
                 fn(callable $next, callable $mw): callable => fn(Request $req, Response $res): mixed => $mw($req, $res, $next),
                 fn(Request $req, Response $res): Response => $this->handle($req, $res)
             );
-            $handler($req, $res);
+            try {
+                $handler($req, $res);
+            } catch (Throwable $e) {
+                // An app-level middleware threw (a route's own exceptions were already handled in handle()).
+                ($this->resolveExceptionHandler($e))($e, $req, $res);
+            }
             $res->send();
         } finally {
             // Per-request singleton state must not leak into a later request on a persistent worker.

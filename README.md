@@ -628,7 +628,8 @@ project that wants more than the generic message needs its own explicit
 
 Register your own handler — for an exact exception class, or anything further up its class/interface
 hierarchy — with `useExceptionHandler()`. The most specific registered handler wins: exact class match
-first, then parent classes, then implemented interfaces, then the `Throwable` catch-all.
+first, then parent classes, then implemented interfaces, then the `Throwable` catch-all. The handlers
+cover app-level middleware (`$app->use()`) as well as routes, so an auth check there can simply throw.
 
 ```php
 use Waypoint\Http\{Request, Response};
