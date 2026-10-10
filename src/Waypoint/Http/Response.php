@@ -4,7 +4,11 @@ namespace Waypoint\Http;
 
 use Waypoint\Options\CompressionOptions;
 
-/** The outgoing response, built up by middleware/controllers and sent exactly once by App::handleHttp(). */
+/**
+ * The outgoing response, built up by middleware/controllers. App::handle() returns it finalized (gzip, HEAD,
+ * Content-Length) for a runtime that writes it out itself via getBody()/getHeaders()/getCookies();
+ * App::handleHttp() sends it exactly once through header()/echo.
+ */
 class Response
 {
     private int $status = 200;
@@ -25,6 +29,12 @@ class Response
 
     /** Makes send() idempotent: a custom exception handler may call it itself, and handleHttp() always calls it afterwards. */
     private bool $sent = false;
+
+    /** The request this answers (forRequest()): its method and Accept-Encoding decide HEAD and gzip. */
+    private ?Request $request = null;
+
+    /** Set by finalize(): the body is compressed if it will be, Content-Length is fixed. */
+    private bool $finalized = false;
 
     public function __construct(private CompressionOptions $compressionOptions = new CompressionOptions())
     {
@@ -149,34 +159,73 @@ class Response
         return $this;
     }
 
-    /** Sends status, headers, cookies and body. A second call does nothing. */
+    /** Ties the response to $req: HEAD drops the body, its Accept-Encoding decides gzip. App::handle() does this. */
+    public function forRequest(Request $req): self
+    {
+        $this->request = $req;
+        return $this;
+    }
+
+    /**
+     * Compresses the body if it qualifies and fixes Content-Length to the body actually sent. A second call does
+     * nothing. Without forRequest() it falls back to the superglobals (a Response sent on its own under FPM).
+     */
+    public function finalize(): self
+    {
+        if ($this->finalized) {
+            return $this;
+        }
+        $this->finalized = true;
+        $acceptEncoding = $this->request !== null ? ($this->request->headers['Accept-Encoding'] ?? '') : ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '');
+        $this->body = $this->maybeCompress($this->body, is_string($acceptEncoding) ? $acceptEncoding : '');
+        // Content-Length is always recomputed from the body actually sent (compression may have shrunk it).
+        foreach (array_keys($this->headers) as $name) {
+            if (strcasecmp($name, 'Content-Length') === 0) {
+                unset($this->headers[$name]);
+            }
+        }
+        $this->headers['Content-Length'] = (string) strlen($this->body);
+        return $this;
+    }
+
+    /** The body as it goes out: compressed after finalize(), '' for a HEAD request (whose Content-Length is the GET's). */
+    public function getBody(): string
+    {
+        $method = $this->request !== null ? $this->request->method : ($_SERVER['REQUEST_METHOD'] ?? '');
+        return $method === 'HEAD' ? '' : $this->body;
+    }
+
+    /** @return array<string, string> Every header but Set-Cookie (see getCookies()). */
+    public function getHeaders(): array
+    {
+        return $this->headers;
+    }
+
+    /** @return list<string> One raw Set-Cookie value each. */
+    public function getCookies(): array
+    {
+        return array_values($this->cookies);
+    }
+
+    /** Finalizes, then sends status, headers, cookies and body. A second call does nothing. */
     public function send(): void
     {
         if ($this->sent) {
             return;
         }
         $this->sent = true;
-
-        $body = $this->maybeCompress($this->body);
+        $this->finalize();
 
         if (!headers_sent()) {
             http_response_code($this->status);
-            // Content-Length is always recomputed from the body actually sent (compression may have shrunk it).
             foreach ($this->headers as $name => $value) {
-                if (strcasecmp($name, 'Content-Length') !== 0) {
-                    header("{$name}: {$value}");
-                }
+                header("{$name}: {$value}");
             }
-            header('Content-Length: ' . strlen($body));
             foreach ($this->cookies as $cookie) {
                 header('Set-Cookie: ' . $cookie, false);
             }
         }
-
-        // A HEAD answer carries the headers of the GET, Content-Length included, but never the body
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'HEAD') {
-            echo $body;
-        }
+        echo $this->getBody();
     }
 
     /** Whether Accept-Encoding allows gzip: named (or by `*`) with a quality above 0; `gzip;q=0` refuses it outright. */
@@ -203,15 +252,13 @@ class Response
     }
 
     /** gzip when: not disabled, enabled in options, the client accepts it, the body is big enough, and it isn't already encoded. */
-    private function maybeCompress(string $body): string
+    private function maybeCompress(string $body, string $acceptEncoding): string
     {
-        $acceptEncoding = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? '';
         if (
             $this->gzipDisabled
             || !$this->compressionOptions->enabled
             || strlen($body) < $this->compressionOptions->minBytes
             || isset($this->headers['Content-Encoding'])
-            || !is_string($acceptEncoding)
             || !self::acceptsGzip($acceptEncoding)
         ) {
             return $body;

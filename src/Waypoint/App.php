@@ -195,38 +195,47 @@ class App
     }
 
     /**
-     * Handles the request in the superglobals: middleware pipe around dispatch(), then the single send().
+     * Handles the request in the superglobals and sends the answer through header()/echo.
      * Public so tests and unusual SAPIs can drive it directly.
      * @param string|null $rawBody Overrides php://input (the Testing kit's JSON requests).
      */
     public function handleHttp(?string $rawBody = null): void
     {
-        $req = Request::capture($rawBody);
-        $res = (new Response($this->container->get(CompressionOptions::class)))->withRequestId($req->id);
+        $this->handle(Request::capture($rawBody))->send();
+    }
+
+    /**
+     * Runs $req through the middleware pipe, routing and exception handlers and returns the finalized Response
+     * without sending it: for a runtime that hands over requests itself (Request::fromParts()) and writes
+     * getStatus()/getHeaders()/getCookies()/getBody() out on its own.
+     */
+    public function handle(Request $req): Response
+    {
+        $res = (new Response($this->container->get(CompressionOptions::class)))->forRequest($req)->withRequestId($req->id);
         $this->container->get(RequestContext::class)->setRequestId($req->id);
 
         try {
             $handler = array_reduce(
                 array_reverse($this->middlewares),
                 fn(callable $next, callable $mw): callable => fn(Request $req, Response $res): mixed => $mw($req, $res, $next),
-                fn(Request $req, Response $res): Response => $this->handle($req, $res)
+                fn(Request $req, Response $res): Response => $this->dispatch($req, $res)
             );
             try {
                 $handler($req, $res);
             } catch (Throwable $e) {
-                // An app-level middleware threw (a route's own exceptions were already handled in handle()).
+                // An app-level middleware threw (a route's own exceptions were already handled in dispatch()).
                 ($this->resolveExceptionHandler($e))($e, $req, $res);
             }
             $this->container->get(Csrf::class)->followSession($res);
-            $res->send();
         } finally {
             // Per-request singleton state must not leak into a later request on a persistent worker.
             $this->container->get(RequestContext::class)->setRequestId(null);
             $this->container->get(Csrf::class)->reset();
         }
+        return $res->finalize();
     }
 
-    private function handle(Request $req, Response $res): Response
+    private function dispatch(Request $req, Response $res): Response
     {
         try {
             $this->router->dispatch(uri: $req->path, httpMethod: $req->method, req: $req, res: $res);

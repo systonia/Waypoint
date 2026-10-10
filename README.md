@@ -138,6 +138,15 @@ branches on `php_sapi_name()`: under a real
 HTTP SAPI it dispatches the current request (`handleHttp()`); under `cli` it runs the CLI task runner
 against the process's own `$argv` (`runCli()`) — see [CLI Tasks](#cli-tasks).
 
+A runtime that hands requests over itself, instead of filling the superglobals, builds the request with
+`Request::fromParts()` and calls `handle()`. It returns the finished `Response` (gzip, `HEAD` and
+`Content-Length` already applied) without sending anything:
+
+```php
+$res = $app->handle(Request::fromParts('GET', '/customers/7?tab=orders', $headers, $body, $cookies, https: true));
+// $res->getStatus(), $res->getHeaders(), $res->getCookies() (one Set-Cookie value each), $res->getBody()
+```
+
 A minimal controller:
 
 ```php
