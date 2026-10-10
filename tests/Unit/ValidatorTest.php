@@ -144,6 +144,27 @@ final class ValidatorTest extends TestCase
         $this->assertArrayNotHasKey('pin', $errors);
     }
 
+    public function testRegexNeverLetsAListOrObjectThrough(): void
+    {
+        // Untyped properties take whatever the request body carried
+        foreach ([['1234'], new \stdClass(), true] as $value) {
+            $dto = new ValidatorTest_AccountDTO();
+            $dto->pin = $value;
+            $this->assertArrayHasKey('pin', $this->validator->validate($dto), get_debug_type($value));
+        }
+    }
+
+    public function testRegexChecksANumberByItsTextAndSkipsAMissingValue(): void
+    {
+        $dto = new ValidatorTest_AccountDTO();
+        $dto->pin = 1234;
+        $this->assertArrayNotHasKey('pin', $this->validator->validate($dto));
+        $dto->pin = 12;
+        $this->assertArrayHasKey('pin', $this->validator->validate($dto));
+        $dto->pin = null;
+        $this->assertArrayNotHasKey('pin', $this->validator->validate($dto));
+    }
+
     public function testValidateCollectsOneErrorPerInvalidField(): void
     {
         $dto = new ValidatorTest_ContactDTO();

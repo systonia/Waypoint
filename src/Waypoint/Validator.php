@@ -31,7 +31,7 @@ class Validator
                     $rule instanceof NotBlank => self::isBlank($value) ? $this->message('This value should not be blank.') : null,
                     $rule instanceof Email => $value !== null && !filter_var($value, FILTER_VALIDATE_EMAIL) ? $this->message('This value is not a valid email address.') : null,
                     $rule instanceof Length => $this->lengthError($value, $rule),
-                    $rule instanceof Regex => is_string($value) && !preg_match($rule->pattern, $value) ? $this->message('This value does not match the required format.') : null,
+                    $rule instanceof Regex => $value !== null && !self::matches($rule->pattern, $value) ? $this->message('This value does not match the required format.') : null,
                     $rule instanceof OneOf => $value !== null && !in_array($value, $rule->values, true) ? $this->message('This value should be one of: {choices}.', ['choices' => implode(', ', array_map('strval', $rule->values))]) : null,
                     $rule instanceof SameAs => $value !== self::propertyValue($dto, $rule->property) ? $this->message('This value should match {field}.', ['field' => $rule->property]) : null,
                 };
@@ -41,6 +41,12 @@ class Validator
             }
         }
         return $errors;
+    }
+
+    /** A string or number matches by its text; a list, object or bool never matches (it used to slip through unchecked). */
+    private static function matches(string $pattern, mixed $value): bool
+    {
+        return (is_string($value) || is_int($value) || is_float($value)) && preg_match($pattern, (string) $value) === 1;
     }
 
     /** @return list<array{prop: ReflectionProperty, rules: list<NotBlank|Email|Length|Regex|OneOf|SameAs>}> */
