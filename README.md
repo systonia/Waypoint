@@ -167,7 +167,8 @@ first. In a template, don't wait: fetch the data in the controller before `rende
 A route can hand the request over to Tenma with `Response::upgrade()`: a WebSocket
 (`Tenma\Http\Response::websocket()`), a stream or server-sent events (`stream()`, `events()`). The route's
 guards, `#[Authenticated]` and middlewares run first as for any other route; Tenma's response then replaces
-Waypoint's entirely, so status, headers and cookies set on `$res` are dropped. If an exception handler writes
+Waypoint's. A stream keeps the headers and cookies set on `$res` (CORS, security headers, the request id), its
+own headers and status win; a WebSocket answers with its handshake only. If an exception handler writes
 the response instead (the controller or an `after()` threw after the handover), the error goes out and the
 upgrade is dropped. The handler runs after the request ended, but with the request's context restored: the
 request id (on every log line), the CSRF token and whatever a plugin keeps in a `FiberLocal`. Values from the

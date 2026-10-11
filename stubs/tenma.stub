@@ -52,7 +52,7 @@ namespace Tenma\Http {
 
     final class StreamedResponse
     {
-        /** @param array<string, string> $headers */
+        /** @param array<string, string|list<string>> $headers */
         public function __construct(
             public readonly \Closure $writer,
             public readonly int $status,

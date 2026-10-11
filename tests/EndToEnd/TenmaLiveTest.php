@@ -89,4 +89,16 @@ final class TenmaLiveTest extends FullAppLiveTest
         $this->assertSame("\x81", $header[0]);
         $this->assertSame('id-ws: hello', $reply);
     }
+
+    public function testAHandedOverStreamKeepsTheAppsHeadersAndCookies(): void
+    {
+        $handle = curl_init($this->baseUrl() . '/tenma/events');
+        curl_setopt_array($handle, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true, CURLOPT_TIMEOUT => 5, CURLOPT_HTTPHEADER => ['X-Request-Id: id-sse']]);
+        $response = (string) curl_exec($handle);
+
+        $this->assertMatchesRegularExpression('/^content-type: text\/event-stream\r$/mi', $response);
+        $this->assertMatchesRegularExpression('/^x-request-id: id-sse\r$/mi', $response);
+        $this->assertMatchesRegularExpression('/^set-cookie: seen=1;/mi', $response);
+        $this->assertStringContainsString("data: hello\n\n", $response);
+    }
 }

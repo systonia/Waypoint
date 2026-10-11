@@ -42,4 +42,13 @@ class TenmaController
             }
         }));
     }
+
+    /** Hands the request over to a Tenma event stream that sends one event and ends. */
+    #[Get('/events')]
+    public function events(Response $res): void
+    {
+        $res->withCookie('seen', '1')->upgrade(\Tenma\Http\Response::events(function (\Tenma\Http\EventStream $events) {
+            $events->send('hello');
+        }));
+    }
 }

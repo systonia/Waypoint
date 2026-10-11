@@ -58,14 +58,23 @@ final class Bridge
             });
         }
         if ($upgrade instanceof StreamedResponse) {
+            // The app's headers (CORS, security headers, X-Request-ID) and cookies go along; the stream's own win,
+            // and those describing the body the stream replaces don't
+            $headers = array_diff_key(self::headers($response), ['content-length' => true, 'content-type' => true, 'content-encoding' => true]);
             return new StreamedResponse(static function (Stream $stream) use ($upgrade, $restore): void {
                 $restore();
                 ($upgrade->writer)($stream);
-            }, $upgrade->status, $upgrade->headers);
+            }, $upgrade->status, [...$headers, ...$upgrade->headers]);
         }
         if ($upgrade !== null) {
             throw new \LogicException('Response::upgrade() got a ' . get_class($upgrade) . ', Tenma takes only Response::websocket(), stream() or events()');
         }
+        return new TenmaResponse($response->getBody(), $response->getStatus(), self::headers($response));
+    }
+
+    /** @return array<string, string|list<string>> lowercase names, the cookies as set-cookie */
+    private static function headers(Response $response): array
+    {
         $headers = [];
         foreach ($response->getHeaders() as $name => $value) {
             $headers[strtolower($name)] = $value;
@@ -74,6 +83,6 @@ final class Bridge
         if ($cookies !== []) {
             $headers['set-cookie'] = $cookies;
         }
-        return new TenmaResponse($response->getBody(), $response->getStatus(), $headers);
+        return $headers;
     }
 }
