@@ -2,7 +2,7 @@
 
 namespace Waypoint\Tenma;
 
-use Tenma\Http\{Request as TenmaRequest, Response as TenmaResponse, StreamedResponse, WebSocketResponse};
+use Tenma\Http\{Request as TenmaRequest, Response as TenmaResponse, Stream, StreamedResponse, WebSocket, WebSocketResponse};
 use Waypoint\App;
 use Waypoint\Http\{Request, Response};
 use Waypoint\Support\FiberLocal;
@@ -45,12 +45,23 @@ final class Bridge
         );
     }
 
-    /** A response handed over with Response::upgrade() goes to Tenma as it is; anything else is Tenma's plain Response. */
+    /** A response handed over with Response::upgrade() goes to Tenma with the request's context; anything else is Tenma's plain Response. */
     public static function toTenma(Response $response): TenmaResponse|WebSocketResponse|StreamedResponse
     {
         $upgrade = $response->getUpgrade();
-        if ($upgrade instanceof WebSocketResponse || $upgrade instanceof StreamedResponse) {
-            return $upgrade;
+        // The handler runs in the request's task after App::handle() reset it: it gets the request's values back first
+        $restore = $response->getContext() ?? static function (): void {};
+        if ($upgrade instanceof WebSocketResponse) {
+            return new WebSocketResponse(static function (WebSocket $socket) use ($upgrade, $restore): void {
+                $restore();
+                ($upgrade->handler)($socket);
+            });
+        }
+        if ($upgrade instanceof StreamedResponse) {
+            return new StreamedResponse(static function (Stream $stream) use ($upgrade, $restore): void {
+                $restore();
+                ($upgrade->writer)($stream);
+            }, $upgrade->status, $upgrade->headers);
         }
         if ($upgrade !== null) {
             throw new \LogicException('Response::upgrade() got a ' . get_class($upgrade) . ', Tenma takes only Response::websocket(), stream() or events()');

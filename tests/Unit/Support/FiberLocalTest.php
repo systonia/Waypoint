@@ -108,4 +108,28 @@ final class FiberLocalTest extends TestCase
         $before->set('own');
         $this->assertSame('own', $shared->value);
     }
+
+    public function testCaptureSetsTheValuesOfEveryFiberLocalAgainLaterAndElsewhere(): void
+    {
+        $requestId = new FiberLocal();
+        $locale = new FiberLocal();
+        $unset = new FiberLocal();
+        $requestId->set('req-1');
+        $locale->set('de');
+        $restore = FiberLocal::capture();
+
+        $requestId->set(null);
+        $locale->set('en');
+        $restore();
+        $this->assertSame(['req-1', 'de', null], [$requestId->get(), $locale->get(), $unset->get()]);
+
+        // In a Fiber of its own, as the handler of an upgraded request
+        $seen = null;
+        $requestId->set(null);
+        (new Fiber(function () use ($restore, $requestId, &$seen): void {
+            $restore();
+            $seen = $requestId->get();
+        }))->start();
+        $this->assertSame('req-1', $seen);
+    }
 }

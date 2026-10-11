@@ -169,8 +169,9 @@ A route can hand the request over to Tenma with `Response::upgrade()`: a WebSock
 guards, `#[Authenticated]` and middlewares run first as for any other route; Tenma's response then replaces
 Waypoint's entirely, so status, headers and cookies set on `$res` are dropped. If an exception handler writes
 the response instead (the controller or an `after()` threw after the handover), the error goes out and the
-upgrade is dropped. The handler runs after the request ended, so pass what it needs (user, request id) in
-through `use`:
+upgrade is dropped. The handler runs after the request ended, but with the request's context restored: the
+request id (on every log line), the CSRF token and whatever a plugin keeps in a `FiberLocal`. Values from the
+request itself, such as the JWT claims, go in through `use`:
 
 ```php
 #[Get('/chat')]
@@ -1185,6 +1186,11 @@ declares what it adds and does nothing else:
 | `OpenApiExtension` | Describes the plugin's bound parameters and rendered return types for the spec; without it they show as `string`/`object`. | `text/csv` for an export. |
 | `ViewHelper` | Methods templates can call as `$this->name()`. | `$this->t('key')`. |
 | `ClientAsset` | CSS/JS files shipped by the plugin, served content-hashed; render with `$this->pluginAssetTags()`. | A table component. |
+
+State that belongs to one request (a locale, a user, queued messages) lives in a `Waypoint\Support\FiberLocal`,
+not in a property of the plugin's service: under Tenma several requests run interleaved in one process, and
+the handler of an upgraded request (WebSocket, stream) only gets back what is in a `FiberLocal`. Set it at the
+start of every request rather than resetting it afterwards, since a reset in `after()` runs before that handler.
 
 Rules: `requires()` names plugins that must come first; two plugins with the same `name()` or the
 same view helper are a boot error; plugins never reach into each other or into the core's internals.

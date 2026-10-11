@@ -31,14 +31,14 @@ class TenmaController
         ];
     }
 
-    /** Hands the request over to a Tenma WebSocket that echoes every message, prefixed with the request id. */
+    /** Hands the request over to a Tenma WebSocket that echoes every message, prefixed with the request id it still sees. */
     #[Get('/echo')]
     public function echo(Response $res): void
     {
-        $requestId = Waypoint::getConfig(RequestContext::class)->getRequestId();
-        $res->upgrade(\Tenma\Http\Response::websocket(function (\Tenma\Http\WebSocket $socket) use ($requestId) {
+        $res->upgrade(\Tenma\Http\Response::websocket(function (\Tenma\Http\WebSocket $socket) {
+            $context = Waypoint::getConfig(RequestContext::class);
             while (($message = $socket->receive()) !== null) {
-                $socket->send("$requestId: $message");
+                $socket->send($context->getRequestId() . ": $message");
             }
         }));
     }

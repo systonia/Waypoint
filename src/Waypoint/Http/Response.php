@@ -39,6 +39,9 @@ class Response
     /** Set via upgrade(): the runtime's own response object that replaces this one (a WebSocket, a stream). */
     private ?object $upgrade = null;
 
+    /** @var (\Closure(): void)|null Set via keepContext(): puts the request's FiberLocal values back. */
+    private ?\Closure $context = null;
+
     public function __construct(private CompressionOptions $compressionOptions = new CompressionOptions())
     {
     }
@@ -178,7 +181,26 @@ class Response
     public function withoutUpgrade(): self
     {
         $this->upgrade = null;
+        $this->context = null;
         return $this;
+    }
+
+    /**
+     * App::handle() keeps the request's FiberLocal values (FiberLocal::capture()) here before it resets them,
+     * for an upgraded response whose handler runs after the request: request id, CSRF token, a plugin's state.
+     *
+     * @param \Closure(): void $restore
+     */
+    public function keepContext(\Closure $restore): self
+    {
+        $this->context = $restore;
+        return $this;
+    }
+
+    /** @return (\Closure(): void)|null What keepContext() kept: the runtime calls it before it runs the upgrade. */
+    public function getContext(): ?\Closure
+    {
+        return $this->context;
     }
 
     public function write(string $data): self

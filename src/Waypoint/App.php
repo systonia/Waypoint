@@ -13,6 +13,7 @@ use Waypoint\Http\{Request, Response};
 use Waypoint\Options\{CompressionOptions, CorsOptions, CsrfOptions, FileSystemOptions, JWTOptions};
 use Waypoint\Plugin\{Plugin, PluginRegistry};
 use Waypoint\Routing\{PropertyInjector, ServiceDiscovery};
+use Waypoint\Support\FiberLocal;
 
 /**
  * The application: owns the container, the app-level middleware pipe, the
@@ -235,6 +236,10 @@ class App
                 $this->handleException($e, $req, $res);
             }
             $this->container->get(Csrf::class)->followSession($res);
+            if ($res->getUpgrade() !== null) {
+                // The runtime runs the upgrade after the reset below; it restores what belongs to this request
+                $res->keepContext(FiberLocal::capture());
+            }
         } finally {
             // Per-request singleton state must not leak into a later request on a persistent worker.
             $this->container->get(RequestContext::class)->setRequestId(null);
