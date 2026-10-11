@@ -316,9 +316,9 @@ This is reflected in the generated OpenAPI schema too: the request body document
 ### File uploads
 
 A `multipart/form-data` request carries its fields in `$req->body` and its files in `$req->files`, nested as
-the field names say (`photos[]` becomes a list). `$req->file('avatar')` returns one, `file('doc.a')` one under
-`doc[a]`. An empty file input is left out. The same works under FPM, Tenma, any PSR-7 server and the testing kit
-(`->withFile('avatar', 'me.png', $bytes, 'image/png')`):
+the field names say (`photos[]` becomes a list). `$req->file()` returns one, named as in the form: `'avatar'`,
+`'doc[a]'`, `'photos[1]'`. An empty file input is left out, and a list stays numbered without gaps. The same works
+under FPM, Tenma, any PSR-7 server and the testing kit (`->withFile('avatar', 'me.png', $bytes, 'image/png')`):
 
 ```php
 #[Post('/profile/avatar')]

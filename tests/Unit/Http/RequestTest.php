@@ -225,10 +225,10 @@ final class RequestTest extends TestCase
             'doc' => ['name' => 'a.pdf', 'type' => 'application/pdf', 'tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => 9],
             'empty' => ['name' => '', 'type' => '', 'tmp_name' => '', 'error' => UPLOAD_ERR_NO_FILE, 'size' => 0],
             'photos' => [
-                'name' => ['x.jpg', 'big.jpg', ''],
-                'type' => ['image/jpeg', 'image/jpeg', ''],
+                'name' => ['x.jpg', '', 'big.jpg'],
+                'type' => ['image/jpeg', '', 'image/jpeg'],
                 'tmp_name' => [$tmp, '', ''],
-                'error' => [UPLOAD_ERR_OK, UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_NO_FILE],
+                'error' => [UPLOAD_ERR_OK, UPLOAD_ERR_NO_FILE, UPLOAD_ERR_INI_SIZE],
                 'size' => [9, 0, 0],
             ],
         ];
@@ -244,10 +244,25 @@ final class RequestTest extends TestCase
         $this->assertSame(9, $req->file('doc')->size);
         $this->assertNull($req->file('empty'));
         $this->assertNull($req->file('photos'));
-        $this->assertCount(2, $req->files['photos']);
-        $this->assertTrue($req->file('photos.0')?->isValid());
-        $this->assertFalse($req->file('photos.1')?->isValid());
+        // The empty input in the middle is left out and the list numbered again, as under Tenma
+        $this->assertSame([0, 1], array_keys($req->files['photos']));
+        $this->assertTrue($req->file('photos[0]')?->isValid());
+        $this->assertFalse($req->file('photos[1]')?->isValid());
         unlink($tmp);
+    }
+
+    public function testAFileIsNamedAsInTheForm(): void
+    {
+        $file = UploadedFile::fromString('a.txt', 'text/plain', 'a');
+        $req = Request::fromParts('POST', '/', files: ['doc' => ['a.b' => $file, 'list' => [$file]]]);
+
+        $this->assertSame($file, $req->file('doc[a.b]'));
+        $this->assertSame($file, $req->file('doc[list][0]'));
+        $this->assertNull($req->file('doc'));
+        $this->assertNull($req->file('doc[list][]'));
+        $this->assertNull($req->file('doc.a.b'));
+        $this->assertSame(['doc', 'a', ''], Request::fieldPath('doc[a][]'));
+        $this->assertNull(Request::fieldPath('doc[a'));
     }
 
     public function testAnUploadMovesOnceAndAFailedOneNotAtAll(): void

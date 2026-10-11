@@ -17,7 +17,8 @@ final class UploadedFile
     private bool $moved = false;
 
     /**
-     * For a runtime of its own; fromPath() and fromString() cover PHP's uploads and files held in memory.
+     * For a runtime that hands files over itself; fromString() covers a file held in memory. Request builds PHP's
+     * own uploads ($_FILES) itself.
      *
      * @param Closure(): string $contents
      * @param Closure(string): void $moveTo
@@ -31,23 +32,6 @@ final class UploadedFile
         private readonly Closure $moveTo,
         public readonly int $error = UPLOAD_ERR_OK,
     ) {
-    }
-
-    /** An upload PHP received itself ($_FILES): moveTo() is move_uploaded_file(). */
-    public static function fromPath(string $name, string $type, int $size, string $tmpPath, int $error = UPLOAD_ERR_OK): self
-    {
-        return new self(
-            $name,
-            $type,
-            $size,
-            static fn (): string => (string) file_get_contents($tmpPath),
-            static function (string $path) use ($tmpPath): void {
-                if (!move_uploaded_file($tmpPath, $path)) {
-                    throw new RuntimeException("Could not move the upload to '$path'");
-                }
-            },
-            $error,
-        );
     }
 
     /** A file held in memory, e.g. from a test or a WebSocket message. */

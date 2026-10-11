@@ -17,10 +17,11 @@ final class UploadTest extends IntegrationTestCase
             ->withFile('doc', 'a.pdf', 'pdf bytes', 'application/pdf')
             ->withFile('photos[]', 'x.jpg', 'x', 'image/jpeg')
             ->withFile('photos[]', 'y.jpg', 'y', 'image/jpeg')
+            ->withFile('extra[a][b]', 'z.txt', 'z')
             ->send();
 
         $this->assertSame(
-            ['title' => 'Report', 'doc' => ['a.pdf', 'application/pdf', 9], 'moved' => 'pdf bytes', 'photos' => 2],
+            ['title' => 'Report', 'doc' => ['a.pdf', 'application/pdf', 9], 'moved' => 'pdf bytes', 'photos' => 2, 'extra' => 'z.txt'],
             json_decode($res->body(), true),
         );
     }

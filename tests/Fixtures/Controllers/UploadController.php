@@ -27,6 +27,7 @@ class UploadController
             'doc' => $doc !== null ? [$doc->name, $doc->type, $doc->size] : null,
             'moved' => $moved,
             'photos' => is_array($photos) ? count($photos) : 0,
+            'extra' => $req->file('extra[a][b]')?->name,
         ];
     }
 }

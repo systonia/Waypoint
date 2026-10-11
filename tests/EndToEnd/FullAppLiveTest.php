@@ -199,11 +199,12 @@ class FullAppLiveTest extends LiveServerTestCase
             'doc' => new \CURLStringFile('pdf bytes', 'a.pdf', 'application/pdf'),
             'photos[0]' => new \CURLStringFile('x', 'x.jpg', 'image/jpeg'),
             'photos[1]' => new \CURLStringFile('y', 'y.jpg', 'image/jpeg'),
+            'extra[a][b]' => new \CURLStringFile('z', 'z.txt', 'text/plain'),
         ]]);
 
         $this->assertSame(200, $res['status'], $res['body']);
         $this->assertSame(
-            ['title' => 'Report', 'doc' => ['a.pdf', 'application/pdf', 9], 'moved' => 'pdf bytes', 'photos' => 2],
+            ['title' => 'Report', 'doc' => ['a.pdf', 'application/pdf', 9], 'moved' => 'pdf bytes', 'photos' => 2, 'extra' => 'z.txt'],
             json_decode($res['body'], true),
         );
     }

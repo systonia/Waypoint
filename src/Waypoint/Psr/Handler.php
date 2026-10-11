@@ -80,18 +80,20 @@ final class Handler implements RequestHandlerInterface
         foreach ($files as $name => $file) {
             if ($file instanceof UploadedFileInterface && $file->getError() !== UPLOAD_ERR_NO_FILE) {
                 $uploads[$name] = new UploadedFile(
-                    $file->getClientFilename() ?? '',
+                    // PSR-7 leaves the client's name as sent; FPM and Tenma keep only the file's own name
+                    basename(str_replace('\\', '/', $file->getClientFilename() ?? '')),
                     $file->getClientMediaType() ?? '',
                     $file->getSize() ?? 0,
                     static fn (): string => (string) $file->getStream(),
                     $file->moveTo(...),
                     $file->getError(),
                 );
-            } elseif (is_array($file)) {
-                $uploads[$name] = self::files($file);
+            } elseif (is_array($file) && ($nested = self::files($file)) !== []) {
+                $uploads[$name] = $nested;
             }
         }
-        return $uploads;
+        // A list stays a list when an empty input in the middle is left out
+        return array_is_list($files) ? array_values($uploads) : $uploads;
     }
 
     private function toPsr(Response $response): ResponseInterface

@@ -54,12 +54,17 @@ final class PsrHandlerTest extends IntegrationTestCase
             $factory->createServerRequest('POST', 'http://example.test/upload')->withUploadedFiles([
                 'doc' => $factory->createUploadedFile($factory->createStream('pdf bytes'), 9, UPLOAD_ERR_OK, 'a.pdf', 'application/pdf'),
                 'empty' => $factory->createUploadedFile($factory->createStream(''), 0, UPLOAD_ERR_NO_FILE),
-                'photos' => [$factory->createUploadedFile($factory->createStream('x'), 1, UPLOAD_ERR_OK, 'x.jpg', 'image/jpeg')],
+                'photos' => [
+                    $factory->createUploadedFile($factory->createStream(''), 0, UPLOAD_ERR_NO_FILE),
+                    $factory->createUploadedFile($factory->createStream('x'), 1, UPLOAD_ERR_OK, '../../x.jpg', 'image/jpeg'),
+                ],
+                'blank' => [$factory->createUploadedFile($factory->createStream(''), 0, UPLOAD_ERR_NO_FILE)],
             ]),
         );
 
         $this->assertSame(['doc', 'photos'], array_keys($request->files));
         $this->assertSame(['a.pdf', 'application/pdf', 9, 'pdf bytes'], [$request->file('doc')?->name, $request->file('doc')->type, $request->file('doc')->size, $request->file('doc')->contents()]);
-        $this->assertSame('x.jpg', $request->file('photos.0')?->name);
+        // The client's path is cut to the name, the list numbered again, an all-empty field left out
+        $this->assertSame('x.jpg', $request->file('photos[0]')?->name);
     }
 }

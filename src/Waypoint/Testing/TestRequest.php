@@ -69,16 +69,29 @@ final class TestRequest
         return $this->withHeader('Content-Type', 'application/json');
     }
 
-    /** An uploaded file for the field $field ("photos[]" appends to a list); the body becomes the form's fields. */
+    /**
+     * An uploaded file for the field $field, named as in the form: "avatar", "doc[a]", "photos[]" (appends to a
+     * list). Sets a multipart Content-Type; withBody() fields arrive as the form's fields.
+     */
     public function withFile(string $field, string $name, string $contents, string $type = 'application/octet-stream'): self
     {
-        $file = UploadedFile::fromString($name, $type, $contents);
-        if (str_ends_with($field, '[]')) {
-            $list = $this->files[substr($field, 0, -2)] ?? [];
-            $this->files[substr($field, 0, -2)] = [...(is_array($list) ? $list : []), $file];
-        } else {
-            $this->files[$field] = $file;
+        $path = Request::fieldPath($field) ?? throw new \InvalidArgumentException("'$field' is not a form field name");
+        $target = &$this->files;
+        foreach ($path as $i => $key) {
+            if (!is_array($target)) {
+                $target = [];
+            }
+            if ($key === '') {
+                $target[] = null;
+                $key = array_key_last($target);
+            }
+            if ($i === count($path) - 1) {
+                $target[$key] = UploadedFile::fromString($name, $type, $contents);
+            } else {
+                $target = &$target[$key];
+            }
         }
+        unset($target);
         return $this->withHeader('Content-Type', 'multipart/form-data; boundary=waypoint-test');
     }
 

@@ -176,13 +176,26 @@ class Request
                     $nested[$key] = $upload;
                 }
             }
-            return $nested;
+            // A list stays a list when an empty input in the middle is left out, as under Tenma
+            return array_is_list($name) ? array_values($nested) : $nested;
         }
         $error = is_numeric($error) ? (int) $error : UPLOAD_ERR_NO_FILE;
         if ($error === UPLOAD_ERR_NO_FILE) {
             return null;
         }
-        return UploadedFile::fromPath(is_string($name) ? $name : '', is_string($type) ? $type : '', is_numeric($size) ? (int) $size : 0, is_string($tmpPath) ? $tmpPath : '', $error);
+        $tmpPath = is_string($tmpPath) ? $tmpPath : '';
+        return new UploadedFile(
+            is_string($name) ? $name : '',
+            is_string($type) ? $type : '',
+            is_numeric($size) ? (int) $size : 0,
+            static fn (): string => (string) file_get_contents($tmpPath),
+            static function (string $path) use ($tmpPath): void {
+                if (!move_uploaded_file($tmpPath, $path)) {
+                    throw new \RuntimeException("Could not move the upload to '$path'");
+                }
+            },
+            $error,
+        );
     }
 
     /** "CONTENT_TYPE" or "content-type" -> "Content-Type". */
@@ -229,14 +242,27 @@ class Request
         return $key === null ? $this->body : ($this->body[$key] ?? $default);
     }
 
-    /** The uploaded file of a field ("avatar", or "doc.a" for doc[a]); null when there is none or it is a list. */
+    /** The uploaded file of a field, named as in the form: "avatar", "doc[a]", "photos[1]"; null when there is none. */
     public function file(string $name): ?UploadedFile
     {
         $file = $this->files;
-        foreach (explode('.', $name) as $key) {
-            $file = is_array($file) ? $file[$key] ?? null : null;
+        foreach (self::fieldPath($name) ?? [''] as $key) {
+            $file = is_array($file) && $key !== '' ? $file[$key] ?? null : null;
         }
         return $file instanceof UploadedFile ? $file : null;
+    }
+
+    /**
+     * @internal A form field's name as keys, the way PHP nests it: "doc[a][]" is ['doc', 'a', ''], '' appending.
+     * @return list<string>|null null for a name PHP wouldn't nest this way
+     */
+    public static function fieldPath(string $name): ?array
+    {
+        if (preg_match('/^([^\[\]]+)((?:\[[^\[\]]*\])*)$/', $name, $match) !== 1) {
+            return null;
+        }
+        preg_match_all('/\[([^\[\]]*)\]/', $match[2], $keys);
+        return [$match[1], ...$keys[1]];
     }
 
     /** Alias of body($key, $default). */
