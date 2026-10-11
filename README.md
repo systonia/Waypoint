@@ -1132,7 +1132,9 @@ public function show(#[Param] string $id, Request $req): array
 Waypoint's `Logger` is PSR-3 based: register any `Psr\Log\LoggerInterface` implementation, optionally
 filtered to specific levels. Registration happens on `LoggerOptions`, configured like any other Options
 class via `configure()`; `Logger` itself is a stateless, container-resolvable service that dispatches to
-whatever `LoggerOptions` currently holds -- inject it with `#[Inject]` into a controller/service:
+whatever `LoggerOptions` currently holds -- inject it with `#[Inject]` into a controller/service.
+As long as no logger is registered, errors and worse go to PHP's `error_log` (stderr under Tenma and
+`php -S`, the server's error log under FPM), so a failure never vanishes unseen; `add(new NullLogger())` silences it:
 
 ```php
 use Waypoint\Options\LoggerOptions;

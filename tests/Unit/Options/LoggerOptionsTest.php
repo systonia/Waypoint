@@ -129,20 +129,13 @@ final class LoggerOptionsTest extends TestCase
         $this->assertSame($opts, $opts->addMono('app', new TestHandler()));
     }
 
-    public function testGetLoggersFallsBackToANullLoggerAcceptingEveryLevelWhenNoneAreRegistered(): void
+    public function testGetLoggersFallsBackToTheErrorLogForErrorsWhenNoneAreRegistered(): void
     {
-        $opts = new LoggerOptions();
-        $loggers = $opts->getLoggers();
+        $loggers = (new LoggerOptions())->getLoggers();
 
         $this->assertCount(1, $loggers);
-        foreach (
-            [
-                LogLevel::EMERGENCY, LogLevel::ALERT, LogLevel::CRITICAL, LogLevel::ERROR,
-                LogLevel::WARNING, LogLevel::NOTICE, LogLevel::INFO, LogLevel::DEBUG,
-            ] as $level
-        ) {
-            $this->assertTrue($loggers[0]['levels'][$level] ?? false);
-        }
+        $this->assertInstanceOf(\Waypoint\Support\ErrorLogLogger::class, $loggers[0]['logger']);
+        $this->assertSame([LogLevel::EMERGENCY, LogLevel::ALERT, LogLevel::CRITICAL, LogLevel::ERROR], array_keys($loggers[0]['levels']));
     }
 
     public function testAConstructedLoggerOptionsCarriesLevelsAndName(): void

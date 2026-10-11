@@ -6,6 +6,10 @@
       <directory>src</directory>
     </include>
   </source>
+  <php>
+    <!-- Errors the tests provoke on purpose would land on stderr; a test that wants them sets error_log itself -->
+    <ini name="error_log" value="/dev/null"/>
+  </php>
   <testsuites>
     <testsuite name="Unit">
       <directory>./tests</directory>

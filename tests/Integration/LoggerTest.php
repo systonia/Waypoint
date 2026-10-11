@@ -37,12 +37,22 @@ final class LoggerTest extends IntegrationTestCase
         $this->assertEquals([LogLevel::WARNING, 'warning msg', []], $dummy->logs[1]);
     }
 
-    public function testFallsBackToANullLoggerWhenNothingWasConfigured(): void
+    public function testWithoutALoggerAnErrorStillReachesTheErrorLog(): void
     {
         Waypoint::create();
+        $file = (string) tempnam(sys_get_temp_dir(), 'waypoint-log');
+        $before = ini_set('error_log', $file);
+        try {
+            (new Logger())->info('only chatter');
+            (new Logger())->error('it broke', ['order' => 7, 'exception' => new \RuntimeException('disk full')]);
+            $log = (string) file_get_contents($file);
+        } finally {
+            ini_set('error_log', $before === false ? '' : $before);
+            unlink($file);
+        }
 
-        (new Logger())->info('nobody is listening');
-        $this->addToAssertionCount(1); // reaching here without throwing is the assertion
+        $this->assertStringNotContainsString('only chatter', $log);
+        $this->assertStringContainsString('[error] it broke {"order":7} — RuntimeException: disk full in ' . __FILE__, $log);
     }
 
     #[DataProvider('psrLevelMethodProvider')]

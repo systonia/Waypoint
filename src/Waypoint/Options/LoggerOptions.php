@@ -3,9 +3,8 @@
 namespace Waypoint\Options;
 
 use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 use Psr\Log\LogLevel;
-use Waypoint\Support\Arr;
+use Waypoint\Support\{Arr, ErrorLogLogger};
 
 /**
  * The PSR-3 loggers Waypoint\Logger fans out to, each with the levels it
@@ -74,9 +73,16 @@ class LoggerOptions
         return $this;
     }
 
-    /** @return array<int, array{logger: LoggerInterface, levels: array<string, bool>, name: string|null}> A NullLogger accepting everything when none were added. */
+    /**
+     * @return array<int, array{logger: LoggerInterface, levels: array<string, bool>, name: string|null}> When none were
+     *  added: PHP's error_log for errors and worse, so an error never vanishes unseen; `add(new NullLogger())` silences it.
+     */
     public function getLoggers(): array
     {
-        return $this->loggers ?: [['logger' => new NullLogger(), 'levels' => array_fill_keys(self::ALL_LEVELS, true), 'name' => null]];
+        return $this->loggers ?: [[
+            'logger' => new ErrorLogLogger(),
+            'levels' => array_fill_keys([LogLevel::EMERGENCY, LogLevel::ALERT, LogLevel::CRITICAL, LogLevel::ERROR], true),
+            'name' => null,
+        ]];
     }
 }
