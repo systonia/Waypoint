@@ -43,7 +43,7 @@ abstract class LiveServerTestCase extends TestCase
             2 => ['pipe', 'w'],
         ];
 
-        self::$process = proc_open($command, $descriptors, $pipes, $docroot, [...getenv(), 'E2E_PORT' => (string) self::$port]);
+        self::$process = proc_open($command, $descriptors, $pipes, $docroot, [...getenv(), 'PORT' => (string) self::$port]);
         if (!is_resource(self::$process)) {
             self::fail('Could not start the built-in PHP server for end-to-end tests.');
         }

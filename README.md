@@ -164,12 +164,11 @@ request id and the CSRF token follow a request into the tasks it starts (`Tenma:
 `static` prefixes are served by Tenma itself, without PHP:
 
 ```php
-if (class_exists(Tenma::class)) {
-    Tenma::serve(8080, $app, static: ['/assets' => __DIR__ . '/public/assets']);
-} else {
-    $app->run();
-}
+$app->serve(static: ['/assets' => __DIR__ . '/public/assets']);
 ```
+
+`serve()` is the one line for every runtime: under Tenma it starts the server on `PORT` from the Environment
+(8080 without one, or `serve(3000)`); under FPM, `php -S` or the CLI it is `run()`.
 
 A controller may then wait on Tenma's async I/O (`Tenma\Db`, `Tenma::fetch()`, `Tenma::all()`) while the
 process serves other requests. Read [Controllers per request, services shared](#controllers-per-request-services-shared)
