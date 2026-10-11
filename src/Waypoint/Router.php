@@ -8,7 +8,7 @@ use Waypoint\Enums\RouteType;
 use Waypoint\Http\{PublicFileServer, Redirect, Request, Response, ResultRenderer, View};
 use Waypoint\OpenAPI\OpenAPIEndpoint;
 use Waypoint\Options\{CsrfOptions, FileSystemOptions, RendererOptions};
-use Waypoint\Plugin\{ArgumentBinder, ClientAsset, Endpoint, Guard, PluginRegistry, Renderer, ResponseHook, RouteAttributeCompiler};
+use Waypoint\Plugin\{ArgumentBinder, ClientAsset, Endpoint, Fallback, Guard, PluginRegistry, Renderer, ResponseHook, RouteAttributeCompiler};
 use Waypoint\Routing\{ArgumentResolver, PropertyInjector, RouteGuard};
 use Waypoint\Support\Arr;
 
@@ -62,6 +62,9 @@ class Router
     private PluginRegistry $plugins;
     private ArgumentResolver $arguments;
 
+    /** @var list<Fallback> Asked in registration order when no route matched. */
+    private array $fallbacks = [];
+
     /** @var list<Endpoint> OpenAPI first, then plugin endpoints in registration order. */
     private array $endpoints;
 
@@ -107,6 +110,7 @@ class Router
             ...array_values($this->plugins->hooks(Endpoint::class)),
         ];
         $this->guards = $this->plugins->hooks(Guard::class);
+        $this->fallbacks = array_values($this->plugins->hooks(Fallback::class));
         $this->responseHooks = $this->plugins->hooks(ResponseHook::class);
         $this->renderers = $this->plugins->hooks(Renderer::class);
         $this->viewHelpers = $this->plugins->viewHelpers();
@@ -333,6 +337,14 @@ class Router
                 $res->status(405)->withHeader('Allow', implode(', ', $allowed))
                     ->withHeader('Content-Type', 'application/json')->write('{"error":"Method not allowed"}');
                 return;
+            }
+            foreach ($this->fallbacks as $fallback) {
+                if ($fallback->serve($method, $path, $req, $res)) {
+                    foreach ($this->responseHooks as $hook) {
+                        $hook->after([], $req, $res);
+                    }
+                    return;
+                }
             }
             $this->respondNotFound($res);
             return;

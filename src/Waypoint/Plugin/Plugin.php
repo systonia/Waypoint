@@ -25,7 +25,7 @@ interface Plugin
     /** @return list<callable> App-level middlewares, added at attach() in registration order. */
     public function middlewares(): array;
 
-    /** @return list<object> Instances of Endpoint, RouteAttributeCompiler, Guard, ResponseHook, ArgumentBinder, Renderer, ViewHelper, ClientAsset. */
+    /** @return list<object> Instances of Endpoint, Fallback, RouteAttributeCompiler, Guard, ResponseHook, ArgumentBinder, Renderer, ViewHelper, ClientAsset. */
     public function hooks(): array;
 
     /** @return array<string, int> {path => mtime} of files whose change must rebuild the route cache. */

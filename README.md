@@ -1229,6 +1229,7 @@ declares what it adds and does nothing else:
 | Hook (`Waypoint\Plugin\...`) | When | Typical use |
 |---|---|---|
 | `Endpoint` | Before routing, after static files. Runs without route guards: no `#[Authenticated]`, no CSRF check, so an endpoint that changes state or shows private data checks the request itself. | Health, metrics, an SSO callback. |
+| `Fallback` | When no route matched, before the 404; the app's routes always win. No route guards, like `Endpoint`; response hooks run with an empty plan. | Pages of a CMS, short links. |
 | `RouteAttributeCompiler` | At compile time, per route; result cached under the plugin's name. | A `#[RateLimit]` attribute. |
 | `Guard` | Per request before the controller, after auth/CSRF; gets that route's compiled data (`[]` if none). | Enforce the attribute. |
 | `ResponseHook` | After the result was rendered. Not when a guard or the controller threw: the exception handler writes that response afterwards, so count errors in an app-level middleware or exception handler. | Audit, metrics, idempotency store. |

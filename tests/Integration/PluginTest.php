@@ -193,4 +193,18 @@ final class PluginTest extends IntegrationTestCase
         $this->assertSame($app->get(\Waypoint\Options\CorsOptions::class), $cors);
         $this->assertSame($app->get(\Waypoint\Environment::class), $env);
     }
+
+    public function testAFallbackAnswersWhatNoRouteMatched(): void
+    {
+        $app = Waypoint::create();
+        $app->plugin(new \Waypoint\Tests\Fixtures\Plugins\FallbackPlugin());
+        $app->attach([\Waypoint\Tests\Fixtures\Controllers\PagesRouteController::class]);
+
+        $this->assertSame('page /pages/about', $this->dispatch('GET', '/pages/about'));
+        $this->assertSame('yes', $this->lastResponse?->header('X-Hooked'));
+        // The app's own route comes first; anything else stays a 404
+        $this->assertSame(['route' => true], json_decode($this->dispatch('GET', '/pages/own'), true));
+        $this->dispatch('GET', '/nowhere');
+        $this->assertSame(404, $this->lastResponse?->status());
+    }
 }
