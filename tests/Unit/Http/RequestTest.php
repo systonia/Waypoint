@@ -286,7 +286,10 @@ final class RequestTest extends TestCase
     public function testCaptureTakesTheAddressFromRemoteAddr(): void
     {
         $_SERVER['REMOTE_ADDR'] = '198.51.100.7';
-
-        $this->assertSame('198.51.100.7', Request::capture()->ip);
+        try {
+            $this->assertSame('198.51.100.7', Request::capture()->ip);
+        } finally {
+            unset($_SERVER['REMOTE_ADDR']);
+        }
     }
 }

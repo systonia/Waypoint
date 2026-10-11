@@ -2,6 +2,8 @@
 
 namespace Waypoint\Routing;
 
+use Waypoint\PermissionProvider;
+
 use Waypoint\Container;
 use Waypoint\Csrf;
 use Waypoint\Enums\Message;
@@ -57,8 +59,9 @@ final class RouteGuard
         if (!is_array($permissions) || $permissions === []) {
             return;
         }
-        // No provider configured fails closed.
-        $provider = $this->container?->get(PermissionOptions::class)->provider;
+        // The app's own, else one a plugin bound with Container::bind(PermissionProvider::class, ...); none fails closed.
+        $provider = $this->container?->get(PermissionOptions::class)->provider
+            ?? ($this->container?->isRegistered(PermissionProvider::class) === true ? $this->container->get(PermissionProvider::class) : null);
         foreach ($permissions as $permission) {
             if (!is_string($permission) || $provider === null || !$provider->hasPermission($req->jwt, $permission)) {
                 throw new ForbiddenException();

@@ -40,8 +40,8 @@ final class ViewAssets
             $names[] = $prefix . basename($file, '.php');
         }
         foreach (glob("$dir/*", GLOB_ONLYDIR) ?: [] as $subdir) {
-            // Without a views directory configured, the script's own directory is scanned: never its dependencies,
-            // which may link back to it (a path repository) and would recurse until glob() gives up
+            // Never into dependencies: without a views directory configured the script's own directory is scanned,
+            // and a path repository in vendor/ links back to it and would recurse until glob() gives up
             if (in_array(basename($subdir), ['vendor', 'node_modules'], true)) {
                 continue;
             }

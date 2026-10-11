@@ -1,1 +1,1 @@
-<main><?= $content ?></main>
+<main><?= $this->assetTags() ?><?= $content ?></main>

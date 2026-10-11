@@ -148,7 +148,15 @@ $res = $app->handle(Request::fromParts('GET', '/customers/7?tab=orders', $header
 ```
 
 `$req->ip` is the address the connection came from (`REMOTE_ADDR` under FPM): the client's, or a proxy's in front
-of it. `X-Forwarded-For` is not trusted.
+of it. Behind a reverse proxy, name it in `ProxyOptions`; a request from it then carries the client's address
+from `X-Forwarded-For` and the scheme from `X-Forwarded-Proto` (`$req->https`). From anyone else both headers
+are ignored:
+
+```php
+$app->configure(function (ProxyOptions $proxies) {
+    $proxies->trusted = ['127.0.0.1', '::1', '10.0.0.0/8'];
+});
+```
 
 Under Tenma (PHP with a Node-style event loop) the app itself is the request handler, as in Express:
 one process serves every request, each in a Fiber of its own, interleaved while they wait on I/O. The
@@ -1239,7 +1247,9 @@ start of every request rather than resetting it afterwards, since a reset in `af
 Rules: `requires()` names plugins that must come first; two plugins with the same `name()` or the
 same view helper are a boot error; plugins never reach into each other or into the core's internals.
 The core also exposes `Container::bind(Interface::class, $service)` and `Waypoint\Validation\Messages`
-(translates the validator's English messages, which double as catalog keys) for plugins to hook into.
+(translates the validator's English messages, which double as catalog keys) for plugins to hook into. A plugin
+that knows who may do what binds a `Waypoint\PermissionProvider`: `#[Permissions(...)]` asks it unless the app set
+`PermissionOptions::$provider` itself.
 
 Available plugins:
 

@@ -139,6 +139,20 @@ final class AuthorizationTest extends IntegrationTestCase
         $this->assertSame(['ok' => true], json_decode($output, true));
     }
 
+    public function testAProviderAPluginBoundCountsWhenTheAppSetNone(): void
+    {
+        $provider = new FakePermissionProvider();
+        $provider->granted = ['users.manage'];
+        // What a plugin does in its boot()
+        Waypoint::create()->getContainer()->bind(\Waypoint\PermissionProvider::class, $provider);
+        $token = JWT::encode(['sub' => '1']);
+
+        $this->dispatch('GET', '/authz/manage-users', ['Authorization' => "Bearer $token"]);
+        $this->assertSame(200, $this->lastResponse?->status());
+        $this->dispatch('GET', '/authz/multi-permission', ['Authorization' => "Bearer $token"]);
+        $this->assertSame(403, $this->lastResponse?->status());
+    }
+
     public function testPermissionsRouteRejectsAnUngrantedPermission(): void
     {
         $provider = new FakePermissionProvider();

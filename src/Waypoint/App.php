@@ -9,8 +9,8 @@ use ReflectionFunction;
 use ReflectionNamedType;
 use Throwable;
 use Waypoint\Exceptions\{HttpException, UnauthorizedException};
-use Waypoint\Http\{Request, Response};
-use Waypoint\Options\{CompressionOptions, CorsOptions, CsrfOptions, FileSystemOptions, JWTOptions};
+use Waypoint\Http\{Request, Response, TrustedProxies};
+use Waypoint\Options\{CompressionOptions, CorsOptions, CsrfOptions, FileSystemOptions, JWTOptions, ProxyOptions};
 use Waypoint\Plugin\{Plugin, PluginRegistry};
 use Waypoint\Routing\{PropertyInjector, ServiceDiscovery};
 use Waypoint\Support\FiberLocal;
@@ -220,6 +220,7 @@ class App
      */
     public function handle(Request $req): Response
     {
+        TrustedProxies::apply($req, $this->container->get(ProxyOptions::class)->trusted);
         $res = (new Response($this->container->get(CompressionOptions::class)))->forRequest($req)->withRequestId($req->id);
         $this->container->get(RequestContext::class)->setRequestId($req->id);
 
