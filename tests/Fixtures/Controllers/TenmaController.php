@@ -4,7 +4,7 @@ namespace Waypoint\Tests\Fixtures\Controllers;
 
 use Waypoint\{RequestContext, Waypoint};
 use Waypoint\Attributes\{Controller, Get, Inject};
-use Waypoint\Http\Request;
+use Waypoint\Http\{Request, Response};
 
 /** Only attached under Tenma (TenmaLiveTest): waits on real async I/O and starts a task of its own. */
 #[Controller('/tenma')]
@@ -29,5 +29,17 @@ class TenmaController
             'requestId' => $context->getRequestId(),
             'childRequestId' => $child->await(),
         ];
+    }
+
+    /** Hands the request over to a Tenma WebSocket that echoes every message, prefixed with the request id. */
+    #[Get('/echo')]
+    public function echo(Response $res): void
+    {
+        $requestId = Waypoint::getConfig(RequestContext::class)->getRequestId();
+        $res->upgrade(\Tenma\Http\Response::websocket(function (\Tenma\Http\WebSocket $socket) use ($requestId) {
+            while (($message = $socket->receive()) !== null) {
+                $socket->send("$requestId: $message");
+            }
+        }));
     }
 }

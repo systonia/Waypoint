@@ -2,7 +2,7 @@
 
 namespace Waypoint\Tenma;
 
-use Tenma\Http\{Request as TenmaRequest, Response as TenmaResponse};
+use Tenma\Http\{Request as TenmaRequest, Response as TenmaResponse, StreamedResponse, WebSocketResponse};
 use Waypoint\App;
 use Waypoint\Http\{Request, Response};
 use Waypoint\Support\FiberLocal;
@@ -18,7 +18,7 @@ final class Bridge
     private static bool $storageInstalled = false;
 
     /** One request: Tenma's Request in, through App::handle(), Tenma's Response out. */
-    public static function respond(App $app, TenmaRequest $request): TenmaResponse
+    public static function respond(App $app, TenmaRequest $request): TenmaResponse|WebSocketResponse|StreamedResponse
     {
         if (!self::$storageInstalled) {
             // Request id and CSRF token follow a request into the tasks it starts
@@ -45,8 +45,16 @@ final class Bridge
         );
     }
 
-    public static function toTenma(Response $response): TenmaResponse
+    /** A response handed over with Response::upgrade() goes to Tenma as it is; anything else is Tenma's plain Response. */
+    public static function toTenma(Response $response): TenmaResponse|WebSocketResponse|StreamedResponse
     {
+        $upgrade = $response->getUpgrade();
+        if ($upgrade instanceof WebSocketResponse || $upgrade instanceof StreamedResponse) {
+            return $upgrade;
+        }
+        if ($upgrade !== null) {
+            throw new \LogicException('Response::upgrade() got a ' . get_class($upgrade) . ', Tenma takes only Response::websocket(), stream() or events()');
+        }
         $headers = [];
         foreach ($response->getHeaders() as $name => $value) {
             $headers[strtolower($name)] = $value;

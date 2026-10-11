@@ -207,7 +207,7 @@ class App
     /**
      * Makes the app a request handler for Tenma: `Tenma::serve(3000, $app)`. See Tenma\Bridge.
      */
-    public function __invoke(\Tenma\Http\Request $request): \Tenma\Http\Response
+    public function __invoke(\Tenma\Http\Request $request): \Tenma\Http\Response|\Tenma\Http\WebSocketResponse|\Tenma\Http\StreamedResponse
     {
         return Tenma\Bridge::respond($this, $request);
     }
@@ -232,7 +232,7 @@ class App
                 $handler($req, $res);
             } catch (Throwable $e) {
                 // An app-level middleware threw (a route's own exceptions were already handled in dispatch()).
-                ($this->resolveExceptionHandler($e))($e, $req, $res);
+                $this->handleException($e, $req, $res);
             }
             $this->container->get(Csrf::class)->followSession($res);
         } finally {
@@ -248,7 +248,7 @@ class App
         try {
             $this->router->dispatch(uri: $req->path, httpMethod: $req->method, req: $req, res: $res);
         } catch (Throwable $e) {
-            ($this->resolveExceptionHandler($e))($e, $req, $res);
+            $this->handleException($e, $req, $res);
         }
         return $res;
     }
@@ -317,6 +317,13 @@ class App
             }
         }
         return false;
+    }
+
+    /** The registered handler writes the error response; a WebSocket or stream handed over before the throw is dropped. */
+    private function handleException(Throwable $e, Request $req, Response $res): void
+    {
+        $res->withoutUpgrade();
+        ($this->resolveExceptionHandler($e))($e, $req, $res);
     }
 
     /** Exact class, then parents, then interfaces (Throwable itself skipped so it stays the final fallback). */

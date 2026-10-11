@@ -164,6 +164,31 @@ A controller may then wait on Tenma's async I/O (`Tenma\Db`, `Tenma::fetch()`, `
 process serves other requests. Read [Controllers per request, services shared](#controllers-per-request-services-shared)
 first. In a template, don't wait: fetch the data in the controller before `render()`.
 
+A route can hand the request over to Tenma with `Response::upgrade()`: a WebSocket
+(`Tenma\Http\Response::websocket()`), a stream or server-sent events (`stream()`, `events()`). The route's
+guards, `#[Authenticated]` and middlewares run first as for any other route; Tenma's response then replaces
+Waypoint's entirely, so status, headers and cookies set on `$res` are dropped. If an exception handler writes
+the response instead (the controller or an `after()` threw after the handover), the error goes out and the
+upgrade is dropped. The handler runs after the request ended, so pass what it needs (user, request id) in
+through `use`:
+
+```php
+#[Get('/chat')]
+#[Authenticated]
+public function chat(Request $req, Response $res): void
+{
+    $userId = $req->jwt['sub'];
+    $res->upgrade(\Tenma\Http\Response::websocket(function (\Tenma\Http\WebSocket $socket) use ($userId) {
+        while (($message = $socket->receive()) !== null) {
+            $socket->send("$userId: $message");
+        }
+    }));
+}
+```
+
+WebSockets don't carry the CSRF header, so a WebSocket route that acts for a logged-in user checks the
+`Origin` header itself.
+
 A minimal controller:
 
 ```php

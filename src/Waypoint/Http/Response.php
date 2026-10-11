@@ -36,6 +36,9 @@ class Response
     /** Set by finalize(): the body is compressed if it will be, Content-Length is fixed. */
     private bool $finalized = false;
 
+    /** Set via upgrade(): the runtime's own response object that replaces this one (a WebSocket, a stream). */
+    private ?object $upgrade = null;
+
     public function __construct(private CompressionOptions $compressionOptions = new CompressionOptions())
     {
     }
@@ -150,6 +153,31 @@ class Response
     public function status(int $code): self
     {
         $this->status = $code;
+        return $this;
+    }
+
+    /**
+     * Hands the request over to the runtime: $runtimeResponse replaces this response entirely (status, headers,
+     * cookies and body are dropped), e.g. Tenma's `Response::websocket()` or `Response::stream()`. Waypoint never
+     * looks inside it; only a runtime that knows the object honors it (Tenma\Bridge), handleHttp() under FPM
+     * and php -S does not. App::handle() clears it again when an exception handler writes the response instead.
+     */
+    public function upgrade(object $runtimeResponse): self
+    {
+        $this->upgrade = $runtimeResponse;
+        return $this;
+    }
+
+    /** What upgrade() handed over, or null for an ordinary response. */
+    public function getUpgrade(): ?object
+    {
+        return $this->upgrade;
+    }
+
+    /** Drops what upgrade() handed over: an error response must not be replaced by a WebSocket. */
+    public function withoutUpgrade(): self
+    {
+        $this->upgrade = null;
         return $this;
     }
 

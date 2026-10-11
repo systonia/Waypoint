@@ -523,4 +523,17 @@ final class ResponseTest extends TestCase
         $this->assertSame(404, $res->getStatus());
         $this->assertSame(200, (new Response())->getStatus());
     }
+
+    public function testUpgradeKeepsTheRuntimeObjectUntilWithoutUpgrade(): void
+    {
+        $res = new Response();
+        $this->assertNull($res->getUpgrade());
+
+        $websocket = new \stdClass();
+        $res->upgrade($websocket);
+        $this->assertSame($websocket, $res->getUpgrade());
+
+        $res->withoutUpgrade();
+        $this->assertNull($res->getUpgrade());
+    }
 }

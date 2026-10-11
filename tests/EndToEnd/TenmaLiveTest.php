@@ -63,4 +63,30 @@ final class TenmaLiveTest extends FullAppLiveTest
         // Waiting side by side, not one after the other (2 x 0.2 s)
         $this->assertLessThan(0.39, microtime(true) - $started);
     }
+
+    public function testARouteHandsTheRequestOverToATenmaWebSocket(): void
+    {
+        $url = parse_url($this->baseUrl());
+        $socket = stream_socket_client("tcp://{$url['host']}:{$url['port']}", timeout: 5);
+        $this->assertNotFalse($socket);
+        stream_set_timeout($socket, 5);
+        fwrite($socket, "GET /tenma/echo HTTP/1.1\r\nHost: {$url['host']}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+            . "Sec-WebSocket-Key: " . base64_encode(random_bytes(16)) . "\r\nSec-WebSocket-Version: 13\r\nX-Request-Id: id-ws\r\n\r\n");
+        $head = '';
+        while (!str_contains($head, "\r\n\r\n") && ($line = fgets($socket)) !== false) {
+            $head .= $line;
+        }
+        $this->assertStringStartsWith('HTTP/1.1 101', $head);
+
+        // One masked text frame up (client frames must be masked), one unmasked frame back
+        $mask = random_bytes(4);
+        $payload = 'hello';
+        fwrite($socket, "\x81" . chr(0x80 | strlen($payload)) . $mask . ($payload ^ str_repeat($mask, 2)));
+        $header = (string) fread($socket, 2);
+        $reply = (string) fread($socket, ord($header[1]) & 0x7f);
+        fclose($socket);
+
+        $this->assertSame("\x81", $header[0]);
+        $this->assertSame('id-ws: hello', $reply);
+    }
 }
