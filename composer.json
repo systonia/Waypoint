@@ -53,7 +53,7 @@
     "nyholm/psr7": "^1.8",
     "phpstan/phpstan": "^2.2",
     "phpunit/phpunit": "^13.3",
-    "tenma/psr": "@dev"
+    "tenma/psr": "^0.1.1"
   },
   "suggest": {
     "monolog/monolog": "Powerful logging with handlers, channels, and JSON output.",
@@ -61,14 +61,5 @@
     "tenma/psr": "Response::upgrade() through the PSR-15 handler under Tenma"
   },
   "minimum-stability": "stable",
-  "prefer-stable": true,
-  "repositories": [
-    {
-      "type": "path",
-      "url": "../../../tenma-psr",
-      "options": {
-        "symlink": true
-      }
-    }
-  ]
+  "prefer-stable": true
 }

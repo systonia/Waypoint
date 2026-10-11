@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b3c9353318ea4713f057c492fc2c248b",
+    "content-hash": "0cb6562332d27a0b7e2e31bfb6ec227b",
     "packages": [
         {
             "name": "psr/container",
@@ -2392,11 +2392,17 @@
         },
         {
             "name": "tenma/psr",
-            "version": "dev-main",
+            "version": "v0.1.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/systonia/Tenma-PSR.git",
+                "reference": "6133f638b5de70f545b5755532041e276993d9ea"
+            },
             "dist": {
-                "type": "path",
-                "url": "../../../tenma-psr",
-                "reference": "d4289c0cd1000523d3ecd355c9875c30a4be90a5"
+                "type": "zip",
+                "url": "https://api.github.com/repos/systonia/Tenma-PSR/zipball/6133f638b5de70f545b5755532041e276993d9ea",
+                "reference": "6133f638b5de70f545b5755532041e276993d9ea",
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.5",
@@ -2408,7 +2414,7 @@
                 "nyholm/psr7": "^1.8",
                 "phpstan/phpstan": "^2.2",
                 "phpunit/phpunit": "^13.3",
-                "systonia/tenma-stubs": "@dev"
+                "tenma/stubs": "^0.1.1"
             },
             "type": "library",
             "autoload": {
@@ -2416,28 +2422,17 @@
                     "Tenma\\Psr\\": "src/"
                 }
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "Tenma\\Psr\\Tests\\": "tests/"
-                }
-            },
-            "scripts": {
-                "test": [
-                    "vendor/bin/phpunit --testdox"
-                ],
-                "stan": [
-                    "phpstan analyse"
-                ]
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT",
                 "Apache-2.0"
             ],
             "description": "Runs any PSR-15 app under Tenma: PSR-7 requests in, Tenma responses out, WebSockets and streams included.",
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "support": {
+                "issues": "https://github.com/systonia/Tenma-PSR/issues",
+                "source": "https://github.com/systonia/Tenma-PSR/tree/v0.1.1"
+            },
+            "time": "2026-10-11T17:25:50+00:00"
         },
         {
             "name": "theseer/tokenizer",
@@ -2492,9 +2487,7 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "tenma/psr": 20
-    },
+    "stability-flags": {},
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
