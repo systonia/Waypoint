@@ -162,10 +162,10 @@ class App
 
     /**
      * The one line at the end of index.php, whatever runs it. Under Tenma it starts the server on $port, or on
-     * PORT from the Environment (8080 without one), files under the $static prefixes served by Tenma itself;
-     * under FPM, php -S or the CLI it is run().
+     * PORT from the Environment (8080 without one), and Tenma serves FileSystemOptions::$publicDirectory itself,
+     * without PHP; under FPM, php -S or the CLI it is run(), and Waypoint serves that directory.
      *
-     * @param string|array<string, string>|null $static Tenma's static mounts: ['/assets' => __DIR__ . '/public/assets']
+     * @param string|array<string, string>|null $static Tenma's static mounts instead: ['/assets' => __DIR__ . '/public/assets']
      * @codeCoverageIgnore starts a server or answers the superglobals' request; Tenma's branch is covered by the live suite
      */
     public function serve(?int $port = null, string|array|null $static = null): void
@@ -175,7 +175,7 @@ class App
             return;
         }
         $configured = $this->container->get(Environment::class)->get('PORT');
-        \Tenma::serve($port ?? (is_numeric($configured) ? (int) $configured : 8080), $this, $static);
+        \Tenma::serve($port ?? (is_numeric($configured) ? (int) $configured : 8080), $this, $static ?? $this->container->get(FileSystemOptions::class)->publicDirectory);
     }
 
     /** @codeCoverageIgnore exit()s with runCli()'s code. */
