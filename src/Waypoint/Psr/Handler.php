@@ -2,12 +2,12 @@
 
 namespace Waypoint\Psr;
 
-use Psr\Http\Message\{ResponseFactoryInterface, ResponseInterface, ServerRequestInterface, StreamFactoryInterface};
+use Psr\Http\Message\{ResponseFactoryInterface, ResponseInterface, ServerRequestInterface, StreamFactoryInterface, UploadedFileInterface};
 use Psr\Http\Server\RequestHandlerInterface;
 use Tenma\Http\{StreamedResponse, WebSocketResponse};
 use Tenma\Psr\Upgrade;
 use Waypoint\App;
-use Waypoint\Http\{Request, Response};
+use Waypoint\Http\{Request, Response, UploadedFile};
 use Waypoint\Support\Arr;
 use Waypoint\Tenma\Bridge;
 
@@ -61,10 +61,37 @@ final class Handler implements RequestHandlerInterface
             // Whatever the server put into the URI; a proxy's X-Forwarded-Proto it only trusts if told to
             $uri->getScheme() === 'https',
             is_array($parsed) ? $parsed : null,
+            self::files($request->getUploadedFiles()),
         );
         // The query params, not the query string again: a middleware may have changed them
         $req->query = Arr::stringKeyed($request->getQueryParams());
         return $req;
+    }
+
+    /**
+     * PSR-7's uploads as Waypoint's; empty file inputs (UPLOAD_ERR_NO_FILE) are left out, as under FPM.
+     *
+     * @param array<array-key, mixed> $files
+     * @return array<array-key, mixed>
+     */
+    private static function files(array $files): array
+    {
+        $uploads = [];
+        foreach ($files as $name => $file) {
+            if ($file instanceof UploadedFileInterface && $file->getError() !== UPLOAD_ERR_NO_FILE) {
+                $uploads[$name] = new UploadedFile(
+                    $file->getClientFilename() ?? '',
+                    $file->getClientMediaType() ?? '',
+                    $file->getSize() ?? 0,
+                    static fn (): string => (string) $file->getStream(),
+                    $file->moveTo(...),
+                    $file->getError(),
+                );
+            } elseif (is_array($file)) {
+                $uploads[$name] = self::files($file);
+            }
+        }
+        return $uploads;
     }
 
     private function toPsr(Response $response): ResponseInterface

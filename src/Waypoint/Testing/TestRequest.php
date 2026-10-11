@@ -3,7 +3,7 @@
 namespace Waypoint\Testing;
 
 use Waypoint\{Csrf, JWT, Waypoint};
-use Waypoint\Http\Request;
+use Waypoint\Http\{Request, UploadedFile};
 use Waypoint\Options\{CsrfOptions, JWTOptions};
 use Waypoint\Support\Arr;
 
@@ -28,6 +28,9 @@ final class TestRequest
     private bool $csrf = false;
 
     private ?bool $https = null;
+
+    /** @var array<array-key, mixed> */
+    private array $files = [];
 
     public function __construct(private string $method, private string $uri)
     {
@@ -64,6 +67,19 @@ final class TestRequest
     {
         $this->rawBody = json_encode($data) ?: '{}';
         return $this->withHeader('Content-Type', 'application/json');
+    }
+
+    /** An uploaded file for the field $field ("photos[]" appends to a list); the body becomes the form's fields. */
+    public function withFile(string $field, string $name, string $contents, string $type = 'application/octet-stream'): self
+    {
+        $file = UploadedFile::fromString($name, $type, $contents);
+        if (str_ends_with($field, '[]')) {
+            $list = $this->files[substr($field, 0, -2)] ?? [];
+            $this->files[substr($field, 0, -2)] = [...(is_array($list) ? $list : []), $file];
+        } else {
+            $this->files[$field] = $file;
+        }
+        return $this->withHeader('Content-Type', 'multipart/form-data; boundary=waypoint-test');
     }
 
     public function withCookie(string $name, string $value): self
@@ -125,6 +141,7 @@ final class TestRequest
             $cookies,
             $this->https ?? (is_string($https) && $https !== '' && strtolower($https) !== 'off'),
             $this->body,
+            $this->files,
         );
 
         // Output a controller echoed itself lands in front of the body, as it would under a SAPI

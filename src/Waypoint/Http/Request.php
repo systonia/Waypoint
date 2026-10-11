@@ -26,6 +26,14 @@ class Request
     /** @var array<string, string> The request cookies, name => value. */
     public array $cookies = [];
 
+    /**
+     * Uploaded files of a multipart/form-data request, nested as the field names say (avatar, photos[], doc[a]).
+     * A file input left empty is not in here.
+     *
+     * @var array<array-key, mixed> UploadedFile or arrays of them
+     */
+    public array $files = [];
+
     /** Whether the request itself arrived over HTTPS; a reverse proxy's X-Forwarded-Proto is deliberately not trusted. */
     public bool $https = false;
 
@@ -50,6 +58,7 @@ class Request
      * @param array<string, string> $headers any casing
      * @param array<string, string> $cookies
      * @param array<array-key, mixed>|null $form
+     * @param array<array-key, mixed> $files UploadedFile, nested as the field names say
      */
     public static function fromParts(
         string $method,
@@ -59,6 +68,7 @@ class Request
         array $cookies = [],
         bool $https = false,
         ?array $form = null,
+        array $files = [],
     ): self {
         $req = new self();
         $req->method = strtoupper($method);
@@ -71,6 +81,7 @@ class Request
         $req->query = Arr::stringKeyed($query);
         $req->cookies = $cookies;
         $req->https = $https;
+        $req->files = $files;
 
         // JSON only when the client says so: a cross-site <form> can send a JSON-looking text/plain body
         // without a preflight, and that must not be read as a JSON request.
@@ -126,10 +137,52 @@ class Request
             // IIS sets the literal 'off'
             is_string($https) && $https !== '' && strtolower($https) !== 'off',
             $_POST,
+            self::uploads($_FILES),
         );
         // $_GET, not the query string again: a test or front controller may have set it on its own
         $req->query = Arr::stringKeyed($_GET);
         return $req;
+    }
+
+    /**
+     * $_FILES turned around: PHP keeps name/type/tmp_name/error/size side by side, nested per field below each
+     * of them; here every file is one UploadedFile at the field's own path. Empty file inputs are left out.
+     *
+     * @param array<array-key, mixed> $files
+     * @return array<array-key, mixed>
+     */
+    private static function uploads(array $files): array
+    {
+        $uploads = [];
+        foreach ($files as $field => $file) {
+            if (is_array($file) && isset($file['name'], $file['type'], $file['tmp_name'], $file['error'], $file['size'])) {
+                $upload = self::upload($file['name'], $file['type'], $file['tmp_name'], $file['error'], $file['size']);
+                if ($upload !== null && $upload !== []) {
+                    $uploads[$field] = $upload;
+                }
+            }
+        }
+        return $uploads;
+    }
+
+    /** @return UploadedFile|array<array-key, mixed>|null */
+    private static function upload(mixed $name, mixed $type, mixed $tmpPath, mixed $error, mixed $size): UploadedFile|array|null
+    {
+        if (is_array($name)) {
+            $nested = [];
+            foreach ($name as $key => $value) {
+                $upload = self::upload($value, is_array($type) ? $type[$key] ?? '' : '', is_array($tmpPath) ? $tmpPath[$key] ?? '' : '', is_array($error) ? $error[$key] ?? UPLOAD_ERR_NO_FILE : UPLOAD_ERR_NO_FILE, is_array($size) ? $size[$key] ?? 0 : 0);
+                if ($upload !== null && $upload !== []) {
+                    $nested[$key] = $upload;
+                }
+            }
+            return $nested;
+        }
+        $error = is_numeric($error) ? (int) $error : UPLOAD_ERR_NO_FILE;
+        if ($error === UPLOAD_ERR_NO_FILE) {
+            return null;
+        }
+        return UploadedFile::fromPath(is_string($name) ? $name : '', is_string($type) ? $type : '', is_numeric($size) ? (int) $size : 0, is_string($tmpPath) ? $tmpPath : '', $error);
     }
 
     /** "CONTENT_TYPE" or "content-type" -> "Content-Type". */
@@ -174,6 +227,16 @@ class Request
     public function body(?string $key = null, mixed $default = null): mixed
     {
         return $key === null ? $this->body : ($this->body[$key] ?? $default);
+    }
+
+    /** The uploaded file of a field ("avatar", or "doc.a" for doc[a]); null when there is none or it is a list. */
+    public function file(string $name): ?UploadedFile
+    {
+        $file = $this->files;
+        foreach (explode('.', $name) as $key) {
+            $file = is_array($file) ? $file[$key] ?? null : null;
+        }
+        return $file instanceof UploadedFile ? $file : null;
     }
 
     /** Alias of body($key, $default). */

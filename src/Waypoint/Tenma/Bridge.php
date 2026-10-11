@@ -2,9 +2,9 @@
 
 namespace Waypoint\Tenma;
 
-use Tenma\Http\{Request as TenmaRequest, Response as TenmaResponse, Stream, StreamedResponse, WebSocket, WebSocketResponse};
+use Tenma\Http\{Request as TenmaRequest, Response as TenmaResponse, Stream, StreamedResponse, UploadedFile as TenmaUploadedFile, WebSocket, WebSocketResponse};
 use Waypoint\App;
-use Waypoint\Http\{Request, Response};
+use Waypoint\Http\{Request, Response, UploadedFile};
 use Waypoint\Support\FiberLocal;
 
 /**
@@ -47,7 +47,27 @@ final class Bridge
             false,
             // multipart is parsed by Tenma, a urlencoded or JSON body by fromParts() itself
             stripos($type, 'multipart/form-data') === 0 ? $request->form() : null,
+            self::files($request->files()),
         );
+    }
+
+    /**
+     * Tenma's uploads as Waypoint's; moveTo() stays Tenma's, which writes without blocking the worker.
+     *
+     * @param array<array-key, mixed> $files
+     * @return array<array-key, mixed>
+     */
+    private static function files(array $files): array
+    {
+        $uploads = [];
+        foreach ($files as $name => $file) {
+            if ($file instanceof TenmaUploadedFile) {
+                $uploads[$name] = new UploadedFile($file->name, $file->type, $file->size(), $file->contents(...), $file->moveTo(...));
+            } elseif (is_array($file)) {
+                $uploads[$name] = self::files($file);
+            }
+        }
+        return $uploads;
     }
 
     /** A response handed over with Response::upgrade() goes to Tenma with the request's context; anything else is Tenma's plain Response. */

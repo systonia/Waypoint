@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0cb6562332d27a0b7e2e31bfb6ec227b",
+    "content-hash": "47532bed978a33cbbf24523a40ec9251",
     "packages": [
         {
             "name": "psr/container",
@@ -2433,6 +2433,57 @@
                 "source": "https://github.com/systonia/Tenma-PSR/tree/v0.1.1"
             },
             "time": "2026-10-11T17:25:50+00:00"
+        },
+        {
+            "name": "tenma/stubs",
+            "version": "0.1.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/systonia/Tenma-Stubs.git",
+                "reference": "b7376695930d73e266c0d4681f3d783040600c38"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/systonia/Tenma-Stubs/zipball/b7376695930d73e266c0d4681f3d783040600c38",
+                "reference": "b7376695930d73e266c0d4681f3d783040600c38",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.5"
+            },
+            "type": "library",
+            "extra": {
+                "phpstan": {
+                    "includes": [
+                        "extension.neon"
+                    ]
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Lento Leisenfeld",
+                    "email": "lento@leisenfeld.com"
+                }
+            ],
+            "description": "Stubs of Tenma's PHP API (Tenma::serve(), Tenma\\Http, Tenma\\Fs, ...) for IDEs and PHPStan",
+            "homepage": "https://tenma.dev",
+            "keywords": [
+                "Fibers",
+                "PHPStan",
+                "async",
+                "ide-helper",
+                "stubs",
+                "tenma"
+            ],
+            "support": {
+                "issues": "https://github.com/systonia/Tenma-Stubs/issues",
+                "source": "https://github.com/systonia/Tenma-Stubs"
+            },
+            "time": "2026-10-11T17:23:40+00:00"
         },
         {
             "name": "theseer/tokenizer",

@@ -191,4 +191,20 @@ class FullAppLiveTest extends LiveServerTestCase
         $second = $this->request('GET', '/orders/1');
         $this->assertSame($first['body'], $second['body']);
     }
+
+    public function testAMultipartFormArrivesWithItsFilesAndAFileMovesToDisk(): void
+    {
+        $res = $this->request('POST', '/upload', ['body' => [
+            'title' => 'Report',
+            'doc' => new \CURLStringFile('pdf bytes', 'a.pdf', 'application/pdf'),
+            'photos[0]' => new \CURLStringFile('x', 'x.jpg', 'image/jpeg'),
+            'photos[1]' => new \CURLStringFile('y', 'y.jpg', 'image/jpeg'),
+        ]]);
+
+        $this->assertSame(200, $res['status'], $res['body']);
+        $this->assertSame(
+            ['title' => 'Report', 'doc' => ['a.pdf', 'application/pdf', 9], 'moved' => 'pdf bytes', 'photos' => 2],
+            json_decode($res['body'], true),
+        );
+    }
 }

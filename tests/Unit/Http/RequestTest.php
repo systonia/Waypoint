@@ -4,6 +4,7 @@ namespace Waypoint\Tests\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
 use Waypoint\Http\Request;
+use Waypoint\Http\UploadedFile;
 
 final class RequestTest extends TestCase
 {
@@ -213,5 +214,57 @@ final class RequestTest extends TestCase
         $this->assertSame('Bearer t', $req->headers['Authorization']);
         // Only string cookies: PHP turns a[]=x into an array, which no cookie reader here expects
         $this->assertSame(['sid' => 's1'], $req->cookies);
+    }
+
+    public function testCaptureTurnsFilesAroundAndLeavesEmptyInputsOut(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'wp');
+        file_put_contents($tmp, 'pdf bytes');
+        $backup = $_FILES;
+        $_FILES = [
+            'doc' => ['name' => 'a.pdf', 'type' => 'application/pdf', 'tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => 9],
+            'empty' => ['name' => '', 'type' => '', 'tmp_name' => '', 'error' => UPLOAD_ERR_NO_FILE, 'size' => 0],
+            'photos' => [
+                'name' => ['x.jpg', 'big.jpg', ''],
+                'type' => ['image/jpeg', 'image/jpeg', ''],
+                'tmp_name' => [$tmp, '', ''],
+                'error' => [UPLOAD_ERR_OK, UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_NO_FILE],
+                'size' => [9, 0, 0],
+            ],
+        ];
+        try {
+            $req = Request::capture();
+        } finally {
+            $_FILES = $backup;
+        }
+
+        $this->assertSame(['doc', 'photos'], array_keys($req->files));
+        $this->assertSame('a.pdf', $req->file('doc')?->name);
+        $this->assertSame('pdf bytes', $req->file('doc')->contents());
+        $this->assertSame(9, $req->file('doc')->size);
+        $this->assertNull($req->file('empty'));
+        $this->assertNull($req->file('photos'));
+        $this->assertCount(2, $req->files['photos']);
+        $this->assertTrue($req->file('photos.0')?->isValid());
+        $this->assertFalse($req->file('photos.1')?->isValid());
+        unlink($tmp);
+    }
+
+    public function testAnUploadMovesOnceAndAFailedOneNotAtAll(): void
+    {
+        $file = UploadedFile::fromString('a.txt', 'text/plain', 'hello');
+        $target = sys_get_temp_dir() . '/wp-upload-' . bin2hex(random_bytes(4));
+        $file->moveTo($target);
+        $this->assertSame('hello', file_get_contents($target));
+        unlink($target);
+
+        try {
+            $file->moveTo($target);
+            $this->fail('moved twice');
+        } catch (\RuntimeException) {
+        }
+        $failed = new UploadedFile('b.txt', 'text/plain', 0, fn () => '', fn (string $path) => null, UPLOAD_ERR_PARTIAL);
+        $this->expectException(\RuntimeException::class);
+        $failed->contents();
     }
 }

@@ -124,7 +124,7 @@ abstract class LiveServerTestCase extends TestCase
     /**
      * Makes a real HTTP request against the live server.
      *
-     * @param array{headers?: array<string,string>, body?: string, json?: mixed} $options
+     * @param array{headers?: array<string,string>, body?: string|array<string, mixed>, json?: mixed} $options
      * @return array{status: int, headers: array<string,string>, body: string}
      */
     protected function request(string $method, string $path, array $options = []): array

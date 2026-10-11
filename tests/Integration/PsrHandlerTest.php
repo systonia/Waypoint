@@ -46,4 +46,20 @@ final class PsrHandlerTest extends IntegrationTestCase
         $this->assertSame(['name' => 'Ada'], $request->body);
         $this->assertSame('text/html, application/json', $request->headers['Accept']);
     }
+
+    public function testUploadsArriveAsWaypointFilesWithoutEmptyInputs(): void
+    {
+        $factory = new Psr17Factory();
+        $request = Handler::toWaypoint(
+            $factory->createServerRequest('POST', 'http://example.test/upload')->withUploadedFiles([
+                'doc' => $factory->createUploadedFile($factory->createStream('pdf bytes'), 9, UPLOAD_ERR_OK, 'a.pdf', 'application/pdf'),
+                'empty' => $factory->createUploadedFile($factory->createStream(''), 0, UPLOAD_ERR_NO_FILE),
+                'photos' => [$factory->createUploadedFile($factory->createStream('x'), 1, UPLOAD_ERR_OK, 'x.jpg', 'image/jpeg')],
+            ]),
+        );
+
+        $this->assertSame(['doc', 'photos'], array_keys($request->files));
+        $this->assertSame(['a.pdf', 'application/pdf', 9, 'pdf bytes'], [$request->file('doc')?->name, $request->file('doc')->type, $request->file('doc')->size, $request->file('doc')->contents()]);
+        $this->assertSame('x.jpg', $request->file('photos.0')?->name);
+    }
 }

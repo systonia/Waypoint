@@ -20,6 +20,7 @@ use Waypoint\Tests\Fixtures\Controllers\{
     WhoAmIController,
     MiddlewareController,
     ArgBindingController,
+    UploadController,
 };
 use Waypoint\Tests\Fixtures\Managers\MaintenanceManager;
 
@@ -59,6 +60,7 @@ $app->attach([
     WhoAmIController::class,
     MiddlewareController::class,
     ArgBindingController::class,
+    UploadController::class,
     MaintenanceManager::class,
 ]);
 

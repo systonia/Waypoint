@@ -313,6 +313,31 @@ element that is no object (`[1, "two"]`) answers `422` with an error under its i
 This is reflected in the generated OpenAPI schema too: the request body documents as
 `{"type": "array", "items": {"$ref": "#/components/schemas/LineItemDTO"}}` rather than a single `$ref`.
 
+### File uploads
+
+A `multipart/form-data` request carries its fields in `$req->body` and its files in `$req->files`, nested as
+the field names say (`photos[]` becomes a list). `$req->file('avatar')` returns one, `file('doc.a')` one under
+`doc[a]`. An empty file input is left out. The same works under FPM, Tenma, any PSR-7 server and the testing kit
+(`->withFile('avatar', 'me.png', $bytes, 'image/png')`):
+
+```php
+#[Post('/profile/avatar')]
+public function avatar(Request $req): Redirect
+{
+    $avatar = $req->file('avatar') ?? throw new ValidationException(errors: ['avatar' => 'Choose a picture.']);
+    if (!$avatar->isValid() || getimagesizefromstring($avatar->contents()) === false) {
+        throw new ValidationException(errors: ['avatar' => 'This is not a picture.']);
+    }
+    $avatar->moveTo(__DIR__ . '/../storage/avatars/' . bin2hex(random_bytes(8)) . '.png');
+    return new Redirect('/profile', 303);
+}
+```
+
+`name`, `type` and `size` come from the client: never use the name as a path, and check the content before
+trusting the type. `isValid()` is false when PHP or the runtime refused the file (`$error` holds the
+`UPLOAD_ERR_*` code). `moveTo()` works once; under Tenma it writes without blocking the worker. The size limit is
+`upload_max_filesize`/`post_max_size` under FPM and `--max-body` under Tenma.
+
 ### Validation
 
 DTOs used with `#[Body]` can carry validation attributes on their public properties:
