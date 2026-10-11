@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8a312180a2ba9bdab175be378e53f4f3",
+    "content-hash": "b3c9353318ea4713f057c492fc2c248b",
     "packages": [
         {
             "name": "psr/container",
@@ -2391,12 +2391,12 @@
             "time": "2024-10-20T05:08:20+00:00"
         },
         {
-            "name": "systonia/tenma-psr",
+            "name": "tenma/psr",
             "version": "dev-main",
             "dist": {
                 "type": "path",
                 "url": "../../../tenma-psr",
-                "reference": "10816579764b9dafe50244dadffd6d420811939c"
+                "reference": "d4289c0cd1000523d3ecd355c9875c30a4be90a5"
             },
             "require": {
                 "php": ">=8.5",
@@ -2493,7 +2493,7 @@
     "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": {
-        "systonia/tenma-psr": 20
+        "tenma/psr": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

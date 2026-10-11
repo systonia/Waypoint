@@ -13,10 +13,10 @@ use Waypoint\Tenma\Bridge;
 
 /**
  * The app as a PSR-15 handler, for any server that speaks PSR-7: `new Handler($app, new Psr17Factory())`.
- * Under Tenma through systonia/tenma-psr, under RoadRunner, under FrankenPHP with nyholm/psr7-server, or
+ * Under Tenma through tenma/psr, under RoadRunner, under FrankenPHP with nyholm/psr7-server, or
  * behind PSR-15 middlewares of other packages. `Tenma::serve(3000, $app)` stays the direct way under Tenma.
  *
- * Response::upgrade() needs Tenma and systonia/tenma-psr: it goes out as Tenma\Psr\Upgrade.
+ * Response::upgrade() needs Tenma and tenma/psr: it goes out as Tenma\Psr\Upgrade.
  */
 final class Handler implements RequestHandlerInterface
 {
@@ -37,7 +37,7 @@ final class Handler implements RequestHandlerInterface
         // Bridge wraps the handler with the request's context and gives a stream the app's headers
         $upgrade = Bridge::toTenma($response);
         if (!class_exists(Upgrade::class) || !($upgrade instanceof WebSocketResponse || $upgrade instanceof StreamedResponse)) {
-            throw new \LogicException('Response::upgrade() through PSR-15 needs Tenma and systonia/tenma-psr');
+            throw new \LogicException('Response::upgrade() through PSR-15 needs Tenma and tenma/psr');
         }
         return new Upgrade($psr, $upgrade);
     }

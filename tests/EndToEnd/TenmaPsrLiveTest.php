@@ -4,7 +4,7 @@ namespace Waypoint\Tests\EndToEnd;
 
 /**
  * The whole live suite once more under Tenma, but through PSR-15: Tenma's request becomes a PSR-7 one
- * (systonia/tenma-psr), Waypoint\Psr\Handler turns it into Waypoint's and back. WebSocket and stream included.
+ * (tenma/psr), Waypoint\Psr\Handler turns it into Waypoint's and back. WebSocket and stream included.
  */
 final class TenmaPsrLiveTest extends TenmaLiveTest
 {
