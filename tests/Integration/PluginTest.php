@@ -180,4 +180,17 @@ final class PluginTest extends IntegrationTestCase
         }
     }
 
+
+    public function testBootGetsWhatItsParametersAskFor(): void
+    {
+        $app = Waypoint::create();
+        $plugin = new \Waypoint\Tests\Fixtures\Plugins\InjectedBootPlugin();
+        $app->plugin($plugin);
+        $app->attach([]);
+
+        [$container, $cors, $env] = $plugin->got;
+        $this->assertSame($app->getContainer(), $container);
+        $this->assertSame($app->get(\Waypoint\Options\CorsOptions::class), $cors);
+        $this->assertSame($app->get(\Waypoint\Environment::class), $env);
+    }
 }

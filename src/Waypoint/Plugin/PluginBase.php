@@ -2,8 +2,6 @@
 
 namespace Waypoint\Plugin;
 
-use Waypoint\Container;
-
 /** Plugin with every optional part defaulting to "nothing"; override what you need. */
 abstract class PluginBase implements Plugin
 {
@@ -30,9 +28,5 @@ abstract class PluginBase implements Plugin
     public function cacheInputs(): array
     {
         return [];
-    }
-
-    public function boot(Container $container): void
-    {
     }
 }

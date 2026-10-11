@@ -2,7 +2,6 @@
 
 namespace Waypoint\Plugin;
 
-use Waypoint\Container;
 
 /**
  * A plugin is one Composer package with one class implementing this and at
@@ -32,6 +31,8 @@ interface Plugin
     /** @return array<string, int> {path => mtime} of files whose change must rebuild the route cache. */
     public function cacheInputs(): array;
 
-    /** Called once at attach(), before the Router is built: bind services, read options. */
-    public function boot(Container $container): void;
+    // Optional: boot(...), called once at attach() before the Router is built, to read options and bind services.
+    // Each parameter gets what its type names: the Container itself, the plugin's Options class, a service.
+    //
+    //     public function boot(Container $container, I18nOptions $options): void
 }

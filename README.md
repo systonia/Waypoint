@@ -1223,7 +1223,7 @@ declares what it adds and does nothing else:
 |---|---|
 | `classes()` | Controllers and `#[Manager]` classes attached alongside the app's own. |
 | `middlewares()` | App-level middlewares, added at `attach()`. |
-| `boot(Container)` | Runs once at `attach()`: bind services, read its Options class. |
+| `boot(...)` | Optional; runs once at `attach()`: read its Options class, bind services. Each parameter gets what its type names: `boot(Container $container, I18nOptions $options)`. |
 | `cacheInputs()` | `{path => mtime}` of files whose change must rebuild the route cache. |
 | `hooks()` | Objects implementing any of the hook interfaces below. |
 

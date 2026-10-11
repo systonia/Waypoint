@@ -36,10 +36,23 @@ final class PluginRegistry
         return array_values($this->plugins);
     }
 
+    /** Calls each plugin's boot(), if it has one, with what its parameters' types name (see Plugin). */
     public function boot(Container $container): void
     {
         foreach ($this->plugins as $plugin) {
-            $plugin->boot($container);
+            if (!method_exists($plugin, 'boot')) {
+                continue;
+            }
+            $args = [];
+            foreach ((new \ReflectionMethod($plugin, 'boot'))->getParameters() as $param) {
+                $type = $param->getType();
+                $name = $type instanceof \ReflectionNamedType && !$type->isBuiltin() ? $type->getName() : '';
+                if (!class_exists($name) && !interface_exists($name)) {
+                    throw new \InvalidArgumentException(get_class($plugin) . "::boot(): \${$param->getName()} needs a class type");
+                }
+                $args[] = is_a($container, $name) ? $container : $container->get($name);
+            }
+            $plugin->boot(...$args);
         }
     }
 
