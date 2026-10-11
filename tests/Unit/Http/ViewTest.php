@@ -65,6 +65,14 @@ final class ViewTest extends TestCase
         }
     }
 
+    public function testAViewFromADirectoryOfItsOwnUsesItsOwnLayout(): void
+    {
+        $this->configureRenderer('_Layout.php');
+        $view = new View('Page', 'x', directory: __DIR__ . '/../../Fixtures/PluginViews');
+
+        $this->assertSame("<main><p>plugin x</p>\n</main>\n", $view->render());
+    }
+
     public function testRenderThrowsWhenViewFileMissing(): void
     {
         $this->configureRenderer();

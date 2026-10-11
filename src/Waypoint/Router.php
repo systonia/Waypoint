@@ -557,8 +557,10 @@ class Router
             $this->waypointJsAttributes()
         );
 
-        $assets = $this->getViewAssets($view->getViewName());
-        $view->setAssets($assets); // the layout renders the tags
+        // A view from a directory of its own (a plugin's) has no compiled assets; a site view of the same name must not lend its own
+        if ($view->getDirectory() === null) {
+            $view->setAssets($this->getViewAssets($view->getViewName())); // the layout renders the tags
+        }
         $res->withHeader('Content-Type', 'text/html')->write($view->render());
     }
 

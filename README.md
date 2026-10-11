@@ -143,9 +143,12 @@ A runtime that hands requests over itself, instead of filling the superglobals, 
 `Content-Length` already applied) without sending anything:
 
 ```php
-$res = $app->handle(Request::fromParts('GET', '/customers/7?tab=orders', $headers, $body, $cookies, https: true));
+$res = $app->handle(Request::fromParts('GET', '/customers/7?tab=orders', $headers, $body, $cookies, https: true, ip: $peer));
 // $res->getStatus(), $res->getHeaders(), $res->getCookies() (one Set-Cookie value each), $res->getBody()
 ```
+
+`$req->ip` is the address the connection came from (`REMOTE_ADDR` under FPM): the client's, or a proxy's in front
+of it. `X-Forwarded-For` is not trusted.
 
 Under Tenma (PHP with a Node-style event loop) the app itself is the request handler, as in Express:
 one process serves every request, each in a Fiber of its own, interleaved while they wait on I/O. The
@@ -868,7 +871,7 @@ Compiled, content-hashed copies are written under
 below) and served through `GET /assets/{hash}.css`/`.js` with a year-long, immutable `Cache-Control`
 header.
 
-Passing `partial: true` skips the layout entirely and renders just the view, for a bare HTML fragment.
+Passing `partial: true` skips the layout entirely and renders just the view, for a bare HTML fragment. `directory:` renders view and layout from another directory, such as a plugin's own views; such a view gets no compiled CSS/JS of its own.
 Navigation between pages is plain browser navigation: links and forms load whole pages. For smooth
 transitions between them, CSS covers it without JavaScript: `@view-transition { navigation: auto; }`.
 

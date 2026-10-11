@@ -282,4 +282,11 @@ final class RequestTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $failed->contents();
     }
+
+    public function testCaptureTakesTheAddressFromRemoteAddr(): void
+    {
+        $_SERVER['REMOTE_ADDR'] = '198.51.100.7';
+
+        $this->assertSame('198.51.100.7', Request::capture()->ip);
+    }
 }

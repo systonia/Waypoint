@@ -27,6 +27,12 @@ class ArgBindingController
     #[Inject]
     private Router $injectedRouter;
 
+    #[Get('/ip')]
+    public function ip(Request $req): array
+    {
+        return ['ip' => $req->ip];
+    }
+
     #[Get('/props')]
     public function props(): array
     {

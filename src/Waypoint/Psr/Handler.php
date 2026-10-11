@@ -62,6 +62,7 @@ final class Handler implements RequestHandlerInterface
             $uri->getScheme() === 'https',
             is_array($parsed) ? $parsed : null,
             self::files($request->getUploadedFiles()),
+            is_string($request->getServerParams()['REMOTE_ADDR'] ?? null) ? $request->getServerParams()['REMOTE_ADDR'] : '',
         );
         // The query params, not the query string again: a middleware may have changed them
         $req->query = Arr::stringKeyed($request->getQueryParams());

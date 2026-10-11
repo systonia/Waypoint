@@ -208,4 +208,11 @@ class FullAppLiveTest extends LiveServerTestCase
             json_decode($res['body'], true),
         );
     }
+
+    public function testTheRequestKnowsTheAddressTheConnectionCameFrom(): void
+    {
+        $res = $this->request('GET', '/argbinding/ip', ['headers' => ['X-Forwarded-For' => '203.0.113.9']]);
+
+        $this->assertSame(['ip' => '127.0.0.1'], json_decode($res['body'], true));
+    }
 }

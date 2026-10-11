@@ -37,6 +37,9 @@ class Request
     /** Whether the request itself arrived over HTTPS; a reverse proxy's X-Forwarded-Proto is deliberately not trusted. */
     public bool $https = false;
 
+    /** The address the connection came from: the client's, or that of a proxy in front ('' if the runtime doesn't say). X-Forwarded-For is not trusted. */
+    public string $ip = '';
+
     /** The decoded JWT payload, set by useJwt() when the request carried a valid token. */
     public mixed $jwt = null;
 
@@ -59,6 +62,7 @@ class Request
      * @param array<string, string> $cookies
      * @param array<array-key, mixed>|null $form
      * @param array<array-key, mixed> $files UploadedFile, nested as the field names say
+     * @param string $ip The address the connection came from
      */
     public static function fromParts(
         string $method,
@@ -69,6 +73,7 @@ class Request
         bool $https = false,
         ?array $form = null,
         array $files = [],
+        string $ip = '',
     ): self {
         $req = new self();
         $req->method = strtoupper($method);
@@ -82,6 +87,7 @@ class Request
         $req->cookies = $cookies;
         $req->https = $https;
         $req->files = $files;
+        $req->ip = $ip;
 
         // JSON only when the client says so: a cross-site <form> can send a JSON-looking text/plain body
         // without a preflight, and that must not be read as a JSON request.
@@ -138,6 +144,7 @@ class Request
             is_string($https) && $https !== '' && strtolower($https) !== 'off',
             $_POST,
             self::uploads($_FILES),
+            is_string($_SERVER['REMOTE_ADDR'] ?? null) ? $_SERVER['REMOTE_ADDR'] : '',
         );
         // $_GET, not the query string again: a test or front controller may have set it on its own
         $req->query = Arr::stringKeyed($_GET);

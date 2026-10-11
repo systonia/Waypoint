@@ -32,6 +32,9 @@ class View
     /** Explicit layout file basename (e.g. "_Layout.php"), or null for RendererOptions::$layout. */
     protected ?string $layout = null;
 
+    /** A directory of its own for view and layout, e.g. a plugin's views; null for RendererOptions::$directory. */
+    protected ?string $directory = null;
+
     /** @var array<string, string> */
     protected array $sections = [];
     protected ?string $currentSection = null;
@@ -65,8 +68,10 @@ class View
      * @param string $view Path under RendererOptions::$directory without .php, '/'-separated ("Admin/Users").
      *  A leading '/', a backslash or a '..' segment is rejected: the name is often built from request input.
      * @param string|null $layout Overrides RendererOptions::$layout for this render.
+     * @param string|null $directory Overrides RendererOptions::$directory for view and layout, e.g. a plugin's own
+     *  views. Such a view gets no compiled CSS/JS of its own.
      */
-    public function __construct(string $view, mixed $model = null, bool $partial = false, ?string $layout = null)
+    public function __construct(string $view, mixed $model = null, bool $partial = false, ?string $layout = null, ?string $directory = null)
     {
         if ($view === '' || str_starts_with($view, '/') || str_contains($view, '\\') || in_array('..', explode('/', $view), true)) {
             throw new InvalidArgumentException("Invalid view name '{$view}': must be a '/'-separated path inside the views directory, without '..' segments.");
@@ -75,6 +80,12 @@ class View
         $this->model = $model;
         $this->partial = $partial;
         $this->layout = $layout;
+        $this->directory = $directory;
+    }
+
+    public function getDirectory(): ?string
+    {
+        return $this->directory;
     }
 
     public function getViewName(): string
@@ -257,7 +268,8 @@ class View
     {
         $model = $this->model;
         $options = Waypoint::getConfig(RendererOptions::class);
-        $viewFile = "{$options->directory}/{$this->view}.php";
+        $directory = $this->directory ?? $options->directory;
+        $viewFile = "{$directory}/{$this->view}.php";
         if (!file_exists($viewFile)) {
             throw new RuntimeException("View '{$viewFile}' not found.");
         }
@@ -268,7 +280,7 @@ class View
         $content = ob_get_clean() ?: '';
         // @codeCoverageIgnoreEnd
 
-        $layoutFile = "{$options->directory}/" . ($this->layout ?? $options->layout);
+        $layoutFile = "{$directory}/" . ($this->layout ?? $options->layout);
         if ($this->partial || !file_exists($layoutFile)) {
             return $content;
         }
@@ -276,7 +288,7 @@ class View
         $this->layoutName = basename($layoutFile, '.php');
         // A View rendered outside a Router (unit tests) simply has no layout assets.
         $app = Waypoint::getInstance();
-        if ($app !== null && $app->hasRouter()) {
+        if ($app !== null && $app->hasRouter() && $this->directory === null) {
             $this->layoutAssets = $app->getRouter()->getViewAssets($this->layoutName);
         }
 

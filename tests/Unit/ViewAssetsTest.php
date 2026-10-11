@@ -211,4 +211,24 @@ final class ViewAssetsTest extends TestCase
 
         $this->assertStringStartsWith('[data-view="Weird\\"Name"] {', $scoped);
     }
+
+    public function testDiscoveryLeavesDependenciesOutEvenWhenTheyLinkBack(): void
+    {
+        $dir = sys_get_temp_dir() . '/wp-views-' . bin2hex(random_bytes(4));
+        mkdir("$dir/Admin", 0777, true);
+        mkdir("$dir/vendor/acme", 0777, true);
+        touch("$dir/Home.php");
+        touch("$dir/Admin/Users.php");
+        touch("$dir/vendor/acme/Leak.php");
+        // A path repository links the package back into the site that uses it
+        symlink($dir, "$dir/vendor/acme/site");
+        try {
+            $names = ViewAssets::discoverViewNames($dir);
+            sort($names);
+            $this->assertSame(['Admin/Users', 'Home'], $names);
+        } finally {
+            unlink("$dir/vendor/acme/site");
+            exec('rm -rf ' . escapeshellarg($dir));
+        }
+    }
 }

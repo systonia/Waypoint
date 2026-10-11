@@ -30,7 +30,7 @@ final class PsrHandlerTest extends IntegrationTestCase
     {
         $factory = new Psr17Factory();
         $request = Handler::toWaypoint(
-            $factory->createServerRequest('POST', 'https://example.test/orders?raw=1')
+            $factory->createServerRequest('POST', 'https://example.test/orders?raw=1', ['REMOTE_ADDR' => '203.0.113.9'])
                 ->withHeader('Content-Type', 'multipart/form-data; boundary=x')
                 ->withAddedHeader('Accept', 'text/html')->withAddedHeader('Accept', 'application/json')
                 ->withQueryParams(['page' => '2'])
@@ -41,6 +41,7 @@ final class PsrHandlerTest extends IntegrationTestCase
         $this->assertSame('POST', $request->method);
         $this->assertSame('/orders', $request->path);
         $this->assertTrue($request->https);
+        $this->assertSame('203.0.113.9', $request->ip);
         $this->assertSame(['page' => '2'], $request->query);
         $this->assertSame(['session' => 'abc'], $request->cookies);
         $this->assertSame(['name' => 'Ada'], $request->body);
