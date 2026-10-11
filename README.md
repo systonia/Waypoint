@@ -191,6 +191,21 @@ public function chat(Request $req, Response $res): void
 WebSockets don't carry the CSRF header, so a WebSocket route that acts for a logged-in user checks the
 `Origin` header itself.
 
+For any server that speaks PSR-7, `Waypoint\Psr\Handler` makes the app a PSR-15 request handler: RoadRunner,
+FrankenPHP (with `nyholm/psr7-server`), Tenma through `systonia/tenma-psr`, or behind PSR-15 middlewares
+of other packages. It takes any PSR-17 factory:
+
+```php
+$factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+$handler = new \Waypoint\Psr\Handler($app, $factory);
+
+Tenma::serve(8080, \Tenma\Psr\Psr::handler($handler, $factory));   // or hand $handler to your server
+```
+
+Each request is translated in and out, so the direct `Tenma::serve(8080, $app)` stays the faster way under
+Tenma. PSR-15 middlewares run around the whole app, not per route, and see neither guards nor
+`#[Authenticated]`. `Response::upgrade()` works through the handler only under Tenma with `systonia/tenma-psr`.
+
 A minimal controller:
 
 ```php

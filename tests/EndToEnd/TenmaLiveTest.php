@@ -7,7 +7,7 @@ namespace Waypoint\Tests\EndToEnd;
  * serves every request, with the app itself as Tenma's handler. Skipped without Tenma; TENMA_BIN points at the binary
  * when it isn't on the PATH.
  */
-final class TenmaLiveTest extends FullAppLiveTest
+class TenmaLiveTest extends FullAppLiveTest
 {
     public static function setUpBeforeClass(): void
     {

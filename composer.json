@@ -43,17 +43,32 @@
   "require": {
     "php": ">=8.5",
     "psr/container": "^2.0",
+    "psr/http-factory": "^1.1",
+    "psr/http-message": "^2.0",
+    "psr/http-server-handler": "^1.0",
     "psr/log": "^3.0"
   },
   "require-dev": {
     "monolog/monolog": "^3.9",
+    "nyholm/psr7": "^1.8",
+    "phpstan/phpstan": "^2.2",
     "phpunit/phpunit": "^13.3",
-    "phpstan/phpstan": "^2.2"
+    "systonia/tenma-psr": "@dev"
   },
   "suggest": {
     "monolog/monolog": "Powerful logging with handlers, channels, and JSON output.",
-    "phpunit/phpunit": "Required by the Waypoint\\Testing kit for app and plugin tests."
+    "phpunit/phpunit": "Required by the Waypoint\\Testing kit for app and plugin tests.",
+    "systonia/tenma-psr": "Response::upgrade() through the PSR-15 handler under Tenma"
   },
   "minimum-stability": "stable",
-  "prefer-stable": true
+  "prefer-stable": true,
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../../../tenma-psr",
+      "options": {
+        "symlink": true
+      }
+    }
+  ]
 }

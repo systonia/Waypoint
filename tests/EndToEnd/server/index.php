@@ -62,8 +62,12 @@ $app->attach([
     MaintenanceManager::class,
 ]);
 
-// Under Tenma (TenmaLiveTest) one process serves every request; under php -S each request runs this file anew
-if (class_exists(Tenma::class)) {
+// Under Tenma (TenmaLiveTest) one process serves every request; under php -S each request runs this file anew.
+// TenmaPsrLiveTest goes the PSR-15 way instead: Tenma, systonia/tenma-psr, nyholm/psr7, Waypoint\Psr\Handler.
+if (class_exists(Tenma::class) && getenv('E2E_PSR') === '1') {
+    $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
+    Tenma::serve((int) getenv('E2E_PORT'), \Tenma\Psr\Psr::handler(new \Waypoint\Psr\Handler($app, $factory), $factory));
+} elseif (class_exists(Tenma::class)) {
     Tenma::serve((int) getenv('E2E_PORT'), $app);
 } else {
     $app->run();

@@ -20,12 +20,17 @@ final class Bridge
     /** One request: Tenma's Request in, through App::handle(), Tenma's Response out. */
     public static function respond(App $app, TenmaRequest $request): TenmaResponse|WebSocketResponse|StreamedResponse
     {
+        self::installStorage();
+        return self::toTenma($app->handle(self::toWaypoint($request)));
+    }
+
+    /** Request id and CSRF token follow a request into the tasks it starts. Once per process, under Tenma only. */
+    public static function installStorage(): void
+    {
         if (!self::$storageInstalled) {
-            // Request id and CSRF token follow a request into the tasks it starts
             FiberLocal::useStorage(fn () => new AsyncLocalStorage());
             self::$storageInstalled = true;
         }
-        return self::toTenma($app->handle(self::toWaypoint($request)));
     }
 
     public static function toWaypoint(TenmaRequest $request): Request
