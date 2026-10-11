@@ -3,6 +3,7 @@
 namespace Waypoint\Tests\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
+use Waypoint\Http\Request;
 use Waypoint\Http\Response;
 use Waypoint\Options\CompressionOptions;
 
@@ -84,6 +85,17 @@ final class ResponseTest extends TestCase
         $output = ob_get_clean();
 
         $this->assertSame('Hello, World!', $output);
+    }
+
+    public function testMapBodyRewritesTheBodyAsWrittenEvenForHead(): void
+    {
+        $res = (new Response())->forRequest(Request::fromParts('HEAD', '/'))->write('Hello, ');
+        $res->mapBody(fn (string $body): string => str_replace('Hello', 'Bye', $body))->write('World!')->finalize();
+
+        $this->assertSame('', $res->getBody());
+        $this->assertSame((string) strlen('Bye, World!'), $res->getHeader('Content-Length'));
+        $this->expectException(\LogicException::class);
+        $res->mapBody(fn (string $body): string => $body);
     }
 
     public function testSendSetsConfiguredStatusCode(): void

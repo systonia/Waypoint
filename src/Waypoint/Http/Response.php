@@ -210,6 +210,21 @@ class Response
     }
 
     /**
+     * Rewrites the body written so far, e.g. a ResponseHook expanding tags in a rendered page. $map gets the body
+     * as written, for a HEAD request too (whose getBody() is ''), so Content-Length stays the GET's.
+     *
+     * @param callable(string): string $map
+     */
+    public function mapBody(callable $map): self
+    {
+        if ($this->finalized) {
+            throw new \LogicException('mapBody() after finalize(): Content-Length and compression are already fixed');
+        }
+        $this->body = $map($this->body);
+        return $this;
+    }
+
+    /**
      * Ties the response to $req: HEAD drops the body, its Accept-Encoding decides gzip. App::handle() does this.
      * Until finalize() a bound response ignores send(): an exception handler calling it itself must not write
      * through header()/echo when the caller of handle() writes the response out on its own.
