@@ -1360,9 +1360,10 @@ class AuthController
 }
 ```
 
-`APP_ENV` defaults to `development` under the `cli`/`cli-server` SAPI, or for a request whose
-`SERVER_NAME` is exactly `localhost`, a `*.localhost` name, `127.0.0.1` or `::1`, when unset anywhere.
-Every other server, with or without Xdebug, defaults to `production`.
+`APP_ENV` defaults to `development` under the `cli`/`cli-server` SAPI when unset anywhere. Every other
+server defaults to `production`: the request never decides it, since Apache and Caddy fill `SERVER_NAME`
+from the client's `Host` header. A local FPM setup sets `APP_ENV=development` itself. Request headers
+(`HTTP_*` in `$_SERVER`) are never read as environment.
 `Environment::isDev()` gates whether unhandled-exception messages are exposed in the default 500
 response.
 

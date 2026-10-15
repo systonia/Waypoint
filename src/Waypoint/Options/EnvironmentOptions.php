@@ -27,8 +27,11 @@ class EnvironmentOptions
                 $this->data[$key] = $val;
             }
         }
+        // Without the request's headers: HTTP_* comes from the client (HTTP_PROXY, httpoxy)
         foreach (Arr::stringMap($_SERVER) as $key => $val) {
-            $this->data[$key] = $val;
+            if (!str_starts_with($key, 'HTTP_')) {
+                $this->data[$key] = $val;
+            }
         }
 
         $base = rtrim($dir ?? (getcwd() ?: __DIR__), '/\\');
@@ -112,21 +115,16 @@ class EnvironmentOptions
 
     private function detectEnvironment(): string
     {
-        return self::environmentFor(php_sapi_name() ?: '', $_SERVER['SERVER_NAME'] ?? null);
+        return self::environmentFor(php_sapi_name() ?: '');
     }
 
     /**
-     * 'development' for the CLI, PHP's built-in server or a request to a local host name; everything else is 'production'.
-     * The host must be local exactly: "localhost.example.com" is a public server, and so is any server with Xdebug loaded.
+     * 'development' for the CLI and PHP's built-in server; every other server is 'production' until APP_ENV says
+     * otherwise. Never from the request: Apache and Caddy take SERVER_NAME from the client's Host header.
      * @internal
      */
-    public static function environmentFor(string $sapi, mixed $serverName): string
+    public static function environmentFor(string $sapi): string
     {
-        if ($sapi === 'cli' || $sapi === 'cli-server') {
-            return 'development';
-        }
-        $host = is_string($serverName) ? strtolower(trim($serverName, '[]')) : '';
-        $local = $host === 'localhost' || str_ends_with($host, '.localhost') || $host === '127.0.0.1' || $host === '::1';
-        return $local ? 'development' : 'production';
+        return $sapi === 'cli' || $sapi === 'cli-server' ? 'development' : 'production';
     }
 }

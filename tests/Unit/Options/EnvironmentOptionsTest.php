@@ -207,26 +207,32 @@ final class EnvironmentOptionsTest extends TestCase
         $this->assertNull($opts->get('ANYTHING'));
     }
 
-    /** @return array<string, array{string, mixed, string}> */
+    /** @return array<string, array{string, string}> */
     public static function detectedEnvironments(): array
     {
         return [
-            'cli' => ['cli', null, 'development'],
-            'built-in server' => ['cli-server', 'example.com', 'development'],
-            'localhost' => ['fpm-fcgi', 'localhost', 'development'],
-            'dev subdomain of localhost' => ['fpm-fcgi', 'shop.localhost', 'development'],
-            'loopback' => ['fpm-fcgi', '127.0.0.1', 'development'],
-            'loopback v6' => ['fpm-fcgi', '[::1]', 'development'],
-            'public host containing localhost' => ['fpm-fcgi', 'localhost.example.com', 'production'],
-            'another public host containing it' => ['fpm-fcgi', 'notlocalhost.com', 'production'],
-            'public host' => ['frankenphp', 'example.com', 'production'],
-            'no server name' => ['fpm-fcgi', null, 'production'],
+            'cli' => ['cli', 'development'],
+            'built-in server' => ['cli-server', 'development'],
+            'fpm' => ['fpm-fcgi', 'production'],
+            'frankenphp' => ['frankenphp', 'production'],
         ];
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('detectedEnvironments')]
-    public function testDetectsDevelopmentOnlyForTheCliOrAnExactlyLocalHost(string $sapi, mixed $serverName, string $expected): void
+    public function testDetectsDevelopmentOnlyForTheCliAndTheBuiltInServer(string $sapi, string $expected): void
     {
-        $this->assertSame($expected, EnvironmentOptions::environmentFor($sapi, $serverName));
+        $this->assertSame($expected, EnvironmentOptions::environmentFor($sapi));
+    }
+
+    public function testRequestHeadersAreNoEnvironment(): void
+    {
+        $_SERVER['HTTP_PROXY'] = 'http://evil.test';
+        $_SERVER['SERVER_NAME'] = 'localhost';
+        try {
+            $opts = (new EnvironmentOptions())->load(self::FIXTURES_DIR . '/Malformed');
+            $this->assertNull($opts->get('HTTP_PROXY'));
+        } finally {
+            unset($_SERVER['HTTP_PROXY'], $_SERVER['SERVER_NAME']);
+        }
     }
 }
