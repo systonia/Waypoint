@@ -245,6 +245,16 @@ class Response
             return $this;
         }
         $this->finalized = true;
+        // No content and no Content-Length: a body here would be read as the start of the next response
+        if (in_array($this->getStatus(), [204, 304], true)) {
+            $this->body = '';
+            foreach (array_keys($this->headers) as $name) {
+                if (strcasecmp($name, 'Content-Length') === 0 || strcasecmp($name, 'Content-Type') === 0) {
+                    unset($this->headers[$name]);
+                }
+            }
+            return $this;
+        }
         $acceptEncoding = $this->request !== null ? ($this->request->headers['Accept-Encoding'] ?? '') : ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '');
         $this->body = $this->maybeCompress($this->body, is_string($acceptEncoding) ? $acceptEncoding : '');
         // Content-Length is always recomputed from the body actually sent (compression may have shrunk it).

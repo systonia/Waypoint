@@ -411,7 +411,11 @@ class Router
                 // @codeCoverageIgnoreEnd
             }
             $args = $this->arguments->resolve(Arr::listOfStringKeyed($route['argPlan'] ?? null), $req, $res, $params);
-            $this->renderResult($controller->{$method}(...$args), $req, $res, $route['formatter'] ?? null);
+            $result = $controller->{$method}(...$args);
+            // Missing in an older cache: rendered as before
+            if (!($route['void'] ?? false)) {
+                $this->renderResult($result, $req, $res, $route['formatter'] ?? null);
+            }
         };
 
         return array_reduce(

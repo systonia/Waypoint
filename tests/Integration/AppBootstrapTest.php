@@ -93,6 +93,18 @@ final class AppBootstrapTest extends IntegrationTestCase
         $this->assertNotSame($first, $third);
     }
 
+    public function testAVoidActionSendsWhatItWroteAndA204SendsNoBody(): void
+    {
+        $app = Waypoint::create();
+        $app->attach([\Waypoint\Tests\Fixtures\Controllers\VoidController::class]);
+
+        $text = $this->request('GET', '/void/text')->send();
+        $this->assertSame('hello', $text->body());
+        $gone = $this->request('DELETE', '/void/gone')->send();
+        $this->assertSame([204, ''], [$gone->status(), $gone->body()]);
+        $this->assertArrayNotHasKey('Content-Length', $gone->headers());
+    }
+
     public function testAControllerIsCreatedFreshForEveryRequest(): void
     {
         $app = Waypoint::create();

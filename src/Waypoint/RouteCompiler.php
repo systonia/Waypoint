@@ -110,6 +110,8 @@ final class RouteCompiler
                 'argPlan' => $this->buildArgPlan($method),
                 'propInject' => $propInject,
                 'formatter' => self::normalizeFormatter(self::findFormatter($method)),
+                // A void action builds the response itself: its null is no JSON body
+                'void' => in_array((string) $method->getReturnType(), ['void', 'never'], true),
                 'middlewares' => [...$classMiddlewares, ...$this->collectMiddlewares($method->getAttributes(Middleware::class), "{$controller}::{$method->getName()}()")],
                 'gzip' => !self::hasEither($rc, $method, NoGzip::class),
                 'skipCsrf' => self::hasEither($rc, $method, SkipCsrf::class),
