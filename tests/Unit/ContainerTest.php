@@ -5,10 +5,17 @@ namespace Waypoint\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use Waypoint\Container;
 use Waypoint\Exceptions\{ContainerException, NotFoundException};
-use Waypoint\Tests\Fixtures\Services\{AnotherService, CrashingService, ExampleService};
+use Waypoint\Tests\Fixtures\Services\{AnotherService, CrashingService, ExampleService, ServiceWithInjectedDependency};
 
 final class ContainerTest extends TestCase
 {
+    public function testAServiceTheContainerCreatesOnDemandGetsItsInjectProperties(): void
+    {
+        // Reached only from a middleware, a view or $app->get(): never discovered at attach()
+        $service = (new Container())->get(ServiceWithInjectedDependency::class);
+        $this->assertInstanceOf(AnotherService::class, $service->getOther());
+    }
+
     public function testSetAndGetReturnsSameInstance(): void
     {
         $container = new Container();

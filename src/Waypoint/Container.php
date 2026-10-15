@@ -47,7 +47,10 @@ class Container implements ContainerInterface
             } catch (Throwable $e) {
                 throw new ContainerException("Failed to instantiate service '$id': " . $e->getMessage(), 0, $e);
             }
+            // Registered before its properties: two services may inject each other. A service only reached
+            // here (from a middleware, a view, $app->get()) gets its #[Inject] properties like a discovered one
             $this->set($instance);
+            (new Routing\PropertyInjector($this))->injectReflected($instance);
             return $instance;
         }
         throw new NotFoundException("Service '$id' not found");
