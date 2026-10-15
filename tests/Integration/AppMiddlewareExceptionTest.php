@@ -19,10 +19,27 @@ final class AppMiddlewareExceptionTest extends IntegrationTestCase
             return match ($req->path) {
                 '/unauthorized' => throw new UnauthorizedException(),
                 '/broken' => throw new RuntimeException('database password in a message'),
+                // Fails after the page was written, as a ResponseHook expanding tags can
+                '/half' => self::halfAPage($res),
                 default => $next($req, $res),
             };
         });
         $app->attach([CustomersController::class]);
+    }
+
+    private static function halfAPage(Response $res): never
+    {
+        $res->withHeader('Content-Type', 'text/html')->write('<p>half a page');
+        throw new RuntimeException('late');
+    }
+
+    public function testAnExceptionAfterThePageWasWrittenReplacesItInsteadOfFollowingIt(): void
+    {
+        $output = $this->dispatch('GET', '/half');
+
+        $this->assertSame(500, $this->lastResponse?->status());
+        $this->assertSame('application/problem+json', $this->sentHeaders()['content-type'] ?? null);
+        $this->assertSame('Internal Server Error', json_decode($output, true)['title'] ?? null);
     }
 
     public function testAnHttpExceptionFromAnAppMiddlewareBecomesItsProblemDetails(): void

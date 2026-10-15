@@ -347,6 +347,8 @@ class App
     private function handleException(Throwable $e, Request $req, Response $res): void
     {
         $res->withoutUpgrade();
+        // A handler builds the response anew: what was written before the exception (half a page) must not precede it
+        $res->mapBody(static fn (): string => '');
         ($this->resolveExceptionHandler($e))($e, $req, $res);
     }
 
