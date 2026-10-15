@@ -104,4 +104,24 @@ final class FromArrayTest extends TestCase
 
         $this->assertSame(0, $dto->age);
     }
+
+    public function testJsonValuesOfAnotherTypeAreRefusedNotCast(): void
+    {
+        $dto = new \Waypoint\Tests\Fixtures\Support\TypedFormDTO(['admin' => 'false', 'qty' => 2.7, 'name' => true, 'price' => 3]);
+
+        $this->assertSame([false, 1, '', 3.0], [$dto->admin, $dto->qty, $dto->name, $dto->price]);
+        // "false" reads as false, as a form's text would; the rest has no reading as their type
+        $this->assertSame(['qty', 'name'], array_keys($dto->errors));
+    }
+
+    public function testAFormsTextForNumbersAndBooleansIsConvertedStrictly(): void
+    {
+        $dto = new \Waypoint\Tests\Fixtures\Support\TypedFormDTO(['admin' => 'on', 'qty' => '5', 'price' => '2.5']);
+        $this->assertSame([true, 5, 2.5], [$dto->admin, $dto->qty, $dto->price]);
+        $this->assertTrue($dto->isValid);
+
+        $bad = new \Waypoint\Tests\Fixtures\Support\TypedFormDTO(['qty' => '5abc', 'admin' => 'maybe']);
+        $this->assertSame([1, false], [$bad->qty, $bad->admin]);
+        $this->assertSame(['qty', 'admin'], array_keys($bad->errors));
+    }
 }

@@ -67,7 +67,8 @@ final class ArgumentResolver
         $dto = new $class($req->body());
         $req->bodyDto = $dto;
         if ($arg['validate'] ?? false) {
-            $errors = (new Validator())->validate($dto);
+            // A FromArray DTO also knows what didn't fit its types
+            $errors = property_exists($dto, 'errors') && is_array($dto->errors) ? $dto->errors : (new Validator())->validate($dto);
             if ($errors) {
                 throw new ValidationException('Validation failed', $errors);
             }
@@ -102,7 +103,7 @@ final class ArgumentResolver
             }
             $dto = new $class($item);
             if ($validator !== null) {
-                $itemErrors = $validator->validate($dto);
+                $itemErrors = property_exists($dto, 'errors') && is_array($dto->errors) ? $dto->errors : $validator->validate($dto);
                 if ($itemErrors) {
                     $errors["$index"] = $itemErrors;
                 }
