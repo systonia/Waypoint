@@ -114,6 +114,17 @@ final class AppBootstrapTest extends IntegrationTestCase
         $this->assertSame(['page' => 2, 'size' => 20, 'sort' => 'name'], json_decode($this->request('GET', '/paging?page=2&sort=name')->send()->body(), true));
     }
 
+    public function testAQueryAttributeScalarThatIsNoneOfItsTypeIs422(): void
+    {
+        $app = Waypoint::create();
+        $app->attach([\Waypoint\Tests\Fixtures\Controllers\PagingController::class]);
+
+        $this->assertSame(['n' => 7], json_decode($this->request('GET', '/paging/n?n=7')->send()->body(), true));
+        foreach (['/paging/n?n=abc', '/paging/n?n[]=1'] as $uri) {
+            $this->assertSame(422, $this->request('GET', $uri)->send()->status(), $uri);
+        }
+    }
+
     public function testAControllerIsCreatedFreshForEveryRequest(): void
     {
         $app = Waypoint::create();

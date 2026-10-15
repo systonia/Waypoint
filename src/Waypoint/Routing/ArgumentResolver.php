@@ -30,8 +30,8 @@ final class ArgumentResolver
             $args[] = match ($arg['inject'] ?? null) {
                 'Request' => $req,
                 'Response' => $res,
-                'Route' => $params[$name] ?? null,
-                'Query' => $req->query($name),
+                'Route' => self::typed($arg, $name, $params[$name] ?? null),
+                'Query' => self::typed($arg, $name, $req->query($name)),
                 'Body' => self::body($arg, $req),
                 'BodyCollection' => self::bodyCollection($arg, $req),
                 'Scalar' => self::scalar($arg, $name, $req, $params),
