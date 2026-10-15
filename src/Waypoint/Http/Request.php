@@ -43,6 +43,9 @@ class Request
     /** The decoded JWT payload, set by useJwt() when the request carried a valid token. */
     public mixed $jwt = null;
 
+    /** Whether $jwt came from the cookie (JWTOptions::$cookieName), which the browser sends on its own: a #[SkipCsrf] route ignores it. */
+    public bool $jwtFromCookie = false;
+
     /** The #[Body] DTO the matched route built (set before validation runs, so present even when validation fails); null until routing has run. */
     public ?object $bodyDto = null;
 

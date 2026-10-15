@@ -142,6 +142,7 @@ class App
                 $cookie = $cookieName !== null ? ($req->cookies[$cookieName] ?? null) : null;
                 if ($cookie !== null) {
                     $payload = JWT::decode($cookie);
+                    $req->jwtFromCookie = $payload !== null;
                 }
             }
             if ($payload !== null) {

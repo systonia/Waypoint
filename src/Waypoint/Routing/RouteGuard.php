@@ -29,12 +29,18 @@ final class RouteGuard
     /** @param array<string, mixed> $route */
     public function check(array $route, string $httpMethod, Request $req): void
     {
+        $unsafe = in_array(strtoupper($httpMethod), self::CSRF_METHODS, true);
+        // Without the CSRF check a cookie proves nothing: any page could have made the browser send it
+        if ($unsafe && ($route['skipCsrf'] ?? false) && $req->jwtFromCookie) {
+            $req->jwt = null;
+            $req->jwtFromCookie = false;
+        }
         if ($route['authenticated'] ?? false) {
             $this->checkAuthentication($route, $req);
         }
 
         if (
-            in_array(strtoupper($httpMethod), self::CSRF_METHODS, true)
+            $unsafe
             && !($route['skipCsrf'] ?? false)
             && $this->container !== null
             && !$this->container->get(Csrf::class)->verify($req)

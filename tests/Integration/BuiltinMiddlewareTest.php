@@ -172,6 +172,27 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
         $this->assertSame('42', json_decode($output, true)['jwt']['sub']);
     }
 
+    public function testASkipCsrfRouteIgnoresTheCookieButNotTheHeader(): void
+    {
+        $app = Waypoint::create();
+        $app->configure(function (JWTOptions $opts, CsrfOptions $csrf) {
+            $opts->secret = 'test-secret';
+            $opts->cookieName = 'auth_token';
+            $csrf->secret = 'csrf-secret';
+        });
+        $app->attach([WhoAmIController::class]);
+        $app->useJwt();
+
+        $_COOKIE['auth_token'] = JWT::encode(['sub' => 'victim']);
+        try {
+            $this->assertNull(json_decode($this->dispatch('POST', '/whoami/api'), true)['jwt']);
+            $output = $this->dispatch('POST', '/whoami/api', ['Authorization' => 'Bearer ' . JWT::encode(['sub' => 'api'])]);
+            $this->assertSame('api', json_decode($output, true)['jwt']['sub']);
+        } finally {
+            unset($_COOKIE['auth_token']);
+        }
+    }
+
     public function testJwtMiddlewarePrefersTheAuthorizationHeaderOverTheCookie(): void
     {
         $app = Waypoint::create();
