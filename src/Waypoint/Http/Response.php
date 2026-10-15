@@ -52,8 +52,14 @@ class Response
         return $this;
     }
 
+    /** Sets $name, replacing it in any spelling: HTTP header names know no case. */
     public function withHeader(string $name, string $value): self
     {
+        foreach (array_keys($this->headers) as $existing) {
+            if (strcasecmp($existing, $name) === 0) {
+                unset($this->headers[$existing]);
+            }
+        }
         $this->headers[$name] = $value;
         return $this;
     }
@@ -61,12 +67,11 @@ class Response
     /** Adds a request header to `Vary`, keeping the ones already listed: caches then keep one copy per value. */
     public function addVary(string $header): self
     {
-        $listed = array_filter(array_map('trim', explode(',', $this->headers['Vary'] ?? '')));
+        $listed = array_filter(array_map('trim', explode(',', $this->getHeader('Vary') ?? '')));
         if (!in_array(strtolower($header), array_map('strtolower', $listed), true)) {
             $listed[] = $header;
         }
-        $this->headers['Vary'] = implode(', ', $listed);
-        return $this;
+        return $this->withHeader('Vary', implode(', ', $listed));
     }
 
     /** Case-insensitive -- lets an after() middleware fill in a header only if the controller didn't set it. */
@@ -356,7 +361,7 @@ class Response
             $this->gzipDisabled
             || !$this->compressionOptions->enabled
             || strlen($body) < $this->compressionOptions->minBytes
-            || isset($this->headers['Content-Encoding'])
+            || $this->hasHeader('Content-Encoding')
             || !self::acceptsGzip($acceptEncoding)
         ) {
             return $body;

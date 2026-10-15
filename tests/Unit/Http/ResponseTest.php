@@ -345,6 +345,17 @@ final class ResponseTest extends TestCase
         $this->assertSame($body, gzdecode($output));
     }
 
+    public function testHeaderNamesKnowNoCaseAndAnEncodedBodyIsLeftAlone(): void
+    {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';
+        $body = str_repeat('a', 2000);
+        $res = (new Response())->withHeader('content-encoding', 'br')->withHeader('X-Thing', 'a')->withHeader('x-thing', 'b')->write($body)->finalize();
+
+        $this->assertSame(['content-encoding' => 'br', 'x-thing' => 'b'], array_intersect_key($res->getHeaders(), ['content-encoding' => 1, 'x-thing' => 1]));
+        $this->assertArrayNotHasKey('X-Thing', $res->getHeaders());
+        $this->assertSame($body, $res->getBody());
+    }
+
     /** @return array<string, array{string, bool}> */
     public static function acceptEncodings(): array
     {
