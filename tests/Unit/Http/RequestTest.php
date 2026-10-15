@@ -292,4 +292,11 @@ final class RequestTest extends TestCase
             unset($_SERVER['REMOTE_ADDR']);
         }
     }
+
+    public function testThePathIsWhatComesBeforeTheQueryEvenWhereParseUrlGivesUp(): void
+    {
+        $this->assertSame(['/foo:123', '/a', ['b' => 'c']], [Request::fromParts('GET', '/foo:123')->path, Request::fromParts('GET', '/a?b=c#d')->path, Request::fromParts('GET', '/a?b=c#d')->query]);
+        $this->assertSame('///x', Request::fromParts('GET', '///x')->path);
+        $this->assertSame('/p', Request::fromParts('GET', 'http://example.com/p?q=1')->path);
+    }
 }

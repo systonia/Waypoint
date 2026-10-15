@@ -80,12 +80,20 @@ class Request
     ): self {
         $req = new self();
         $req->method = strtoupper($method);
-        $req->path = parse_url($uri, PHP_URL_PATH) ?: '/';
+        // The part before ? and #: parse_url() gives up on valid paths such as /a:1 or //x
+        $target = strstr($uri, '#', true) ?: $uri;
+        $path = strstr($target, '?', true);
+        $path = $path === false ? $target : $path;
+        if (preg_match('#^[a-z][a-z0-9+.-]*://[^/]*(/.*)?$#i', $path, $absolute) === 1) {
+            $path = $absolute[1] ?? '/';
+        }
+        $req->path = $path !== '' ? $path : '/';
         foreach ($headers as $name => $value) {
             $req->headers[self::normalizeHeaderName($name)] = $value;
         }
         $req->id = self::resolveRequestId($req->headers);
-        parse_str((string) parse_url($uri, PHP_URL_QUERY), $query);
+        $queryString = strstr($target, '?');
+        parse_str($queryString === false ? '' : substr($queryString, 1), $query);
         $req->query = Arr::stringKeyed($query);
         $req->cookies = $cookies;
         $req->https = $https;

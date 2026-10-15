@@ -105,6 +105,14 @@ final class AppBootstrapTest extends IntegrationTestCase
         $this->assertArrayNotHasKey('Content-Length', $gone->headers());
     }
 
+    public function testARouteWithAnUmlautMatchesItsEncodedPath(): void
+    {
+        $app = Waypoint::create();
+        $app->attach([\Waypoint\Tests\Fixtures\Controllers\VoidController::class]);
+
+        $this->assertSame('"found"', $this->request('GET', '/void/%C3%BCber')->send()->body());
+    }
+
     public function testAMissingScalarGetsItsDefaultOrNull(): void
     {
         $app = Waypoint::create();

@@ -312,9 +312,25 @@ class Router
 
     // -- HTTP dispatch --
 
+    /**
+     * The path as files and routes are named: each segment percent-decoded (/my%20file.txt is "my file.txt",
+     * /%C3%BCber is /über). A segment that decodes to a slash or a NUL keeps the path as it came, so an encoded
+     * slash never makes a new segment.
+     */
+    private static function decodedPath(string $path): string
+    {
+        $segments = array_map('rawurldecode', explode('/', $path));
+        foreach ($segments as $segment) {
+            if (str_contains($segment, '/') || str_contains($segment, "\0")) {
+                return $path;
+            }
+        }
+        return implode('/', $segments);
+    }
+
     public function dispatch(string $uri, string $httpMethod, Request $req, Response $res): void
     {
-        $path = '/' . trim($uri, '/');
+        $path = self::decodedPath('/' . trim($uri, '/'));
 
         if ($this->publicFileServer->serve($path, $res) || $this->tryServeViewAsset($path, $res)) {
             return;

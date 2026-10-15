@@ -20,4 +20,10 @@ class VoidController
     {
         $res->status(204);
     }
+
+    #[Get('/über')]
+    public function umlaut(): string
+    {
+        return 'found';
+    }
 }
