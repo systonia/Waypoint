@@ -901,7 +901,7 @@ public function loginSubmit(Request $req, Response $res): View|Redirect
     if (!$this->credentialsValid($req)) {
         return new View('Login', ['error' => 'Invalid email or password.']);
     }
-    $res->withCookie('auth_token', $token);
+    $res->withCookie('auth_token', $token, secure: true);
     return new Redirect('/dashboard');
 }
 ```
@@ -1054,7 +1054,7 @@ Issue that cookie from your own login endpoint with `Response::withCookie()` (Ht
 public function login(#[Body] LoginDTO $data, Response $res): array
 {
     $token = JWT::encode(['sub' => $userId]);
-    $res->withCookie('auth_token', $token); // maxAge: null -> a session cookie
+    $res->withCookie('auth_token', $token, secure: true); // maxAge: null -> a session cookie
     return ['accessToken' => $token];        // also usable as a Bearer token directly
 }
 
@@ -1364,8 +1364,8 @@ class AuthController
 server defaults to `production`: the request never decides it, since Apache and Caddy fill `SERVER_NAME`
 from the client's `Host` header. A local FPM setup sets `APP_ENV=development` itself. Request headers
 (`HTTP_*` in `$_SERVER`) are never read as environment.
-`Environment::isDev()` gates whether unhandled-exception messages are exposed in the default 500
-response.
+The default 500 response never shows an unhandled exception's message, in development neither: it goes to
+the log.
 
 The JSON files are flat `{"KEY": value, ...}` objects (a value keeps its JSON type — bool/int/array/etc,
 unlike `.env`'s always-string values). `config.json`/`config.$APP_ENV.json` are meant to be committed

@@ -43,7 +43,7 @@ final class Bridge
             $request->headers,
             $request->body,
             $cookies,
-            // Tenma speaks plain HTTP; TLS ends at a proxy, whose X-Forwarded-Proto isn't trusted
+            // Tenma speaks plain HTTP; TLS ends at a proxy, whose X-Forwarded-Proto App::handle() applies if ProxyOptions trusts it
             false,
             // multipart is parsed by Tenma, a urlencoded or JSON body by fromParts() itself
             stripos($type, 'multipart/form-data') === 0 ? $request->form() : null,

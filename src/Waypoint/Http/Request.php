@@ -34,10 +34,10 @@ class Request
      */
     public array $files = [];
 
-    /** Whether the request itself arrived over HTTPS; a reverse proxy's X-Forwarded-Proto is deliberately not trusted. */
+    /** Whether the request arrived over HTTPS; behind a proxy listed in ProxyOptions::$trusted, what its X-Forwarded-Proto says. */
     public bool $https = false;
 
-    /** The address the connection came from: the client's, or that of a proxy in front ('' if the runtime doesn't say). X-Forwarded-For is not trusted. */
+    /** The client's address: the connection's ('' if the runtime doesn't say), or behind a proxy listed in ProxyOptions::$trusted, what its X-Forwarded-For says. */
     public string $ip = '';
 
     /** The decoded JWT payload, set by useJwt() when the request carried a valid token. */
