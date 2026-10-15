@@ -178,6 +178,25 @@ class Response
     }
 
     /** Drops what upgrade() handed over: an error response must not be replaced by a WebSocket. */
+    /**
+     * @internal Before an exception handler builds the response anew: what the failed action wrote goes, its body,
+     * cookies and the headers about the content (type, encoding, caching, download, redirect). Headers about the
+     * request and the app (X-Request-ID, CORS, security headers) stay.
+     */
+    public function discard(): self
+    {
+        $this->body = '';
+        $this->cookies = [];
+        $this->cookieValues = [];
+        foreach (array_keys($this->headers) as $name) {
+            $lower = strtolower($name);
+            if (str_starts_with($lower, 'content-') || in_array($lower, ['cache-control', 'expires', 'etag', 'last-modified', 'location', 'refresh'], true)) {
+                unset($this->headers[$name]);
+            }
+        }
+        return $this;
+    }
+
     public function withoutUpgrade(): self
     {
         $this->upgrade = null;

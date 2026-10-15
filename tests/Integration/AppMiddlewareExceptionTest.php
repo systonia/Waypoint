@@ -29,7 +29,8 @@ final class AppMiddlewareExceptionTest extends IntegrationTestCase
 
     private static function halfAPage(Response $res): never
     {
-        $res->withHeader('Content-Type', 'text/html')->write('<p>half a page');
+        $res->withHeader('Content-Type', 'text/html')->withHeader('Cache-Control', 'public, max-age=31536000')->withHeader('Content-Encoding', 'gzip')
+            ->withCookie('session', 'abc')->write('<p>half a page');
         throw new RuntimeException('late');
     }
 
@@ -40,6 +41,9 @@ final class AppMiddlewareExceptionTest extends IntegrationTestCase
         $this->assertSame(500, $this->lastResponse?->status());
         $this->assertSame('application/problem+json', $this->sentHeaders()['content-type'] ?? null);
         $this->assertSame('Internal Server Error', json_decode($output, true)['title'] ?? null);
+        $this->assertArrayNotHasKey('cache-control', $this->sentHeaders());
+        $this->assertArrayNotHasKey('content-encoding', $this->sentHeaders());
+        $this->assertSame([], $this->lastResponse?->cookies() ?? []);
     }
 
     public function testAnHttpExceptionFromAnAppMiddlewareBecomesItsProblemDetails(): void

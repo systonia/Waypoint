@@ -353,8 +353,9 @@ class App
     private function handleException(Throwable $e, Request $req, Response $res): void
     {
         $res->withoutUpgrade();
-        // A handler builds the response anew: what was written before the exception (half a page) must not precede it
-        $res->mapBody(static fn (): string => '');
+        // A handler builds the response anew: what the failed action wrote (half a page, a cache header, a login
+        // cookie) must not go out with it
+        $res->discard();
         ($this->resolveExceptionHandler($e))($e, $req, $res);
     }
 
