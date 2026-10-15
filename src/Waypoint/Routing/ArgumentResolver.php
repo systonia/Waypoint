@@ -122,16 +122,28 @@ final class ArgumentResolver
      */
     private static function scalar(array $arg, string $name, Request $req, array $params): mixed
     {
-        $value = $params[$name] ?? $req->query($name);
+        return self::typed($arg, $name, $params[$name] ?? $req->query($name));
+    }
+
+    /**
+     * A value from the URL for a scalar parameter: converted to its type, a 422 if it is none. Missing: the
+     * parameter's default, null if it takes null, otherwise the type's empty value. Without a scalar type (an
+     * untyped #[Query], or an older cache) the value as it came.
+     * @param array<string, mixed> $arg
+     */
+    private static function typed(array $arg, string $name, mixed $value): mixed
+    {
         $type = $arg['type'] ?? null;
         if (!is_string($type)) {
-            // @codeCoverageIgnoreStart
-            // RouteCompiler always records the type for 'Scalar'.
             return $value;
-            // @codeCoverageIgnoreEnd
         }
         if ($value === null) {
-            // Missing entirely: the type's empty value, as before
+            if (array_key_exists('default', $arg)) {
+                return $arg['default'];
+            }
+            if ($arg['nullable'] ?? false) {
+                return null;
+            }
             settype($value, $type);
             return $value;
         }

@@ -391,11 +391,27 @@ final class RouteCompiler
                 ($query = self::attribute($param, Query::class)) !== null => ['inject' => 'Query', 'name' => $query->name ?? $param->getName()],
                 ($route = self::attribute($param, Param::class)) !== null => ['inject' => 'Route', 'name' => $route->name ?? $param->getName()],
                 $plugin !== null => $plugin,
-                in_array($type, ['string', 'int', 'float', 'bool'], true) => ['inject' => 'Scalar', 'name' => $param->getName(), 'type' => $type],
+                in_array($type, ['string', 'int', 'float', 'bool'], true) => ['inject' => 'Scalar', 'name' => $param->getName()] + self::scalarPlan($param, $type),
                 default => ['inject' => 'Unknown'],
             };
         }
         return $argPlan;
+    }
+
+    /**
+     * For a scalar parameter: its type, and what a missing value becomes (its default, null, or the type's empty value).
+     * @return array<string, mixed>
+     */
+    private static function scalarPlan(ReflectionParameter $param, ?string $type): array
+    {
+        if (!in_array($type, ['string', 'int', 'float', 'bool'], true)) {
+            return [];
+        }
+        $plan = ['type' => $type, 'nullable' => $param->allowsNull()];
+        if ($param->isDefaultValueAvailable()) {
+            $plan['default'] = $param->getDefaultValue();
+        }
+        return $plan;
     }
 
     /**

@@ -105,6 +105,15 @@ final class AppBootstrapTest extends IntegrationTestCase
         $this->assertArrayNotHasKey('Content-Length', $gone->headers());
     }
 
+    public function testAMissingScalarGetsItsDefaultOrNull(): void
+    {
+        $app = Waypoint::create();
+        $app->attach([\Waypoint\Tests\Fixtures\Controllers\PagingController::class]);
+
+        $this->assertSame(['page' => 5, 'size' => 20, 'sort' => null], json_decode($this->request('GET', '/paging')->send()->body(), true));
+        $this->assertSame(['page' => 2, 'size' => 20, 'sort' => 'name'], json_decode($this->request('GET', '/paging?page=2&sort=name')->send()->body(), true));
+    }
+
     public function testAControllerIsCreatedFreshForEveryRequest(): void
     {
         $app = Waypoint::create();
