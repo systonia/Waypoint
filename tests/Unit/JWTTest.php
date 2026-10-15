@@ -12,7 +12,7 @@ final class JWTTest extends TestCase
     {
         Waypoint::reset();
         Waypoint::create()->configure(function (JWTOptions $opts) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
         });
     }
 
@@ -81,7 +81,7 @@ final class JWTTest extends TestCase
     {
         $h = \Waypoint\Support\Base64Url::encodeJson($header);
         $p = \Waypoint\Support\Base64Url::encodeJson($payload);
-        return "$h.$p." . \Waypoint\Support\Base64Url::sign("$h.$p", 'test-secret');
+        return "$h.$p." . \Waypoint\Support\Base64Url::sign("$h.$p", 'test-secret-long-enough-for-hmac-32');
     }
 
     public function testDecodeRejectsATokenThatNeverExpires(): void
@@ -141,5 +141,11 @@ final class JWTTest extends TestCase
         $payload = JWT::fromRequestHeaders(['Authorization' => ["Bearer $token"]]);
 
         $this->assertSame('7', $payload['sub']);
+    }
+
+    public function testAShortSecretIsRefusedInsteadOfSigningWithIt(): void
+    {
+        $this->expectExceptionMessage('needs at least 32 bytes');
+        \Waypoint\Support\Base64Url::sign('data', '');
     }
 }

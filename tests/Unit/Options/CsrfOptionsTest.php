@@ -33,7 +33,7 @@ final class CsrfOptionsTest extends TestCase
     public function testSecretCanBeAssigned(): void
     {
         $opts = new CsrfOptions();
-        $opts->secret = 'super-secret';
-        $this->assertSame('super-secret', $opts->secret);
+        $opts->secret = 'super-secret-long-enough-for-hmac-32';
+        $this->assertSame('super-secret-long-enough-for-hmac-32', $opts->secret);
     }
 }

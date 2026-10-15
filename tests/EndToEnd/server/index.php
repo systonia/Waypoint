@@ -32,7 +32,7 @@ $app->configure(function (FileSystemOptions $fs) {
 });
 
 $app->configure(function (JWTOptions $opts) {
-    $opts->secret = 'e2e-test-secret';
+    $opts->secret = 'e2e-test-secret-long-enough-for-hmac';
 });
 $app->configure(function (RendererOptions $opts) {
     $opts->directory = __DIR__ . '/../../Fixtures/Views';

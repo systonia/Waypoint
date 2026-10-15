@@ -27,7 +27,7 @@ final class CsrfTest extends TestCase
 
         Waypoint::reset();
         Waypoint::create()->configure(function (CsrfOptions $opts) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
         });
     }
 
@@ -88,7 +88,7 @@ final class CsrfTest extends TestCase
         $token = Csrf::generateToken();
 
         Waypoint::create()->configure(function (CsrfOptions $opts) {
-            $opts->secret = 'a-different-secret';
+            $opts->secret = 'a-different-secret-long-enough-for-hmac';
         });
 
         $this->assertFalse(Csrf::isValidToken($token));

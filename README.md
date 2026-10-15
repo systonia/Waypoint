@@ -666,7 +666,7 @@ default), every request passes through unchecked, so this never breaks an app th
 use Waypoint\Options\CsrfOptions;
 
 $app->configure(function (CsrfOptions $opts) {
-    $opts->secret = $env->get('CSRF_SECRET'); // required to actually enable checking
+    $opts->secret = $env->get('CSRF_SECRET'); // required to actually enable checking, at least 32 bytes
     $opts->cookieSecure = true;               // default -- HTTPS only; set false for local HTTP dev
 });
 ```
@@ -1015,7 +1015,7 @@ in the future (`JWT::encode()` always sets one):
 use Waypoint\Options\JWTOptions;
 
 $app->configure(function (JWTOptions $opts, Environment $env) {
-    $opts->secret = $env->get('JWT_SECRET'); // required -- no default
+    $opts->secret = $env->get('JWT_SECRET'); // required, at least 32 bytes: bin2hex(random_bytes(32))
     $opts->ttl = 3600;                   // default, seconds
     $opts->tokenType = 'Bearer';         // default
     $opts->header = 'Authorization';     // default

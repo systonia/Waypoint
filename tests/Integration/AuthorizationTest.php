@@ -15,7 +15,7 @@ final class AuthorizationTest extends IntegrationTestCase
 
         $app = Waypoint::create();
         $app->configure(function (JWTOptions $opts) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
         });
         $app->attach([AuthorizationController::class, ClassAuthenticatedController::class, ClassRoleController::class, InheritedGuardsController::class]);
         $app->useJwt();

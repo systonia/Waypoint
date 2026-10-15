@@ -18,6 +18,10 @@ final class Base64Url
     /** base64url(HMAC-SHA256($data, $secret)) -- compare with hash_equals(). */
     public static function sign(string $data, string $secret): string
     {
+        // An empty secret (JWT_SECRET= in .env) signs too: then anyone can. Fails loudly instead
+        if (strlen($secret) < 32) {
+            throw new \LogicException('A signing secret (JWTOptions::$secret, CsrfOptions::$secret) needs at least 32 bytes, e.g. bin2hex(random_bytes(32))');
+        }
         return self::encode(hash_hmac('sha256', $data, $secret, true));
     }
 

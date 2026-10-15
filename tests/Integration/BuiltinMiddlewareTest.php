@@ -79,7 +79,7 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
     {
         $app = Waypoint::create();
         $app->configure(function (JWTOptions $opts) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
         });
         $token = JWT::encode(['sub' => '99']);
 
@@ -95,7 +95,7 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
     {
         $app = Waypoint::create();
         $app->configure(function (JWTOptions $opts) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
         });
         $app->attach([WhoAmIController::class]);
         $app->useJwt();
@@ -109,7 +109,7 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
     {
         $app = Waypoint::create();
         $app->configure(function (JWTOptions $opts) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
         });
         $token = JWT::encode(['sub' => '7']);
         $app->attach([WhoAmIController::class]);
@@ -138,7 +138,7 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
         // A cookie rides along on cross-site requests: signing in by cookie without CSRF protection is refused, loudly
         $app = Waypoint::create();
         $app->configure(function (JWTOptions $opts) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
             $opts->cookieName = 'auth_token';
         });
         $app->attach([WhoAmIController::class]);
@@ -154,9 +154,9 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
     {
         $app = Waypoint::create();
         $app->configure(function (JWTOptions $opts, CsrfOptions $csrf) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
             $opts->cookieName = 'auth_token';
-            $csrf->secret = 'csrf-secret';
+            $csrf->secret = 'csrf-secret-long-enough-for-hmac-32';
         });
         $token = JWT::encode(['sub' => '42']);
         $app->attach([WhoAmIController::class]);
@@ -176,9 +176,9 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
     {
         $app = Waypoint::create();
         $app->configure(function (JWTOptions $opts, CsrfOptions $csrf) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
             $opts->cookieName = 'auth_token';
-            $csrf->secret = 'csrf-secret';
+            $csrf->secret = 'csrf-secret-long-enough-for-hmac-32';
         });
         $app->attach([WhoAmIController::class]);
         $app->useJwt();
@@ -197,9 +197,9 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
     {
         $app = Waypoint::create();
         $app->configure(function (JWTOptions $opts, CsrfOptions $csrf) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
             $opts->cookieName = 'auth_token';
-            $csrf->secret = 'csrf-secret';
+            $csrf->secret = 'csrf-secret-long-enough-for-hmac-32';
         });
         $headerToken = JWT::encode(['sub' => '1']);
         $cookieToken = JWT::encode(['sub' => '2']);
@@ -220,7 +220,7 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
     {
         $app = Waypoint::create();
         $app->configure(function (JWTOptions $opts) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
         });
         $token = JWT::encode(['sub' => '5']);
         $app->attach([WhoAmIController::class]);
@@ -240,9 +240,9 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
     {
         $app = Waypoint::create();
         $app->configure(function (JWTOptions $opts, CsrfOptions $csrf) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
             $opts->cookieName = 'auth_token';
-            $csrf->secret = 'csrf-secret';
+            $csrf->secret = 'csrf-secret-long-enough-for-hmac-32';
         });
         $app->attach([WhoAmIController::class]);
         $app->useJwt();

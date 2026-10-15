@@ -20,7 +20,7 @@ class FullAppLiveTest extends LiveServerTestCase
     {
         Waypoint::reset();
         Waypoint::create()->configure(function (JWTOptions $opts) {
-            $opts->secret = 'e2e-test-secret';
+            $opts->secret = 'e2e-test-secret-long-enough-for-hmac';
         });
         $token = JWT::encode($payload);
         Waypoint::reset();

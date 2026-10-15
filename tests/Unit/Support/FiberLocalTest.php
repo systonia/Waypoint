@@ -50,7 +50,7 @@ final class FiberLocalTest extends TestCase
     public function testTheCsrfTokenIsKeptPerFiber(): void
     {
         Waypoint::create()->configure(function (CsrfOptions $opts) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
         });
         $csrf = new Csrf();
         $tokens = [];

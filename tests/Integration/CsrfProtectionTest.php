@@ -22,7 +22,7 @@ final class CsrfProtectionTest extends IntegrationTestCase
             $opts->directory = __DIR__ . '/../Fixtures/Views';
         });
         $app->configure(function (CsrfOptions $opts) {
-            $opts->secret = 'test-secret';
+            $opts->secret = 'test-secret-long-enough-for-hmac-32';
         });
         $app->attach([CsrfFormController::class]);
     }
