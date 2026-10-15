@@ -121,7 +121,14 @@ final class FileSystem
         $meta = $extraMeta;
         $meta[ViewAssets::WAYPOINT_JS] = filemtime(ViewAssets::WAYPOINT_JS) ?: 0;
         $meta[__DIR__] = self::frameworkMtime();
+        // The plans hold what the controllers' #[Middleware] classes inject and which #[Body] DTOs they build too
+        $classes = $controllers;
         foreach ($controllers as $controller) {
+            if (class_exists($controller)) {
+                $classes = [...$classes, ...self::referencedClasses(new ReflectionClass($controller))];
+            }
+        }
+        foreach (array_unique($classes) as $controller) {
             if (!class_exists($controller)) {
                 continue;
             }
@@ -145,6 +152,41 @@ final class FileSystem
             }
         }
         return $meta;
+    }
+
+    /**
+     * The #[Middleware] classes of a controller and its routes, and the #[Body] DTO classes its routes take.
+     * @param ReflectionClass<object> $controller
+     * @return list<class-string>
+     */
+    private static function referencedClasses(ReflectionClass $controller): array
+    {
+        $found = [];
+        $holders = [$controller, ...$controller->getMethods()];
+        foreach ($holders as $holder) {
+            foreach ($holder->getAttributes(\Waypoint\Attributes\Middleware::class) as $attribute) {
+                $class = $attribute->getArguments()[0] ?? $attribute->getArguments()['class'] ?? null;
+                if (is_string($class) && class_exists($class)) {
+                    $found[] = $class;
+                }
+            }
+        }
+        foreach ($controller->getMethods() as $method) {
+            foreach ($method->getParameters() as $param) {
+                $body = $param->getAttributes(\Waypoint\Attributes\Body::class)[0] ?? null;
+                if ($body === null) {
+                    continue;
+                }
+                $type = $param->getType();
+                $candidates = [$type instanceof \ReflectionNamedType ? $type->getName() : null, $body->getArguments()['of'] ?? null];
+                foreach ($candidates as $class) {
+                    if (is_string($class) && class_exists($class)) {
+                        $found[] = $class;
+                    }
+                }
+            }
+        }
+        return $found;
     }
 
     /** The newest mtime among the framework's own PHP files; once per process, they only change with a deploy. */

@@ -121,6 +121,27 @@ final class FileSystemCacheTest extends IntegrationTestCase
         $this->assertFalse($fileSystem->isAvailable([CustomersController::class]));
     }
 
+    public function testIsAvailableInvalidatesWhenAMiddlewareOfAControllerChanges(): void
+    {
+        [$options, $fileSystem] = $this->fileSystem();
+        $controller = \Waypoint\Tests\Fixtures\Controllers\ClassMiddlewareController::class;
+        $this->router([$controller], [], $options);
+        $this->assertTrue($fileSystem->isAvailable([$controller]));
+
+        // Its plan holds what the middleware injects: a new #[Inject] there must recompile
+        $attribute = (new \ReflectionClass($controller))->getAttributes(\Waypoint\Attributes\Middleware::class)[0];
+        $file = (string) (new \ReflectionClass($attribute->newInstance()->class))->getFileName();
+        $original = filemtime($file);
+        touch($file, $original + 10);
+        clearstatcache();
+        try {
+            $this->assertFalse($fileSystem->isAvailable([$controller]));
+        } finally {
+            touch($file, $original);
+            clearstatcache();
+        }
+    }
+
     public function testIsAvailableInvalidatesWhenABaseControllerOrTheFrameworkChanges(): void
     {
         [$options, $fileSystem] = $this->fileSystem();
