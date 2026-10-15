@@ -93,6 +93,16 @@ final class AppBootstrapTest extends IntegrationTestCase
         $this->assertNotSame($first, $third);
     }
 
+    public function testAControllerIsCreatedFreshForEveryRequest(): void
+    {
+        $app = Waypoint::create();
+        $app->attach([\Waypoint\Tests\Fixtures\Controllers\VisitsController::class]);
+
+        foreach ([1, 2, 3] as $_) {
+            $this->assertSame('1', $this->request('GET', '/visits')->send()->body());
+        }
+    }
+
     public function testAttachWalksInjectAttributesOnAPromotedConstructorPropertyToo(): void
     {
         // #[Inject] on a *promoted* constructor property is visible on both
