@@ -22,7 +22,9 @@ final class TrustedProxies
                 break;
             }
         }
-        $proto = strtolower(trim(explode(',', $req->headers['X-Forwarded-Proto'] ?? '')[0]));
+        // The right-most value is what the nearest proxy saw; one that appends keeps the client's own in front
+        $protos = explode(',', $req->headers['X-Forwarded-Proto'] ?? '');
+        $proto = strtolower(trim((string) end($protos)));
         if ($proto === 'https' || $proto === 'http') {
             $req->https = $proto === 'https';
         }

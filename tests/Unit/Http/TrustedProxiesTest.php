@@ -21,6 +21,15 @@ final class TrustedProxiesTest extends TestCase
         $this->assertTrue($req->https);
     }
 
+    public function testTheSchemeIsTheOneTheNearestProxySawNotTheClientsOwn(): void
+    {
+        // The client sent "https" itself over plain HTTP, the proxy appended what it really saw
+        $req = self::request('10.1.2.3', '203.0.113.9', 'https, http');
+        TrustedProxies::apply($req, ['10.0.0.0/8']);
+
+        $this->assertFalse($req->https);
+    }
+
     public function testAnyoneElseIsIgnored(): void
     {
         $req = self::request('198.51.100.7', '127.0.0.1', 'https');
