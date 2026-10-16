@@ -15,7 +15,7 @@ final class CsrfOptionsTest extends TestCase
         $this->assertSame('csrf_token', $opts->cookieName);
         $this->assertSame('X-CSRF-Token', $opts->headerName);
         $this->assertSame('_csrf', $opts->fieldName);
-        $this->assertTrue($opts->cookieSecure);
+        $this->assertNull($opts->cookieSecure);
         $this->assertSame('Lax', $opts->cookieSameSite);
     }
 

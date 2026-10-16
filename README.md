@@ -711,7 +711,7 @@ use Waypoint\Options\CsrfOptions;
 
 $app->configure(function (CsrfOptions $opts, Environment $env) {
     $opts->secret = $env->get('CSRF_SECRET'); // required to actually enable checking, at least 32 bytes
-    $opts->cookieSecure = true;               // default: HTTPS only; set false for local HTTP dev
+    $opts->cookieSecure = null;               // default: Secure exactly when the request came over HTTPS
 });
 ```
 
@@ -1094,7 +1094,7 @@ protection: with `cookieName` set and no `CsrfOptions::$secret`, `useJwt()` fail
 500 instead of running unprotected.
 
 Issue that cookie from your own login endpoint with `Response::withCookie()` (HttpOnly and
-`SameSite=Lax` by default), and clear it on logout with `withoutCookie()`:
+`SameSite=Lax` by default, `Secure` when the request came over HTTPS), and clear it on logout with `withoutCookie()`:
 
 ```php
 #[Post('/login')]
@@ -1535,7 +1535,7 @@ An unconfigured Options class still resolves; every setting below already shows 
 | `cookieName` | `'csrf_token'` | Name of the double-submit cookie the token is issued under. Deliberately not HttpOnly: client-side JS must be able to read it. |
 | `headerName` | `'X-CSRF-Token'` | Request header checked first for the submitted token (the AJAX/fetch path). |
 | `fieldName` | `'_csrf'` | Request body field checked when the header isn't present (the classic no-JS `<form>` path). |
-| `cookieSecure` | `true` | The CSRF cookie's own `Secure` attribute. Set `false` explicitly for a local HTTP-only dev environment. |
+| `cookieSecure` | `null` | The CSRF cookie's own `Secure` attribute; `null` follows the request (`$req->https`). |
 | `cookieSameSite` | `'Lax'` | The CSRF cookie's own `SameSite` attribute. |
 
 ### [EnvironmentOptions](#environment-variables)

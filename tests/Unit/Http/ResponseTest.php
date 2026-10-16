@@ -259,6 +259,17 @@ final class ResponseTest extends TestCase
         );
     }
 
+    public function testACookieIsSecureByDefaultExactlyWhenTheRequestCameOverHttps(): void
+    {
+        $https = (new Response())->forRequest(Request::fromParts('GET', '/', https: true))->withCookie('a', '1');
+        $plain = (new Response())->forRequest(Request::fromParts('GET', '/'))->withCookie('a', '1');
+        $forced = (new Response())->forRequest(Request::fromParts('GET', '/'))->withCookie('a', '1', secure: true);
+
+        $this->assertSame('a=1; Path=/; Secure; HttpOnly; SameSite=Lax', $https->getCookies()[0]);
+        $this->assertSame('a=1; Path=/; HttpOnly; SameSite=Lax', $plain->getCookies()[0]);
+        $this->assertSame('a=1; Path=/; Secure; HttpOnly; SameSite=Lax', $forced->getCookies()[0]);
+    }
+
     public function testWithCookieOmitsSameSiteWhenExplicitlyNull(): void
     {
         $res = (new Response())->withCookie('session', 'abc123', sameSite: null);

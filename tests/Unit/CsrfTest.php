@@ -250,9 +250,11 @@ final class CsrfTest extends TestCase
     public function testIssueForSetsANonHttpOnlyCookieWhenNoneExistsYet(): void
     {
         $csrf = new Csrf();
+        $req = Request::fromParts('GET', '/', https: true);
         $res = new Response();
 
-        $csrf->issueFor($this->captureRequest(), $res);
+        $csrf->issueFor($req, $res->forRequest($req));
+        $res->finalize();
 
         ob_start();
         $res->send();
@@ -265,6 +267,19 @@ final class CsrfTest extends TestCase
         $this->assertStringContainsString('Secure', $cookieLine);
         $this->assertStringContainsString('SameSite=Lax', $cookieLine);
         $this->assertStringContainsString('Max-Age=3600', $cookieLine);
+    }
+
+    public function testTheCookieIsSecureOnlyOverHttpsUnlessConfigured(): void
+    {
+        $plain = Request::fromParts('GET', '/');
+        $res = (new Response())->forRequest($plain);
+        (new Csrf())->issueFor($plain, $res);
+        $this->assertStringNotContainsString('Secure', $res->getCookies()[0]);
+
+        Waypoint::getConfig(CsrfOptions::class)->cookieSecure = true;
+        $res = (new Response())->forRequest($plain);
+        (new Csrf())->issueFor($plain, $res);
+        $this->assertStringContainsString('Secure', $res->getCookies()[0]);
     }
 
     public function testIssueForReusesAnExistingValidCookieInsteadOfRotating(): void

@@ -142,11 +142,11 @@ public function create(#[Body] NewProduct $product, Response $res): array
 ### Cookies
 
 ```php
-$res->withCookie('theme', 'dark', maxAge: 60 * 60 * 24 * 365, secure: true);
+$res->withCookie('theme', 'dark', maxAge: 60 * 60 * 24 * 365);
 $res->withoutCookie('theme');
 ```
 
-[`withCookie()`](../reference/Waypoint/Http/Response.md#withcookie) defaults to `Path=/`, `HttpOnly` and `SameSite=Lax`, the right defaults for a session cookie. `maxAge: null` (the default) makes a session cookie that ends with the browser session; `secure: true` limits it to HTTPS. `httpOnly: false` lets JavaScript read it, and `sameSite: null` leaves the attribute out. `withoutCookie()` needs the same `path` and `domain` the cookie was set with.
+[`withCookie()`](../reference/Waypoint/Http/Response.md#withcookie) defaults to `Path=/`, `HttpOnly` and `SameSite=Lax`, the right defaults for a session cookie. `maxAge: null` (the default) makes a session cookie that ends with the browser session; `Secure` (HTTPS only) is set when the request came over HTTPS (`$req->https`); `secure: true` or `false` decides it yourself. `httpOnly: false` lets JavaScript read it, and `sameSite: null` leaves the attribute out. `withoutCookie()` needs the same `path` and `domain` the cookie was set with.
 
 ## JSON
 

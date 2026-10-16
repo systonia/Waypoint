@@ -23,8 +23,8 @@ class CsrfOptions
     /** Body field checked second (the plain `<form>` path, see Csrf::field()). */
     public string $fieldName = '_csrf';
 
-    /** Cookie Secure attribute. True by default; set false only for HTTP-only local dev. */
-    public bool $cookieSecure = true;
+    /** Cookie Secure attribute. Null (default): Secure when the request came over HTTPS (behind a trusted proxy, as it says). */
+    public ?bool $cookieSecure = null;
 
     /** Cookie SameSite attribute; 'Lax' still sends it on a top-level navigation into a form. */
     public string $cookieSameSite = 'Lax';

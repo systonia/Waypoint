@@ -19,7 +19,6 @@ $app->configure(function (JWTOptions $jwt, CsrfOptions $csrf, Environment $env) 
     $jwt->loginRedirectUrl = '/login';
 
     $csrf->secret = $env->get('CSRF_SECRET');
-    $csrf->cookieSecure = !$env->isDev();
 });
 
 $app->useJwt();
@@ -279,7 +278,7 @@ It is on as soon as `CsrfOptions::$secret` is set. Then every `POST`, `PUT`, `PA
 | `ttl` | `3600` | lifetime of a token and its cookie in seconds |
 | `cookieName` | `csrf_token` | readable by JavaScript on purpose |
 | `headerName`, `fieldName` | `X-CSRF-Token`, `_csrf` | where the token is repeated |
-| `cookieSecure`, `cookieSameSite` | `true`, `Lax` | the cookie's attributes; `cookieSecure = false` only for plain-HTTP development |
+| `cookieSecure`, `cookieSameSite` | `null`, `Lax` | the cookie's attributes; `null` sets `Secure` exactly when the request came over HTTPS (`$req->https`, behind a [trusted proxy](proxies.md) as it says) |
 
 ### #[SkipCsrf]
 

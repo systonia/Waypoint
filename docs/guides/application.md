@@ -27,7 +27,6 @@ $app->configure(function (FileSystemOptions $fs, JWTOptions $jwt, CsrfOptions $c
     $fs->cacheDirectory = dirname(__DIR__) . '/var/cache';
     $jwt->secret = $env->get('JWT_SECRET');
     $csrf->secret = $env->get('CSRF_SECRET');
-    $csrf->cookieSecure = !$env->isDev();
 });
 
 // 3. attach

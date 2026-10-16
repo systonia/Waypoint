@@ -112,6 +112,7 @@ class Response
     /**
      * Queues a Set-Cookie. HttpOnly and SameSite=Lax by default, the right defaults for a session cookie.
      * @param int|null $maxAge Seconds; null makes it a session cookie.
+     * @param bool|null $secure Null: Secure when the request this answers came over HTTPS (Request::$https).
      * @param string|null $sameSite 'Lax', 'Strict', 'None', or null to omit the attribute.
      */
     public function withCookie(
@@ -120,10 +121,11 @@ class Response
         ?int $maxAge = null,
         string $path = '/',
         ?string $domain = null,
-        bool $secure = false,
+        ?bool $secure = null,
         bool $httpOnly = true,
         ?string $sameSite = 'Lax'
     ): self {
+        $secure ??= $this->request !== null && $this->request->https;
         $parts = [rawurlencode($name) . '=' . rawurlencode($value)];
         if ($path !== '') {
             $parts[] = "Path=$path";

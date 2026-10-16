@@ -42,7 +42,7 @@ Waypoint's defaults are chosen to fail closed: a missing secret stops the app in
 
 - **Escape in templates.** Views don't escape on their own: every value from the model, the request or the database goes through `htmlspecialchars()`.
 - **Keep secrets out of the repository.** Read them from [`Environment`](application.md#environment-and-env-files): `.env` and `config.local.json` belong in `.gitignore`.
-- **Set `cookieSecure`.** Use `secure: true` for the session cookie and leave `CsrfOptions::$cookieSecure` on everywhere but local plain HTTP.
+- **Serve over HTTPS.** Cookies (`withCookie()`, the CSRF cookie) get `Secure` when the request came over HTTPS; behind a proxy that ends TLS, list it in `ProxyOptions` so `$req->https` is right, or set `secure: true` and `CsrfOptions::$cookieSecure = true` yourself.
 - **Check redirect targets.** Never redirect to a URL from the request without checking it against your own paths.
 - **Treat uploads as untrusted.** Never use the client's file name as a path; check the content, not the declared type (see [Requests and responses](requests-responses.md#uploaded-files)).
 - **Keep tokens short-lived.** A JWT stays valid until it expires and can't be revoked individually. Keep `JWTOptions::$ttl` short, and check whatever must be revocable (a disabled account) against the database in a [permission provider](authentication.md#roles-and-permissions) or middleware.
