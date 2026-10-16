@@ -144,8 +144,8 @@ A form posts to a route, which either redirects after success or renders the pag
 namespace App\Controllers;
 
 use App\Dto\ContactMessage;
-use Waypoint\Attributes\{Controller, Get, Post};
-use Waypoint\Http\{Redirect, Request, View};
+use Waypoint\Attributes\{Body, Controller, Get, Post};
+use Waypoint\Http\{Redirect, View};
 
 #[Controller('/contact')]
 final class ContactController
@@ -157,9 +157,12 @@ final class ContactController
     }
 
     #[Post('')]
-    public function send(Request $req): View|Redirect
-    {
-        $form = new ContactMessage($req->body());
+    public function send(
+        #[Body(
+            validate: false
+        )]
+        ContactMessage $form
+    ): View|Redirect {
         if (!$form->isValid) {
             return new View('Contact', ['title' => 'Contact', 'form' => $form, 'errors' => $form->errors]);
         }

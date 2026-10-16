@@ -4,6 +4,7 @@ namespace Waypoint\Tests\Integration;
 
 use Waypoint\Waypoint;
 use Waypoint\Http\Request;
+use Waypoint\Options\RendererOptions;
 use Waypoint\Tests\Fixtures\Controllers\BodyBindingController;
 
 final class BodyBindingTest extends IntegrationTestCase
@@ -37,6 +38,17 @@ final class BodyBindingTest extends IntegrationTestCase
         $res = $this->request('POST', '/body/shipment')->withJson(['status' => 'lost', 'to' => ['city' => ''], 'stops' => [['city' => '']]])->send();
         $this->assertSame(422, $res->status());
         $this->assertSame(['status', 'to.city', 'stops.0.city'], array_keys($res->json()['errors'] ?? []));
+    }
+
+    public function testWithoutValidationTheMethodGetsTheInvalidDtoAndAViewAnswers422(): void
+    {
+        Waypoint::create()->configure(fn (RendererOptions $views) => $views->directory = __DIR__ . '/../Fixtures/Views');
+
+        $res = $this->request('POST', '/body/form')->withBody(['qty' => '2'])->send();
+        $this->assertSame(422, $res->status());
+        $res->assertContentType('text/html');
+
+        $this->request('POST', '/body/form')->withBody(['name' => 'Ada'])->send()->assertOk()->assertJson(['name' => 'Ada']);
     }
 
     public function testAMalformedJsonBodyIsABadRequest(): void

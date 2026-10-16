@@ -549,6 +549,10 @@ class Router
     private function renderResult(mixed $result, Request $req, Response $res, mixed $formatter): void
     {
         if ($result instanceof View) {
+            // The form shown again for an invalid #[Body(validate: false)] DTO: the page, but no 200
+            if ($req->bodyDto !== null && $res->getStatus() === 200 && ArgumentResolver::errors($req->bodyDto) !== []) {
+                $res->status(422);
+            }
             $this->renderView($result, $req, $res);
             return;
         }

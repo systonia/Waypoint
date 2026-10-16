@@ -149,9 +149,10 @@ final class ArgumentResolver
     /**
      * A FromArray DTO also knows what didn't fit its types. Any other DTO's own $errors is no verdict: it may be a
      * default or a value the client sent, and the rules would never run.
+     * @internal Router asks it too, for a View answering an invalid #[Body(validate: false)] DTO.
      * @return array<array-key, mixed>
      */
-    private static function errors(object $dto, Validator $validator): array
+    public static function errors(object $dto, Validator $validator = new Validator()): array
     {
         $traits = array_merge(class_uses($dto), ...array_map(class_uses(...), array_values(class_parents($dto))));
         return in_array(FromArray::class, $traits, true) && property_exists($dto, 'errors') && is_array($dto->errors) ? $dto->errors : $validator->validate($dto);

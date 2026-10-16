@@ -457,8 +457,9 @@ A DTO that needs extra logic around hydration (not just the plain loop) can decl
 
 #### Validating by hand (`$dto->isValid`, `$dto->errors`, `fail()`)
 
-Outside `#[Body]` (an HTML form handler that re-renders the page with the errors instead of a 422), the
-DTO validates itself. `isValid` and `errors` are computed properties: every read applies the attribute
+For an HTML form handler that re-renders the page with the errors, bind with `#[Body(validate: false)]`: the
+method gets the DTO even when it is invalid, and a `View` it returns then answers with status `422`. Built by
+hand or bound that way, the DTO validates itself. `isValid` and `errors` are computed properties: every read applies the attribute
 rules, so there is no validator to construct and no moment where the result is stale. `fail()` adds a
 failure only your code can know about (a taken email, a wrong current password) to the same list:
 

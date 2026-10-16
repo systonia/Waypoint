@@ -291,8 +291,8 @@ namespace App\Controllers;
 
 use App\Dto\Registration;
 use App\Services\Accounts;
-use Waypoint\Attributes\{Controller, Inject, Post};
-use Waypoint\Http\{Redirect, Request, View};
+use Waypoint\Attributes\{Body, Controller, Inject, Post};
+use Waypoint\Http\{Redirect, View};
 
 #[Controller('/register')]
 final class RegistrationController
@@ -301,9 +301,12 @@ final class RegistrationController
     private Accounts $accounts;
 
     #[Post('')]
-    public function register(Request $req): View|Redirect
-    {
-        $form = new Registration($req->body());
+    public function register(
+        #[Body(
+            validate: false
+        )]
+        Registration $form
+    ): View|Redirect {
         if ($form->isValid && $this->accounts->exists($form->email)) {
             $form->fail('email', 'This email is already registered.');
         }
@@ -316,7 +319,7 @@ final class RegistrationController
 }
 ```
 
-This is the shape for HTML forms: instead of a `422`, the page is shown again with the messages next to the fields (see [Views](views.md#forms)). `errors` maps each field to one message, the attribute rules first and `fail()` entries after them; a later `fail()` for the same field replaces the earlier one. `errors` and `isValid` never appear in the [OpenAPI](openapi.md) schemas or in [redacted logs](logging.md#redacting-sensitive-values).
+`#[Body(validate: false)]` binds the DTO without answering `422` first, so the method sees an invalid one too. This is the shape for HTML forms: the page is shown again with the messages next to the fields (see [Views](views.md#forms)). A `View` returned while the bound DTO is invalid answers with status `422`, so a test or a script sees the failed submission. The same works with `new Registration($req->body())` when the DTO is built by hand, without the `422`. `errors` maps each field to one message, the attribute rules first and `fail()` entries after them; a later `fail()` for the same field replaces the earlier one. `errors` and `isValid` never appear in the [OpenAPI](openapi.md) schemas or in [redacted logs](logging.md#redacting-sensitive-values).
 
 To answer `422` yourself from anywhere, throw a [`ValidationException`](../reference/Waypoint/Exceptions/ValidationException.md):
 

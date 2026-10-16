@@ -421,9 +421,9 @@ final class RouteCompiler
             $argPlan[] = match (true) {
                 $type === Request::class => ['inject' => 'Request'],
                 $type === Response::class => ['inject' => 'Response'],
-                $body !== null && $type !== null && class_exists($type) => ['inject' => 'Body', 'class' => $type, 'validate' => true],
+                $body !== null && $type !== null && class_exists($type) => ['inject' => 'Body', 'class' => $type, 'validate' => $body->validate],
                 $type !== null && class_exists($type) && self::attribute($param, Claims::class) !== null => ['inject' => 'Claims', 'class' => $type, 'nullable' => $param->allowsNull()],
-                $body !== null && in_array($type, ['array', 'iterable'], true) && $of !== null && class_exists($of) => ['inject' => 'BodyCollection', 'class' => $of, 'validate' => true],
+                $body !== null && in_array($type, ['array', 'iterable'], true) && $of !== null && class_exists($of) => ['inject' => 'BodyCollection', 'class' => $of, 'validate' => $body->validate],
                 $body !== null && in_array($type, ['array', 'iterable'], true) => ['inject' => 'BodyArray'],
                 ($query = self::attribute($param, Query::class)) !== null => ['inject' => 'Query', 'name' => $query->name ?? $param->getName()] + self::scalarPlan($param, $type),
                 ($route = self::attribute($param, Param::class)) !== null => ['inject' => 'Route', 'name' => $route->name ?? $param->getName()] + self::scalarPlan($param, $type),
