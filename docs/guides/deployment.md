@@ -12,7 +12,7 @@ composer install --no-dev --classmap-authoritative
 
 ## Configuration
 
-Production values come from the [environment](application.md#environment-and-env-files): real environment variables set by the service manager or container, or a `.env` file next to the code that is not in the repository. `config.json` and `config.production.json` hold committed defaults.
+Production values come from the [environment](application.md#environment-and-env-files): real environment variables set by the service manager or container, or a `.env` file next to the code that is not in the repository. `config.json` and `config.production.json` hold committed defaults; `.env` overrides them, and a real environment variable overrides both.
 
 ```bash
 # .env on the server, readable only by the app's user

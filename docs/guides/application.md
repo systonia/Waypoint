@@ -80,9 +80,9 @@ A plugin brings its own Options class, configured the same way (see [Plugins](pl
 
 Secrets and per-machine settings come from [`Environment`](../reference/Waypoint/Environment.md), never from `getenv()` or `$_ENV` directly. It merges several sources; each later one adds to and overrides the earlier ones:
 
-1. the process environment, then `$_ENV`, then `$_SERVER`,
+1. `config.json`, then `config.<APP_ENV>.json`: the committed defaults,
 2. `.env`, then `.env.<APP_ENV>`,
-3. `config.json`, then `config.<APP_ENV>.json`,
+3. the real process environment (`getenv()`, then `$_ENV`, then `$_SERVER`), so a variable a server or container sets wins over the files,
 4. `config.local.json` (`EnvironmentOptions::$localConfigFile`).
 
 A value set with `Environment::set()` wins over all of them. Missing files are skipped. Keys starting with `HTTP_` are never read from any source: under FPM and CGI those are the request's headers, which the client chose.

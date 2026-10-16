@@ -5,10 +5,10 @@ namespace Waypoint\Options;
 use Waypoint\Support\Arr;
 
 /**
- * The env key/values Waypoint\Environment reads: system env, $_ENV, $_SERVER,
- * .env, .env.$APP_ENV, config.json, config.$APP_ENV.json, then
- * $localConfigFile, each overlaid on the last. get()/isDev() load lazily on
- * first use; configure explicitly only to point load() at another directory.
+ * The env key/values Waypoint\Environment reads, each layer overriding the one before: the committed defaults
+ * config.json and config.$APP_ENV.json, then .env and .env.$APP_ENV, then the real process environment (system
+ * env, $_ENV, $_SERVER), then $localConfigFile, then set(). get()/isDev() load lazily on first use; configure
+ * explicitly only to point load() at another directory.
  */
 class EnvironmentOptions
 {
@@ -27,31 +27,34 @@ class EnvironmentOptions
     public function load(?string $dir = null): self
     {
         $this->loaded = true;
-        $this->data = [];
+        $process = [];
         // Without the request's headers: HTTP_* comes from the client (HTTP_PROXY, httpoxy). FPM puts them into
         // $_ENV as well as $_SERVER, and a CGI server into the process environment.
         foreach ([getenv(), $_ENV, $_SERVER] as $source) {
             foreach (Arr::stringMap($source) as $key => $val) {
                 if (!str_starts_with($key, 'HTTP_')) {
-                    $this->data[$key] = $val;
+                    $process[$key] = $val;
                 }
             }
         }
 
         $base = rtrim($dir ?? (getcwd() ?: __DIR__), '/\\');
-        $this->extendWithEnvFile("$base/.env");
+        $dotenv = self::readEnvFile("$base/.env");
 
-        $env = $this->overrides['APP_ENV'] ?? $this->data['APP_ENV'] ?? null;
+        $env = $this->overrides['APP_ENV'] ?? $process['APP_ENV'] ?? $dotenv['APP_ENV'] ?? null;
         $env = is_string($env) ? $env : $this->detectEnvironment();
-        $this->data['APP_ENV'] = $env;
 
-        $this->extendWithEnvFile("$base/.env.$env");
-        $this->extendWithJsonFile("$base/config.json");
-        $this->extendWithJsonFile("$base/config.$env.json");
-        if ($this->localConfigFile !== null) {
-            $this->extendWithJsonFile("$base/{$this->localConfigFile}");
-        }
-        $this->data = $this->overrides + $this->data;
+        // Committed JSON is the default; .env files, then the real environment, then the local JSON override it
+        $this->data = array_replace(
+            self::readJsonFile("$base/config.json"),
+            self::readJsonFile("$base/config.$env.json"),
+            $dotenv,
+            self::readEnvFile("$base/.env.$env"),
+            $process,
+            $this->localConfigFile !== null ? self::readJsonFile("$base/{$this->localConfigFile}") : [],
+            $this->overrides,
+            ['APP_ENV' => $env],
+        );
         return $this;
     }
 
@@ -81,19 +84,21 @@ class EnvironmentOptions
     /**
      * KEY=value lines; '#' comments and blank lines skipped, a leading `export ` dropped. A quoted value is what stands
      * between its quotes; an unquoted one ends at a ' #' comment. Missing file is fine.
+     * @return array<string, string>
      */
-    private function extendWithEnvFile(string $file): void
+    private static function readEnvFile(string $file): array
     {
         if (!is_file($file)) {
-            return;
+            return [];
         }
         $handle = @fopen($file, 'r');
         if (!$handle) {
             // @codeCoverageIgnoreStart
             // only a delete/permission race after is_file().
-            return;
+            return [];
             // @codeCoverageIgnoreEnd
         }
+        $values = [];
         while (($line = fgets($handle)) !== false) {
             $line = trim($line);
             $equals = strpos($line, '=');
@@ -105,26 +110,28 @@ class EnvironmentOptions
             $value = trim(substr($line, $equals + 1));
             $quote = $value[0] ?? '';
             $end = $quote === '"' || $quote === "'" ? strpos($value, $quote, 1) : false;
-            $this->data[$key] = $end !== false ? substr($value, 1, $end - 1) : (string) preg_replace('/\s+#.*$/', '', $value);
+            $values[$key] = $end !== false ? substr($value, 1, $end - 1) : (string) preg_replace('/\s+#.*$/', '', $value);
         }
         fclose($handle);
+        return $values;
     }
 
-    /** A flat JSON object; values keep their decoded type. Missing or malformed is silently skipped. */
-    private function extendWithJsonFile(string $file): void
+    /**
+     * A flat JSON object; values keep their decoded type. Missing or malformed is silently skipped.
+     * @return array<string, mixed>
+     */
+    private static function readJsonFile(string $file): array
     {
         if (!is_file($file)) {
-            return;
+            return [];
         }
         $contents = @file_get_contents($file);
         if ($contents === false) {
             // @codeCoverageIgnoreStart
-            return;
+            return [];
             // @codeCoverageIgnoreEnd
         }
-        foreach (Arr::stringKeyed(json_decode($contents, true)) as $key => $val) {
-            $this->data[$key] = $val;
-        }
+        return Arr::stringKeyed(json_decode($contents, true));
     }
 
     private function detectEnvironment(): string

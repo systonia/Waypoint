@@ -58,6 +58,34 @@ final class EnvironmentOptionsTest extends TestCase
         }
     }
 
+    public function testCommittedJsonIsTheDefaultThenEnvFilesThenTheProcessThenTheLocalFile(): void
+    {
+        $dir = sys_get_temp_dir() . '/waypoint-env-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        file_put_contents("$dir/config.json", '{"WP_A":"json","WP_B":"json","WP_C":"json","WP_D":"json","WP_E":"json"}');
+        file_put_contents("$dir/.env", "WP_A=dotenv\nWP_B=dotenv\nWP_C=dotenv\nAPP_ENV=staging\n");
+        file_put_contents("$dir/.env.staging", "WP_A=dotenv-staging\n");
+        file_put_contents("$dir/config.local.json", '{"WP_C":"local"}');
+        putenv('WP_B=process');
+        putenv('WP_C=process');
+        try {
+            $opts = (new EnvironmentOptions())->set('WP_E', 'set')->load($dir);
+            $this->assertSame('staging', $opts->get('APP_ENV'));
+            $this->assertSame('dotenv-staging', $opts->get('WP_A'));
+            $this->assertSame('process', $opts->get('WP_B'));
+            $this->assertSame('local', $opts->get('WP_C'));
+            $this->assertSame('json', $opts->get('WP_D'));
+            $this->assertSame('set', $opts->get('WP_E'));
+        } finally {
+            putenv('WP_B');
+            putenv('WP_C');
+            foreach (['config.json', '.env', '.env.staging', 'config.local.json'] as $file) {
+                unlink("$dir/$file");
+            }
+            rmdir($dir);
+        }
+    }
+
     public function testLoadOverlaysDollarEnvSuperglobal(): void
     {
         $_ENV['TEST_FROM_DOLLAR_ENV'] = 'from-dollar-env';

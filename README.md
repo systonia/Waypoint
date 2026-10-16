@@ -1376,9 +1376,9 @@ a controller/service. `get($key)`/`isDev()` lazily call `load()` on first use if
 yet. `load(?string $dir = null)` reads, from `$dir`, each of these in order; later ones overlay (add
 to/override) earlier ones:
 
-1. System env vars, then `$_ENV`, then `$_SERVER`
+1. `config.json`, then `config.$APP_ENV.json` (committed defaults)
 2. `.env`, then `.env.$APP_ENV`
-3. `config.json`, then `config.$APP_ENV.json`
+3. System env vars, then `$_ENV`, then `$_SERVER` (the real environment wins over the files)
 4. `$opts->localConfigFile` (default `config.local.json`), see below
 
 A value given with `set($key, $value)` wins over all of them, also when it was set before the first or a
