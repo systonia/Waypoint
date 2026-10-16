@@ -37,6 +37,26 @@ class TenmaLiveTest extends FullAppLiveTest
         return null;
     }
 
+    public function testTheFrontControllerRunsATaskWhenStartedWithItsName(): void
+    {
+        $process = proc_open([(string) self::tenma(), dirname(__DIR__) . '/EndToEnd/server/index.php', 'maintenance:ping'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, array_diff_key(getenv(), ['E2E_PSR' => true]));
+        $this->assertIsResource($process);
+        $deadline = microtime(true) + 10;
+        while (proc_get_status($process)['running'] && microtime(true) < $deadline) {
+            usleep(20_000);
+        }
+        $status = proc_get_status($process);
+        if ($status['running']) {
+            proc_terminate($process);
+            $this->fail('Still running: serve() started the server instead of the task');
+        }
+        $output = stream_get_contents($pipes[1]);
+        proc_close($process);
+
+        $this->assertSame('pong:2', $output);
+        $this->assertSame(0, $status['exitcode']);
+    }
+
     public function testInterleavedRequestsKeepTheirRequestAndRequestIdIntoChildTasks(): void
     {
         // Both at once: they wait side by side in one worker, each with a child task of its own

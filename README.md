@@ -1276,6 +1276,7 @@ $app->serve();
 
 ```bash
 php index.php users:sync
+tenma index.php users:sync   # under Tenma: runs the task in a Tenma task (Postgres pool, fetch) instead of serving
 ```
 
 ---

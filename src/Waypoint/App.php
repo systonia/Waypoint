@@ -169,7 +169,9 @@ class App
     /**
      * The one line at the end of index.php, whatever runs it. Under Tenma it starts the server on $port, or on
      * PORT from the Environment (8080 without one), and Tenma serves FileSystemOptions::$publicDirectory itself,
-     * without PHP; under FPM, php -S or the CLI it is run(), and Waypoint serves that directory.
+     * without PHP; started with arguments (`tenma index.php users:sync`) it runs that CLI task instead, in a Tenma
+     * task so it can wait on Postgres or fetch(), and exits with its code. Under FPM, php -S or the CLI it is run(),
+     * and Waypoint serves that directory.
      *
      * @param string|array<string, string>|null $static Tenma's static mounts instead, e.g. `['/assets' => __DIR__ . '/public/assets']`
      * @codeCoverageIgnore starts a server or answers the superglobals' request; Tenma's branch is covered by the live suite
@@ -178,6 +180,11 @@ class App
     {
         if (!class_exists(\Tenma::class, false)) {
             $this->run();
+            return;
+        }
+        global $argc;
+        if ($argc >= 2) {
+            \Tenma::async(fn () => exit($this->runCli()));
             return;
         }
         $configured = $this->container->get(Environment::class)->get('PORT');
