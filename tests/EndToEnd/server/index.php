@@ -68,7 +68,7 @@ $app->attach([
 // TenmaPsrLiveTest goes the PSR-15 way instead: Tenma, tenma/psr, nyholm/psr7, Waypoint\Psr\Handler.
 if (class_exists(Tenma::class) && getenv('E2E_PSR') === '1') {
     $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
-    Tenma::serve((int) $app->get(\Waypoint\Environment::class)?->get('PORT'), \Tenma\Psr\Psr::handler(new \Waypoint\Psr\Handler($app, $factory), $factory));
+    Tenma::serve((int) $app->get(\Waypoint\Environment::class)->get('PORT'), \Tenma\Psr\Psr::handler(new \Waypoint\Psr\Handler($app, $factory), $factory));
 } else {
     // Under Tenma the server on PORT, under php -S this request
     $app->serve();

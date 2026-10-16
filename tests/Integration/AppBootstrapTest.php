@@ -72,11 +72,14 @@ final class AppBootstrapTest extends IntegrationTestCase
         $this->assertInstanceOf(ExampleService::class, $app->get(ExampleService::class));
     }
 
-    public function testGetReturnsNullInsteadOfThrowingForUnresolvableClass(): void
+    public function testGetThrowsForAnUnresolvableClassAndFindReturnsNull(): void
     {
         $app = Waypoint::create();
 
-        $this->assertNull($app->get('TotallyUnknownClass'));
+        $this->assertNull($app->find('TotallyUnknownClass'));
+        $this->assertInstanceOf(ExampleService::class, $app->find(ExampleService::class));
+        $this->expectException(\Waypoint\Exceptions\ServiceNotFoundException::class);
+        $app->get('TotallyUnknownClass');
     }
 
     public function testWaypointCreateReturnsTheSameInstanceUntilReset(): void

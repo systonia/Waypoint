@@ -372,13 +372,26 @@ class App
     }
 
     /**
-     * The container's instance of $class (a service, an Options class, Environment), or null when it can't be built.
+     * The container's instance of $class (a service, an Options class, Environment). A class it can't build throws
+     * (ServiceNotFoundException, or ContainerException when its constructor fails); find() returns null instead.
+     *
+     * @template T of object
+     * @param class-string<T> $class
+     * @return T
+     */
+    public function get(string $class): object
+    {
+        return $this->container->get($class);
+    }
+
+    /**
+     * Like get(), but null when the container can't build $class.
      *
      * @template T of object
      * @param class-string<T> $class
      * @return T|null
      */
-    public function get(string $class): ?object
+    public function find(string $class): ?object
     {
         try {
             return $this->container->get($class);

@@ -193,6 +193,6 @@ Waypoint can't enforce this rule. Test an app that is meant to run under Tenma u
 
 ## Outside controllers
 
-[`$app->get()`](../reference/Waypoint/App.md#get) returns the container's instance of a class from the front controller or a script; [`$app->getContainer()`](../reference/Waypoint/App.md#getcontainer) is the [`Container`](../reference/Waypoint/Container.md) itself, a PSR-11 container. Prefer `#[Inject]` everywhere else.
+[`$app->get()`](../reference/Waypoint/App.md#get) returns the container's instance of a class from the front controller or a script (and throws when it can't be built; [`$app->find()`](../reference/Waypoint/App.md#find) returns `null` then); [`$app->getContainer()`](../reference/Waypoint/App.md#getcontainer) is the [`Container`](../reference/Waypoint/Container.md) itself, a PSR-11 container. Prefer `#[Inject]` everywhere else.
 
 See also: [`Inject`](../reference/Waypoint/Attributes/Inject.md), [`Container`](../reference/Waypoint/Container.md), [`FiberLocal`](../reference/Waypoint/Support/FiberLocal.md), [Tenma](tenma.md).

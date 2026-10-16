@@ -183,11 +183,11 @@ The lower-level entry points exist for runtimes that need them: [`handle()`](../
 
 ## Reaching services from the front controller
 
-[`$app->get()`](../reference/Waypoint/App.md#get) returns the container's instance of a class, or `null` when it can't be built. It is for code outside controllers and services, such as a script that needs a configured service:
+[`$app->get()`](../reference/Waypoint/App.md#get) returns the container's instance of a class and throws a `ServiceNotFoundException` when it can't be built; [`$app->find()`](../reference/Waypoint/App.md#find) returns `null` instead. They are for code outside controllers and services, such as a script that needs a configured service:
 
 ```php
-$env = $app->get(Environment::class);
-$port = (int) $env?->get('PORT', 8080);
+$port = $app->get(Environment::class)->int('PORT', 8080);
+$mailer = $app->find(Mailer::class);   // null when the app has none
 ```
 
 Inside controllers and services, use `#[Inject]` instead (see [Dependency injection](dependency-injection.md)).

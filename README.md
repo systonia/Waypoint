@@ -538,6 +538,10 @@ Notes:
   constructor parameter marked `#[Inject]` is *discovered* (so its type is pulled into the container
   graph) but not itself resolved/passed as a constructor argument. Prefer property injection.
 
+Outside controllers and services (the front controller, a script), `$app->get(Service::class)` returns the
+container's instance and throws `ServiceNotFoundException` when it can't be built; `$app->find(Service::class)`
+returns `null` instead.
+
 ### Controllers per request, services shared
 
 Controllers and `#[Middleware]` classes are created fresh for every request, so an `#[Inject] Request`
