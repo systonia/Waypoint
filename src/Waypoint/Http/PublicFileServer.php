@@ -28,7 +28,8 @@ final class PublicFileServer
     {
     }
 
-    public function serve(string $path, Response $res): bool
+    /** @param Request|null $req Its If-Modified-Since answers 304 for a file not changed since. */
+    public function serve(string $path, Response $res, ?Request $req = null): bool
     {
         if ($this->options->publicDirectory === null || !self::isServablePath($path)) {
             return false;
@@ -43,6 +44,15 @@ final class PublicFileServer
             return false;
         }
 
+        $modified = filemtime($file);
+        if ($modified !== false) {
+            $res->withHeader('Last-Modified', gmdate('D, d M Y H:i:s \G\M\T', $modified));
+            $since = strtotime($req?->headers['If-Modified-Since'] ?? '');
+            if ($since !== false && $since >= $modified) {
+                $res->status(304);
+                return true;
+            }
+        }
         $content = @file_get_contents($file);
         if ($content === false) {
             // @codeCoverageIgnoreStart

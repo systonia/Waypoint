@@ -250,6 +250,7 @@ $app->configure(fn (FileSystemOptions $fs) => $fs->publicDirectory = __DIR__);
 - Only `GET` and `HEAD` are served from it, and a file wins over a route at the same path. Other methods go to routing.
 - Never served: paths with a `.` or `..` segment, dotfiles and dot-directories (`.env`, `.git/`), PHP source (`.php`, `.phtml`, `.phar` and the like), and anything whose real path (after symlinks) lies outside the directory. The front controller can therefore live in the public directory.
 - `.css`, `.js`, `.mjs`, `.json`, `.svg` and `.html` get a fixed `Content-Type`; other files are detected by content.
+- Each file carries `Last-Modified`; a request whose `If-Modified-Since` is not older gets `304 Not Modified` without the body.
 
 Under Tenma, `serve()` hands the directory to Tenma, which serves it without PHP and adds `ETag` and range requests. Under PHP-FPM the web server usually serves these files itself before PHP is involved (see [Deployment](deployment.md)).
 

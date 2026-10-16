@@ -326,7 +326,7 @@ class Router
     {
         $method = strtoupper($httpMethod);
         // Files are only read, as Tenma's own static server does: a POST to /style.css goes to routing
-        if (in_array($method, ['GET', 'HEAD'], true) && ($this->publicFileServer->serve($path, $res) || $this->tryServeViewAsset($path, $res))) {
+        if (in_array($method, ['GET', 'HEAD'], true) && ($this->publicFileServer->serve($path, $res, $req) || $this->tryServeViewAsset($path, $res))) {
             return;
         }
         foreach ($this->endpoints as $endpoint) {

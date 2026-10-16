@@ -28,6 +28,21 @@ final class StaticFileServingTest extends IntegrationTestCase
         $this->assertStringStartsWith('text/css', $this->sentHeaders()['content-type'] ?? '');
     }
 
+    public function testAFileUnchangedSinceIfModifiedSinceAnswers304(): void
+    {
+        $lastModified = gmdate('D, d M Y H:i:s \G\M\T', (int) filemtime($this->publicDir . '/style.css'));
+        $this->assertSame($lastModified, $this->request('GET', '/style.css')->send()->header('Last-Modified'));
+
+        $res = $this->request('GET', '/style.css')->withHeaders(['If-Modified-Since' => $lastModified])->send();
+        $this->assertSame(304, $res->status());
+        $this->assertSame('', $res->body());
+
+        $older = gmdate('D, d M Y H:i:s \G\M\T', (int) filemtime($this->publicDir . '/style.css') - 60);
+        $res = $this->request('GET', '/style.css')->withHeaders(['If-Modified-Since' => $older])->send();
+        $this->assertSame(200, $res->status());
+        $this->assertSame("body { color: red; }\n", $res->body());
+    }
+
     public function testOnlyGetAndHeadReadAFile(): void
     {
         $this->assertSame(200, $this->request('HEAD', '/style.css')->send()->status());

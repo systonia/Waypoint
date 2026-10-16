@@ -967,7 +967,8 @@ served: a path with a `..` or `.` segment, a dotfile or dot-directory (`.env`, `
 (`.php`, `.phtml`, `.phar`, …) always 404, and the resolved file (symlinks followed) must lie inside the
 directory itself (a sibling such as `public-backup` doesn't count). So the front controller can sit in
 the same directory without its source ever being handed out. `.css`/`.js`/`.mjs`/`.json`/`.svg`/`.html` get a fixed
-`Content-Type`; anything else falls back to `mime_content_type()`, then `application/octet-stream`.
+`Content-Type`; anything else falls back to `mime_content_type()`, then `application/octet-stream`. Every file
+carries `Last-Modified`, and `If-Modified-Since` with that date or later answers `304 Not Modified`.
 
 ---
 
