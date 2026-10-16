@@ -56,7 +56,8 @@ final class SchemaBuilder
     }
 
     /**
-     * #[Schema(name: ...)] or the short class name.
+     * #[Schema(name: ...)] or the short class name; when another class has that name already, the full class name
+     * with dots for backslashes (`App.Billing.Item`), so two DTOs never share a schema.
      * @param class-string $fqcn
      */
     public function nameFor(string $fqcn): string
@@ -64,7 +65,8 @@ final class SchemaBuilder
         if (!isset($this->names[$fqcn])) {
             $rc = new ReflectionClass($fqcn);
             $override = ($rc->getAttributes(Schema::class)[0] ?? null)?->newInstance()->name;
-            $this->names[$fqcn] = $override !== null && $override !== '' ? $override : $rc->getShortName();
+            $name = $override !== null && $override !== '' ? $override : $rc->getShortName();
+            $this->names[$fqcn] = in_array($name, $this->names, true) ? str_replace('\\', '.', $fqcn) : $name;
         }
         return $this->names[$fqcn];
     }

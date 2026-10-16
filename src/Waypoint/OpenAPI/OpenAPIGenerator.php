@@ -7,6 +7,7 @@ use stdClass;
 use Waypoint\{Logger, Router, Waypoint};
 use Waypoint\Attributes\{Authenticated, Body, Ignore, Param, Permissions, Query, Role, Summary, Tags, Throws};
 use Waypoint\Enums\Message;
+use Waypoint\Exceptions\HttpException;
 use Waypoint\Options\OpenAPIOptions;
 use Waypoint\Plugin\OpenApiExtension;
 use Waypoint\Support\Arr;
@@ -33,6 +34,9 @@ class OpenAPIGenerator
 
     /** @var list<string> OpenAPIOptions' security scheme names (a JWT bearer one without any): what a guarded route requires when there is no global security. */
     private array $schemeNames = [];
+
+    /** @var list<string> ShortClass_method ids two controllers would share: those operations keep the full class name. */
+    private array $ambiguousIds = [];
 
     /** Whether OpenAPIOptions sets a document-wide `security` that every route inherits. */
     private bool $globalSecurity = false;
@@ -103,7 +107,15 @@ class OpenAPIGenerator
     protected function buildPaths(?string $version = null): array
     {
         $paths = [];
-        foreach ($this->selectEligibleRoutes($this->router->getRoutes(), $version) as $route) {
+        $routes = $this->selectEligibleRoutes($this->router->getRoutes(), $version);
+        // ShortClass_method, unless two controllers of the same short name share it: then both keep their full name
+        $ids = [];
+        foreach ($routes as $route) {
+            [$class, $method] = $this->getHandlerSpec($route) ?? ['', ''];
+            $ids[self::shortName($class) . "_$method"][$class] = true;
+        }
+        $this->ambiguousIds = array_keys(array_filter($ids, static fn (array $classes): bool => count($classes) > 1));
+        foreach ($routes as $route) {
             $handlerSpec = $this->getHandlerSpec($route);
             $method = self::routeField($route, 'method');
             $rawPath = self::routeField($route, 'rawPath');
@@ -269,11 +281,11 @@ class OpenAPIGenerator
             }
             $args = $attr['args'];
             $status = $args[1] ?? $args['status'] ?? null;
-            $status = is_int($status) || is_string($status) ? (string) $status : '500';
+            $status = is_int($status) ? $status : self::defaultStatus(self::stringArg($args, 0, 'exception'));
             if (!isset($responses[$status])) {
                 $this->schemas->ensureProblemDetails();
                 $responses[$status] = [
-                    'description' => self::stringArg($args, 2, 'description') ?? self::stringArg($args, 0, 'exception') ?? 'Error',
+                    'description' => self::stringArg($args, 2, 'description') ?? self::reason($status),
                     'content' => ['application/problem+json' => ['schema' => ['$ref' => '#/components/schemas/ProblemDetails']]],
                 ];
             }
@@ -299,7 +311,7 @@ class OpenAPIGenerator
 
         return array_filter([
             'summary' => self::stringArg($summaryArgs, 0, 'text') ?? "$controllerClass->$methodName",
-            'operationId' => $controllerClass . '_' . $methodName,
+            'operationId' => self::operationId($controllerClass, $methodName, $this->ambiguousIds),
             'tags' => array_values(array_unique($tags)),
             'parameters' => $parameters,
             'requestBody' => $requestBody,
@@ -352,6 +364,54 @@ class OpenAPIGenerator
             }
         }
         return false;
+    }
+
+    /**
+     * `ShortClass_method`; the class name in full, its backslashes as dots, where that would be ambiguous.
+     * @param list<string> $ambiguous
+     */
+    private static function operationId(string $class, string $method, array $ambiguous): string
+    {
+        $short = self::shortName($class) . "_$method";
+        return in_array($short, $ambiguous, true) ? str_replace('\\', '.', $class) . "_$method" : $short;
+    }
+
+    private static function shortName(string $class): string
+    {
+        $position = strrpos($class, '\\');
+        return $position === false ? $class : substr($class, $position + 1);
+    }
+
+    /** The response description for a status without one of its own. */
+    private static function reason(int $status): string
+    {
+        return match ($status) {
+            400 => 'Bad Request',
+            401 => 'Unauthorized',
+            403 => 'Forbidden',
+            404 => 'Not Found',
+            405 => 'Method Not Allowed',
+            409 => 'Conflict',
+            410 => 'Gone',
+            422 => 'Unprocessable Content',
+            429 => 'Too Many Requests',
+            500 => 'Internal Server Error',
+            503 => 'Service Unavailable',
+            default => 'Error',
+        };
+    }
+
+    /** What an exception class answers when it is thrown without a status: an HttpException's own, else 500. */
+    private static function defaultStatus(?string $exception): int
+    {
+        if ($exception === null || !is_subclass_of($exception, HttpException::class)) {
+            return 500;
+        }
+        try {
+            return (new \ReflectionClass($exception))->newInstance()->getStatusCode();
+        } catch (\Throwable) {
+            return 500;
+        }
     }
 
     /**

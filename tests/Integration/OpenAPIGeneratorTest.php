@@ -194,6 +194,42 @@ final class OpenAPIGeneratorTest extends IntegrationTestCase
     {
         $operation = $this->generate()['paths']['/documented/{id}']['get'];
 
-        $this->assertSame(DocumentedController::class . '_show', $operation['operationId']);
+        $this->assertSame('DocumentedController_show', $operation['operationId']);
+    }
+
+    public function testControllersSharingAShortNameKeepTheirFullNameInTheOperationId(): void
+    {
+        $app = Waypoint::create();
+        $app->attach([\Waypoint\Tests\Fixtures\Controllers\OrdersController::class, \Waypoint\Tests\Fixtures\Controllers\Admin\OrdersController::class]);
+        $paths = (new OpenAPIGenerator($app->getRouter()))->generate()['paths'];
+
+        $this->assertSame('Waypoint.Tests.Fixtures.Controllers.OrdersController_ping', $paths['/orders/{orderId}']['get']['operationId']);
+        $this->assertSame('Waypoint.Tests.Fixtures.Controllers.Admin.OrdersController_ping', $paths['/admin/orders/{orderId}']['get']['operationId']);
+        $this->assertSame('OrdersController_placeOrder', $paths['/orders']['post']['operationId']);
+    }
+
+    public function testDtosSharingAShortNameGetDistinctSchemas(): void
+    {
+        $app = Waypoint::create();
+        $app->attach([\Waypoint\Tests\Fixtures\Controllers\Admin\OrdersController::class]);
+        $spec = (new OpenAPIGenerator($app->getRouter()))->generate();
+
+        $billing = $spec['paths']['/admin/orders/billing']['post']['requestBody']['content']['application/json']['schema']['$ref'];
+        $shipping = $spec['paths']['/admin/orders/shipping']['post']['requestBody']['content']['application/json']['schema']['$ref'];
+        $this->assertSame('#/components/schemas/LineItem', $billing);
+        $this->assertSame('#/components/schemas/Waypoint.Tests.Fixtures.DTO.Shipping.LineItem', $shipping);
+        $this->assertArrayHasKey('sku', $spec['components']['schemas']['LineItem']['properties']);
+        $this->assertArrayHasKey('parcels', $spec['components']['schemas']['Waypoint.Tests.Fixtures.DTO.Shipping.LineItem']['properties']);
+    }
+
+    public function testThrowsWithoutAStatusUsesTheExceptionsOwnAndAReasonAsDescription(): void
+    {
+        $app = Waypoint::create();
+        $app->attach([\Waypoint\Tests\Fixtures\Controllers\Admin\OrdersController::class]);
+        $responses = (new OpenAPIGenerator($app->getRouter()))->generate()['paths']['/admin/orders/{orderId}']['get']['responses'];
+
+        $this->assertSame('Not Found', $responses[404]['description']);
+        $this->assertSame('Forbidden', $responses[403]['description']);
+        $this->assertSame('Internal Server Error', $responses[500]['description']);
     }
 }

@@ -35,13 +35,13 @@ The document is built from the compiled attribute cache, not by reflecting the c
 
 For each route:
 
-- **operation**: `summary` from `#[Summary]` (otherwise `Class->method`), `operationId` as `Class_method`, `tags` from `#[Tags]` on the class and the method together, `deprecated` from PHP's `#[\Deprecated]`;
+- **operation**: `summary` from `#[Summary]` (otherwise `Class->method`), `operationId` as `ShortClass_method` (the full class name with dots, `App.Admin.OrdersController_show`, where two controllers share a short name), `tags` from `#[Tags]` on the class and the method together, `deprecated` from PHP's `#[\Deprecated]`;
 - **parameters**: `#[Param]` and unattributed scalars named like a placeholder of the route as path parameters, `#[Query]` and the other unattributed scalars as query parameters, with their PHP types; a query parameter is required when it has neither a default nor a nullable type;
 - **request body**: a `#[Body]` DTO as `application/json` with a `$ref` to its schema, `#[Body]` with `of:` as an array of them;
 - **responses**: `200`, plus one problem response (`application/problem+json`, the shared `ProblemDetails` schema) for each `#[Throws]`, and on their own: `401` for a route with `#[Authenticated]`, `#[Role]` or `#[Permissions]`, `403` naming the role or permissions, `422` for a `#[Body]` DTO or a number, boolean or enum parameter;
 - **security**: a guarded route requires the schemes in `OpenAPIOptions::$securitySchemes` (a JWT bearer scheme `bearerAuth` when none is configured). With a document-wide `OpenAPIOptions::$security`, guarded routes inherit it and public routes get `security: []`.
 
-Each DTO becomes a component schema named after its short class name: its public properties with their types, nested DTOs as `$ref` (also self-referencing ones). In detail:
+Each DTO becomes a component schema named after its short class name (a second class of the same short name gets its full name with dots, `App.Shipping.LineItem`; `#[Schema('Name')]` picks a better one): its public properties with their types, nested DTOs as `$ref` (also self-referencing ones). In detail:
 
 - A backed enum is `{"type": "string", "enum": ["open", "done"]}` (or `integer`), for properties and for path and query parameters alike.
 - A nullable property allows `null`: `"type": ["string", "null"]`, or `anyOf` with `{"type": "null"}` next to a `$ref`.
@@ -131,7 +131,7 @@ final class NewOrder
 |---|---|---|
 | `#[Summary('…')]` | method | the operation's summary |
 | `#[Tags(['…'])]` | class, method | tags, merged from both |
-| `#[Throws]` with `exception`, `status` and an optional `description` | method, repeatable | an error response with the problem schema |
+| `#[Throws]` with `exception`, an optional `status` and `description` | method, repeatable | an error response with the problem schema; without a status, the exception's own (404 for `NotFoundException`, 500 for one that is no `HttpException`), without a description, the status's reason phrase |
 | `#[Ignore]` | class, method | leaves the routes out of the document |
 | `#[Schema('Name')]` | DTO class | the component name instead of the short class name |
 | `#[Property(…)]` | DTO property | `description`, `format`, `example`, `deprecated` |

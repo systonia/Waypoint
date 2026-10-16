@@ -1135,7 +1135,10 @@ reflection on every request, so serving the spec is cheap even under trust mode.
   `readOnly` for properties a request cannot set
 - `#[Body(of: ...)]` array/collection request bodies (see [above](#arraycollection-request-bodies))
 - `#[Summary]`, `#[Tags]`, `#[Throws]`, `#[Deprecated]`, `#[Ignore]`
-- `#[Schema(name: ...)]` to override a model's generated component name
+- `#[Schema(name: ...)]` to override a model's generated component name; two DTOs with the same short name
+  never share a schema (the second is named by its full class name with dots)
+- `operationId` as `ShortClass_method`, the full class name only where two controllers share a short name
+- `#[Throws(NotFoundException::class)]` without a status documents the exception's own (404 here)
 - `#[Property(description:, format:, example:, deprecated:)]` to annotate individual model properties
 - Security schemes configured via `OpenAPIOptions::$securitySchemes`/`$security`; routes with `#[Authenticated]`,
   `#[Role]` or `#[Permissions]` require them per operation (a JWT `bearerAuth` scheme when none is configured),

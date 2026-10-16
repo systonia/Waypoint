@@ -48,7 +48,7 @@ final class OpenAPIGeneratorRouteShapeTest extends TestCase
         ])->generate();
 
         $this->assertArrayHasKey('/nested-spec', $spec['paths']);
-        $this->assertSame('Fake\\Controller_fakeMethod', $spec['paths']['/nested-spec']['get']['operationId']);
+        $this->assertSame('Controller_fakeMethod', $spec['paths']['/nested-spec']['get']['operationId']);
     }
 
     public function testArrayRouteWithANestedSpecKeyIsAccepted(): void
@@ -62,7 +62,7 @@ final class OpenAPIGeneratorRouteShapeTest extends TestCase
         ])->generate();
 
         $this->assertArrayHasKey('/array-shaped', $spec['paths']);
-        $this->assertSame('Fake\\Controller_anotherMethod', $spec['paths']['/array-shaped']['post']['operationId']);
+        $this->assertSame('Controller_anotherMethod', $spec['paths']['/array-shaped']['post']['operationId']);
     }
 
     public function testRouteWithAnUnrecognizedHandlerSpecShapeIsSkipped(): void
