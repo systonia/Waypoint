@@ -1137,7 +1137,10 @@ reflection on every request, so serving the spec is cheap even under trust mode.
 - `#[Summary]`, `#[Tags]`, `#[Throws]`, `#[Deprecated]`, `#[Ignore]`
 - `#[Schema(name: ...)]` to override a model's generated component name
 - `#[Property(description:, format:, example:, deprecated:)]` to annotate individual model properties
-- Security schemes configured via `OpenAPIOptions::$securitySchemes`/`$security`
+- Security schemes configured via `OpenAPIOptions::$securitySchemes`/`$security`; routes with `#[Authenticated]`,
+  `#[Role]` or `#[Permissions]` require them per operation (a JWT `bearerAuth` scheme when none is configured),
+  public ones opt out of a document-wide `security` with `security: []`
+- Automatic `401`/`403` responses for guarded routes and `422` for `#[Body]` DTOs and converted parameters
 
 ```php
 use Waypoint\Options\OpenAPIOptions;

@@ -4,6 +4,7 @@ namespace Waypoint\Tests\Integration;
 
 use Waypoint\Waypoint;
 use Waypoint\OpenAPI\OpenAPIGenerator;
+use Waypoint\Options\OpenAPIOptions;
 use Waypoint\Tests\Fixtures\Controllers\ShipmentsController;
 
 final class OpenAPISchemaShapesTest extends IntegrationTestCase
@@ -45,5 +46,46 @@ final class OpenAPISchemaShapesTest extends IntegrationTestCase
         $this->assertSame(['to'], $schema['required']);
         // private(set): FromArray never fills it from a request
         $this->assertSame(['type' => 'integer', 'readOnly' => true], $schema['properties']['id']);
+    }
+
+    public function testGuardedRoutesRequireASchemeAndDocument401And403(): void
+    {
+        $spec = $this->generate();
+        $paths = $spec['paths'];
+
+        $this->assertSame([['bearerAuth' => []]], $paths['/shipments']['post']['security']);
+        $this->assertSame(['type' => 'http', 'scheme' => 'bearer', 'bearerFormat' => 'JWT'], $spec['components']['securitySchemes']['bearerAuth']);
+        $this->assertSame(['200', '401', '403', '422'], array_map('strval', array_keys($paths['/shipments']['post']['responses'])));
+        $this->assertSame('Requires the role dispatcher', $paths['/shipments']['post']['responses'][403]['description']);
+        $this->assertSame('Requires the permissions shipments.delete', $paths['/shipments/{id}']['delete']['responses'][403]['description']);
+        $this->assertSame(['200', '401', '422'], array_map('strval', array_keys($paths['/shipments/{id}']['get']['responses'])));
+
+        // Public: no security, no 401; a plain string placeholder converts nothing, so no 422 either
+        $this->assertArrayNotHasKey('security', $paths['/shipments']['get']);
+        $this->assertSame(['200', '422'], array_map('strval', array_keys($paths['/shipments']['get']['responses'])));
+        $this->assertSame(['200'], array_map('strval', array_keys($paths['/shipments/health']['get']['responses'])));
+    }
+
+    public function testWithADocumentWideSecurityPublicRoutesOptOut(): void
+    {
+        Waypoint::create()->configure(function (OpenAPIOptions $options): void {
+            $options->securitySchemes = ['jwt' => ['type' => 'http', 'scheme' => 'bearer']];
+            $options->security = [['jwt' => []]];
+        });
+        $spec = $this->generate();
+
+        $this->assertSame([['jwt' => []]], $spec['security']);
+        $this->assertSame([], $spec['paths']['/shipments/health']['get']['security']);
+        $this->assertArrayNotHasKey('security', $spec['paths']['/shipments']['post']);
+        $this->assertArrayNotHasKey('bearerAuth', $spec['components']['securitySchemes']);
+    }
+
+    public function testConfiguredSchemesAreWhatAGuardedRouteRequires(): void
+    {
+        Waypoint::create()->configure(function (OpenAPIOptions $options): void {
+            $options->securitySchemes = ['jwt' => ['type' => 'http', 'scheme' => 'bearer'], 'cookie' => ['type' => 'apiKey', 'in' => 'cookie', 'name' => 'auth']];
+        });
+
+        $this->assertSame([['jwt' => []], ['cookie' => []]], $this->generate()['paths']['/shipments']['post']['security']);
     }
 }

@@ -2,7 +2,7 @@
 
 namespace Waypoint\Tests\Fixtures\Controllers;
 
-use Waypoint\Attributes\{Body, Controller, Get, Post, Query};
+use Waypoint\Attributes\{Authenticated, Body, Controller, Delete, Get, Permissions, Post, Query, Role};
 use Waypoint\Tests\Fixtures\DTO\ShipmentDTO;
 use Waypoint\Tests\Fixtures\Enums\OrderStatus;
 
@@ -17,7 +17,28 @@ class ShipmentsController
     }
 
     #[Post('')]
+    #[Role('dispatcher')]
     public function create(#[Body] ShipmentDTO $shipment): array
+    {
+        return [];
+    }
+
+    #[Get('/{id}')]
+    #[Authenticated]
+    public function show(int $id): array
+    {
+        return [];
+    }
+
+    #[Delete('/{id}')]
+    #[Permissions(['shipments.delete'])]
+    public function delete(string $id): array
+    {
+        return [];
+    }
+
+    #[Get('/health')]
+    public function health(): array
     {
         return [];
     }

@@ -5,7 +5,7 @@ namespace Waypoint\OpenAPI;
 use Deprecated;
 use stdClass;
 use Waypoint\{Logger, Router, Waypoint};
-use Waypoint\Attributes\{Body, Ignore, Param, Query, Summary, Tags, Throws};
+use Waypoint\Attributes\{Authenticated, Body, Ignore, Param, Permissions, Query, Role, Summary, Tags, Throws};
 use Waypoint\Enums\Message;
 use Waypoint\Options\OpenAPIOptions;
 use Waypoint\Plugin\OpenApiExtension;
@@ -19,6 +19,9 @@ use Waypoint\Support\Arr;
  */
 class OpenAPIGenerator
 {
+    /** The scheme a guarded route requires when OpenAPIOptions configures none. */
+    private const DEFAULT_SCHEME = 'bearerAuth';
+
     private Logger $logger;
     private SchemaBuilder $schemas;
 
@@ -27,6 +30,13 @@ class OpenAPIGenerator
 
     /** @var array<string, OpenApiExtension> plugin name => extension */
     private array $extensions;
+
+    /** @var list<string> OpenAPIOptions' security scheme names (a JWT bearer one without any): what a guarded route requires when there is no global security. */
+    private array $schemeNames = [];
+
+    /** Whether OpenAPIOptions sets a document-wide `security` that every route inherits. */
+    private bool $globalSecurity = false;
+
 
     public function __construct(private Router $router)
     {
@@ -44,10 +54,15 @@ class OpenAPIGenerator
     public function generate(?string $version = null): array
     {
         $options = Waypoint::getConfig(OpenAPIOptions::class)->toArray();
-        $paths = $this->buildPaths($version);
-
         $components = Arr::stringKeyed($options['components'] ?? null);
         $securitySchemes = Arr::stringKeyed($components['securitySchemes'] ?? null);
+        $this->schemeNames = $securitySchemes !== [] ? array_keys($securitySchemes) : [self::DEFAULT_SCHEME];
+        $this->globalSecurity = ($options['security'] ?? null) !== null;
+
+        $paths = $this->buildPaths($version);
+        if ($securitySchemes === [] && self::requiresSecurity($paths)) {
+            $securitySchemes[self::DEFAULT_SCHEME] = ['type' => 'http', 'scheme' => 'bearer', 'bearerFormat' => 'JWT'];
+        }
 
         return array_filter([
             'openapi' => '3.1.0',
@@ -264,6 +279,21 @@ class OpenAPIGenerator
             }
         }
 
+        [$security, $guardResponses] = $this->guardOf($methodAttrs, $classAttrs);
+        if ($requestBody !== null || array_filter($parameters, self::converted(...)) !== []) {
+            $guardResponses[422] = 'Validation failed';
+        }
+        foreach ($guardResponses as $status => $description) {
+            if (!isset($responses[$status])) {
+                $this->schemas->ensureProblemDetails();
+                $responses[$status] = [
+                    'description' => $description,
+                    'content' => ['application/problem+json' => ['schema' => ['$ref' => '#/components/schemas/ProblemDetails']]],
+                ];
+            }
+        }
+        ksort($responses);
+
         $summaryArgs = self::findAttr($methodAttrs, Summary::class) ?? [];
         $tags = [...self::tagsOf($classAttrs), ...self::tagsOf($methodAttrs)];
 
@@ -274,8 +304,64 @@ class OpenAPIGenerator
             'parameters' => $parameters,
             'requestBody' => $requestBody,
             'responses' => $responses,
+            'security' => $security,
             'deprecated' => self::findAttr([...$classAttrs, ...$methodAttrs], Deprecated::class) !== null,
         ], fn($v) => $v !== null);
+    }
+
+    /**
+     * The operation's `security` (null: the document's applies) and the 401/403 responses its guards can give, from
+     * #[Authenticated]/#[Role]/#[Permissions] (the method's role and permissions win over the class's, as at runtime).
+     * @param list<array{name: string, args: array<int|string, mixed>}> $methodAttrs
+     * @param list<array{name: string, args: array<int|string, mixed>}> $classAttrs
+     * @return array{0: list<array<string, list<string>>>|null, 1: array<int, string>}
+     */
+    private function guardOf(array $methodAttrs, array $classAttrs): array
+    {
+        $role = self::stringArg(self::findAttr($methodAttrs, Role::class) ?? self::findAttr($classAttrs, Role::class) ?? [], 0, 'role');
+        $permissions = self::findAttr($methodAttrs, Permissions::class) ?? self::findAttr($classAttrs, Permissions::class);
+        $permissions = $permissions !== null ? Arr::stringList($permissions[0] ?? $permissions['permissions'] ?? []) : null;
+        $guarded = $role !== null || $permissions !== null || self::findAttr([...$classAttrs, ...$methodAttrs], Authenticated::class) !== null;
+        if (!$guarded) {
+            // A public route opts out of the document's security
+            return [$this->globalSecurity ? [] : null, []];
+        }
+        $responses = [401 => 'Not authenticated'];
+        if ($role !== null) {
+            $responses[403] = "Requires the role {$role}";
+        } elseif ($permissions !== null) {
+            $responses[403] = 'Requires the permissions ' . implode(', ', $permissions);
+        }
+        if ($this->globalSecurity) {
+            return [null, $responses];
+        }
+        return [array_map(static fn (string $scheme): array => [$scheme => []], $this->schemeNames), $responses];
+    }
+
+    /**
+     * Whether some operation requires a security scheme of its own.
+     * @param array<string, mixed> $paths
+     */
+    private static function requiresSecurity(array $paths): bool
+    {
+        foreach ($paths as $operations) {
+            foreach (is_array($operations) ? $operations : [] as $operation) {
+                if (is_array($operation) && ($operation['security'] ?? []) !== []) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether a parameter's value is converted, so a bad one answers 422: a number, a boolean or an enum.
+     * @param array<string, mixed> $parameter
+     */
+    private static function converted(array $parameter): bool
+    {
+        $schema = $parameter['schema'] ?? null;
+        return is_array($schema) && (isset($schema['enum']) || in_array($schema['type'] ?? null, ['integer', 'number', 'boolean'], true));
     }
 
     /** @return array<string, array<string, mixed>>|null The first plugin's description of $returnType. */
