@@ -113,6 +113,19 @@ final class OpenAPIGeneratorTest extends IntegrationTestCase
         );
     }
 
+    public function testAnUnattributedArgumentNamedLikeAPlaceholderIsAPathParameter(): void
+    {
+        $operation = $this->generate()['paths']['/documented/parts/{partId}']['get'];
+
+        $this->assertSame(
+            [
+                ['name' => 'partId', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'integer']],
+                ['name' => 'page', 'in' => 'query', 'required' => false, 'schema' => ['type' => 'integer']],
+            ],
+            $operation['parameters']
+        );
+    }
+
     public function testThrowsAttributeAddsAnErrorResponse(): void
     {
         $operation = $this->generate()['paths']['/documented/{id}']['get'];

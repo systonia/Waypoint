@@ -28,6 +28,12 @@ class DocumentedController
         return ['id' => $id];
     }
 
+    #[Get('/parts/{partId}')]
+    public function part(int $partId, int $page = 1): array
+    {
+        return ['partId' => $partId, 'page' => $page];
+    }
+
     #[Get('/metrics')]
     public function metrics(#[Query] float $threshold, #[Query] bool $active): array
     {

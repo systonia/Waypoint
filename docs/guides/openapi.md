@@ -36,7 +36,7 @@ The document is built from the compiled attribute cache, not by reflecting the c
 For each route:
 
 - **operation**: `summary` from `#[Summary]` (otherwise `Class->method`), `operationId` as `Class_method`, `tags` from `#[Tags]` on the class and the method together, `deprecated` from PHP's `#[\Deprecated]`;
-- **parameters**: `#[Param]` as path parameters, `#[Query]` and unattributed scalars as query parameters, with their PHP types; a query parameter is required when it has neither a default nor a nullable type. The generator documents an unattributed scalar as a query parameter even when it fills a placeholder, so mark placeholders with `#[Param]` in a documented API;
+- **parameters**: `#[Param]` and unattributed scalars named like a placeholder of the route as path parameters, `#[Query]` and the other unattributed scalars as query parameters, with their PHP types; a query parameter is required when it has neither a default nor a nullable type;
 - **request body**: a `#[Body]` DTO as `application/json` with a `$ref` to its schema, `#[Body]` with `of:` as an array of them;
 - **responses**: `200`, plus one problem response (`application/problem+json`, the shared `ProblemDetails` schema) for each `#[Throws]`.
 

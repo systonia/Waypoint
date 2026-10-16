@@ -103,7 +103,7 @@ class OpenAPIGenerator
                 continue;
             }
 
-            $paths[$rawPath][strtolower($method)] = $this->buildOperation($controllerClass, $methodName, $methodAttrs, $classAttrs);
+            $paths[$rawPath][strtolower($method)] = $this->buildOperation($controllerClass, $methodName, $methodAttrs, $classAttrs, $rawPath);
         }
 
         ksort($paths);
@@ -241,9 +241,9 @@ class OpenAPIGenerator
      * @param list<array{name: string, args: array<int|string, mixed>}> $classAttrs
      * @return array<string, mixed>
      */
-    protected function buildOperation(string $controllerClass, string $methodName, array $methodAttrs, array $classAttrs): array
+    protected function buildOperation(string $controllerClass, string $methodName, array $methodAttrs, array $classAttrs, string $path = ''): array
     {
-        [$parameters, $requestBody] = $this->extractParameters($controllerClass, $methodName);
+        [$parameters, $requestBody] = $this->extractParameters($controllerClass, $methodName, $path);
 
         $returnType = $this->methodCacheEntry($controllerClass, $methodName)['returnType'] ?? null;
         $content = is_string($returnType) ? $this->pluginContent($returnType) : null;
@@ -324,12 +324,13 @@ class OpenAPIGenerator
     /**
      * `parameters` and `requestBody` for one operation, from the cached parameter metadata
      * (attributes, PHP type, nullability, default). An unattributed scalar is Router's implicit
-     * placeholder-then-query binding, documented as a query parameter.
+     * placeholder-then-query binding: a path parameter when $path has a placeholder of its name, otherwise a query parameter.
      *
      * @return array{0: list<array<string, mixed>>, 1: array<string, mixed>|null}
      */
-    protected function extractParameters(string $controllerClass, string $methodName): array
+    protected function extractParameters(string $controllerClass, string $methodName, string $path = ''): array
     {
+        preg_match_all('#\{(\w+)\}#', $path, $placeholders);
         $params = [];
         $requestBody = null;
 
@@ -362,7 +363,7 @@ class OpenAPIGenerator
                 }
             }
             if ($kind === null && SchemaBuilder::isScalar($type) && $type !== 'number') {
-                $kind = 'query';
+                $kind = in_array($paramName, $placeholders[1], true) ? 'path' : 'query';
             }
 
             if ($kind === 'path' || $kind === 'query') {

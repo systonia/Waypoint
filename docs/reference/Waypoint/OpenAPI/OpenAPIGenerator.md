@@ -129,6 +129,7 @@ protected function buildOperation(
     string $methodName,
     array $methodAttrs,
     array $classAttrs,
+    string $path = '',
 ): array
 ```
 
@@ -138,22 +139,24 @@ protected function buildOperation(
 - `$methodName` `string`
 - `$methodAttrs` `list<array{name: string, args: array<int|string, mixed>}>`
 - `$classAttrs` `list<array{name: string, args: array<int|string, mixed>}>`
+- `$path` `string`
 
 **Returns** `array<string, mixed>`
 
 ### extractParameters()
 
 ```php
-protected function extractParameters(string $controllerClass, string $methodName): array
+protected function extractParameters(string $controllerClass, string $methodName, string $path = ''): array
 ```
 
 `parameters` and `requestBody` for one operation, from the cached parameter metadata
 (attributes, PHP type, nullability, default). An unattributed scalar is Router's implicit
-placeholder-then-query binding, documented as a query parameter.
+placeholder-then-query binding: a path parameter when $path has a placeholder of its name, otherwise a query parameter.
 
 **Parameters**
 
 - `$controllerClass` `string`
 - `$methodName` `string`
+- `$path` `string`
 
 **Returns** `array{0: list<array<string, mixed>>, 1: array<string, mixed>|null}`
