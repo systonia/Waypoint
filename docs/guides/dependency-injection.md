@@ -65,7 +65,7 @@ There is no service attribute and no service list: a class becomes a service by 
 - **Per request**: `Request`, `Response` and [`Router`](../reference/Waypoint/Router.md), in controllers and `#[Middleware]` classes only. A service never gets them; pass the request to it as an argument.
 - **Registered instances**: objects you created yourself and registered in the container, see [below](#services-with-constructor-arguments).
 
-`#[Inject]` works on properties of controllers, services, `#[Middleware]` classes, middleware instances passed to `$app->use()`, CLI task managers and views. The property's type names what is injected; it must be a class. An interface bound with [`Container::bind()`](../reference/Waypoint/Container.md#bind) is not injected into properties; it is fetched with `$container->get(Interface::class)`, which is how plugins look up each other's services.
+`#[Inject]` works on properties of controllers, services, `#[Middleware]` classes, middleware instances passed to `$app->use()`, CLI task managers and views. The property's type names what is injected: a class, or an interface bound with [`Container::bind()`](../reference/Waypoint/Container.md#bind), which is how plugins provide services to each other. A property typed with an interface nobody bound stays unset.
 
 `#[Inject]` on a constructor parameter makes its class known to the container, but the constructor is still called without arguments. Use properties.
 

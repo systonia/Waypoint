@@ -35,7 +35,7 @@ Registers $service under its own class name, e.g. a service whose constructor ta
 public function bind(string $id, object $service): void
 ```
 
-Registers $service under an interface (or parent class) name, so get(Interface::class) resolves it.
+Registers $service under an interface (or parent class) name, so get(Interface::class) and #[Inject] properties of that type resolve it.
 
 **Parameters**
 

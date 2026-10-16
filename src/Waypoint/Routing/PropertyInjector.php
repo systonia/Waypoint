@@ -40,7 +40,8 @@ final class PropertyInjector
                 Request::class => $req,
                 Response::class => $res,
                 Router::class => $this->router,
-                default => $this->container !== null && class_exists($type) ? $this->container->get($type) : null,
+                // An unbound interface stays unset, as in injectReflected()
+                default => $this->container !== null && (class_exists($type) || (interface_exists($type) && $this->container->has($type))) ? $this->container->get($type) : null,
             };
             if ($value !== null) {
                 (new ReflectionProperty($target, $name))->setValue($target, $value);
@@ -59,7 +60,7 @@ final class PropertyInjector
                 continue;
             }
             $type = self::namedType($prop);
-            if ($type === null || in_array($type, self::PER_REQUEST, true) || !class_exists($type) || !$this->container->has($type)) {
+            if ($type === null || in_array($type, self::PER_REQUEST, true) || !(class_exists($type) || interface_exists($type)) || !$this->container->has($type)) {
                 continue;
             }
             $prop->setValue($target, $this->container->get($type));

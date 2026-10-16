@@ -20,7 +20,7 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Registers $service under an interface (or parent class) name, so get(Interface::class) resolves it.
+     * Registers $service under an interface (or parent class) name, so get(Interface::class) and #[Inject] properties of that type resolve it.
      * @param class-string $id
      */
     public function bind(string $id, object $service): void
