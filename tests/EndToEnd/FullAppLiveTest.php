@@ -171,7 +171,7 @@ class FullAppLiveTest extends LiveServerTestCase
 
         $this->assertSame(200, $response['status']);
         $this->assertSame('3.1.0', $spec['openapi']);
-        $this->assertArrayHasKey('/customers', $spec['paths']);
+        $this->assertArrayHasKey('/customers/{customerId}/orders', $spec['paths']);
     }
 
     public function testRouteCachePersistsAcrossSeparateRealRequests(): void

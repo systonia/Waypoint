@@ -12,7 +12,7 @@ use ReflectionMethod;
 use ReflectionNamedType;
 use ReflectionParameter;
 use Waypoint\Enums\Message;
-use Waypoint\Http\{MiddlewareBase, Request, Response};
+use Waypoint\Http\{MiddlewareBase, Redirect, Request, Response, View};
 use Waypoint\Plugin\{ArgumentBinder, RouteAttributeCompiler};
 use Waypoint\Routing\PropertyInjector;
 use Waypoint\Attributes\{
@@ -516,6 +516,9 @@ final class RouteCompiler
                 $returnType = $method->getReturnType();
                 $result[$className]['methods'][$method->getName()]['__method'] = self::attributeEntries($method->getAttributes());
                 $result[$className]['methods'][$method->getName()]['returnType'] = $returnType instanceof ReflectionNamedType ? $returnType->getName() : null;
+                $result[$className]['methods'][$method->getName()]['returnNullable'] = $returnType === null || $returnType->allowsNull();
+                $result[$className]['methods'][$method->getName()]['returnElement'] = \Waypoint\Support\DocType::element($method);
+                $result[$className]['methods'][$method->getName()]['returnsPage'] = self::returnsPage($returnType);
                 foreach ($method->getParameters() as $param) {
                     $type = $param->getType();
                     $result[$className]['methods'][$method->getName()]['parameters'][$param->getName()] = [
@@ -528,6 +531,18 @@ final class RouteCompiler
             }
         }
         return $result;
+    }
+
+    /** Whether a return type names a View or a Redirect (alone or in a union): an HTML page, no API operation. */
+    private static function returnsPage(?\ReflectionType $type): bool
+    {
+        $types = $type instanceof \ReflectionUnionType ? $type->getTypes() : [$type];
+        foreach ($types as $named) {
+            if ($named instanceof ReflectionNamedType && (is_a($named->getName(), View::class, true) || is_a($named->getName(), Redirect::class, true))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

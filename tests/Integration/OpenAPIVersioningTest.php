@@ -26,7 +26,6 @@ final class OpenAPIVersioningTest extends IntegrationTestCase
     {
         $spec = $this->generator([CustomersController::class])->generate();
 
-        $this->assertArrayHasKey('/customers', $spec['paths']);
         $this->assertArrayHasKey('/customers/{customerId}/orders', $spec['paths']);
     }
 
@@ -81,7 +80,7 @@ final class OpenAPIVersioningTest extends IntegrationTestCase
 
         $spec = $generator->generate();
 
-        $this->assertArrayHasKey('/customers', $spec['paths']);
+        $this->assertArrayHasKey('/customers/{customerId}/orders', $spec['paths']);
         $this->assertArrayHasKey('/v1/users', $spec['paths']);
     }
 

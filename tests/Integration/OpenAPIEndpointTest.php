@@ -44,7 +44,7 @@ final class OpenAPIEndpointTest extends IntegrationTestCase
         $spec = json_decode($this->dispatch('GET', '/openapi/spec.json'), true);
 
         $this->assertSame('3.1.0', $spec['openapi']);
-        $this->assertArrayHasKey('/customers', $spec['paths']);
+        $this->assertArrayHasKey('/customers/{customerId}/orders', $spec['paths']);
         $this->assertArrayNotHasKey('/openapi/spec.json', $spec['paths']);
         $this->assertStringStartsWith('application/json', $this->sentHeaders()['content-type'] ?? '');
     }

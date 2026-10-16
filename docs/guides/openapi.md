@@ -33,12 +33,14 @@ The document is built from the compiled attribute cache, not by reflecting the c
 
 ## What is documented
 
+For each route that answers with data. A route whose return type is a `View` or a `Redirect` (also in a union such as `View|Redirect`) serves pages, not the API, and is left out, like one with `#[Ignore]`.
+
 For each route:
 
 - **operation**: `summary` from `#[Summary]` (otherwise `Class->method`), `operationId` as `ShortClass_method` (the full class name with dots, `App.Admin.OrdersController_show`, where two controllers share a short name), `tags` from `#[Tags]` on the class and the method together, `deprecated` from PHP's `#[\Deprecated]`;
 - **parameters**: `#[Param]` and unattributed scalars named like a placeholder of the route as path parameters, `#[Query]` and the other unattributed scalars as query parameters, with their PHP types; a query parameter is required when it has neither a default nor a nullable type;
 - **request body**: a `#[Body]` DTO as `application/json` with a `$ref` to its schema, `#[Body]` with `of:` as an array of them;
-- **responses**: `200`, plus one problem response (`application/problem+json`, the shared `ProblemDetails` schema) for each `#[Throws]`, and on their own: `401` for a route with `#[Authenticated]`, `#[Role]` or `#[Permissions]`, `403` naming the role or permissions, `422` for a `#[Body]` DTO or a number, boolean or enum parameter;
+- **responses**: `200` with a schema from the return type (an object by its public properties as a component schema, an enum by its values, an `array` by its `@return list<Order>`, `@return Order[]` or `@return array<string, Order>`, a nullable type allowing `null`; a plain `array` stays an object), plus one problem response (`application/problem+json`, the shared `ProblemDetails` schema) for each `#[Throws]`, and on their own: `401` for a route with `#[Authenticated]`, `#[Role]` or `#[Permissions]`, `403` naming the role or permissions, `422` for a `#[Body]` DTO or a number, boolean or enum parameter;
 - **security**: a guarded route requires the schemes in `OpenAPIOptions::$securitySchemes` (a JWT bearer scheme `bearerAuth` when none is configured). With a document-wide `OpenAPIOptions::$security`, guarded routes inherit it and public routes get `security: []`.
 
 Each DTO becomes a component schema named after its short class name (a second class of the same short name gets its full name with dots, `App.Shipping.LineItem`; `#[Schema('Name')]` picks a better one): its public properties with their types, nested DTOs as `$ref` (also self-referencing ones). In detail:

@@ -88,4 +88,29 @@ final class OpenAPISchemaShapesTest extends IntegrationTestCase
 
         $this->assertSame([['jwt' => []], ['cookie' => []]], $this->generate()['paths']['/shipments']['post']['security']);
     }
+
+    /** @return array<string, mixed> */
+    private static function okSchema(array $spec, string $path): array
+    {
+        return $spec['paths'][$path]['get']['responses'][200]['content']['application/json']['schema'];
+    }
+
+    public function testResponsesAreDescribedByTheReturnType(): void
+    {
+        $spec = $this->generate();
+
+        $this->assertSame(['$ref' => '#/components/schemas/ShipmentDTO'], self::okSchema($spec, '/shipments/latest'));
+        $this->assertSame(['type' => 'array', 'items' => ['$ref' => '#/components/schemas/CityDTO']], self::okSchema($spec, '/shipments/cities'));
+        $this->assertSame(['type' => 'string', 'enum' => ['open', 'done']], self::okSchema($spec, '/shipments/status'));
+        $this->assertSame(['anyOf' => [['$ref' => '#/components/schemas/CityDTO'], ['type' => 'null']]], self::okSchema($spec, '/shipments/next-stop'));
+        $this->assertSame(['type' => 'object'], self::okSchema($spec, '/shipments/health'));
+    }
+
+    public function testRoutesAnsweringWithAPageOrARedirectAreLeftOut(): void
+    {
+        $paths = $this->generate()['paths'];
+
+        $this->assertArrayNotHasKey('/shipments/page', $paths);
+        $this->assertArrayNotHasKey('/shipments/form', $paths);
+    }
 }

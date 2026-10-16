@@ -1129,6 +1129,8 @@ The generator is driven entirely by a compiled attribute cache (see
 reflection on every request, so serving the spec is cheap even under trust mode. It documents:
 
 - Path/query parameters with their real PHP types (`#[Param]`/`#[Query]`, and unattributed scalars)
+- `200` responses from the return type: a DTO's public properties, an enum's values, `@return list<X>`;
+  routes returning a `View` or `Redirect` are left out of the document
 - `#[Body]` DTO request bodies, including nested and self-/mutually-referencing (cyclic) models
 - Backed enums as `{type, enum}`, nullable types as `type: [x, "null"]`, `@var list<X>`/`X[]`/`array<string, X>`
   as `items`/`additionalProperties`, `required` for properties with neither a default nor `null`, and

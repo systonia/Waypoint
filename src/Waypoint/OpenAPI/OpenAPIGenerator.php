@@ -5,7 +5,7 @@ namespace Waypoint\OpenAPI;
 use Deprecated;
 use stdClass;
 use Waypoint\{Logger, Router, Waypoint};
-use Waypoint\Attributes\{Authenticated, Body, Ignore, Param, Permissions, Query, Role, Summary, Tags, Throws};
+use Waypoint\Attributes\{Authenticated, Body, FileFormatter, Ignore, Param, Permissions, Query, Role, SimpleXmlFormatter, Summary, Tags, Throws};
 use Waypoint\Enums\Message;
 use Waypoint\Exceptions\HttpException;
 use Waypoint\Options\OpenAPIOptions;
@@ -126,7 +126,8 @@ class OpenAPIGenerator
 
             $classAttrs = self::attrList($this->classCacheEntry($controllerClass)['__class'] ?? null);
             $methodAttrs = self::attrList($this->methodCacheEntry($controllerClass, $methodName)['__method'] ?? null);
-            if (self::findAttr([...$classAttrs, ...$methodAttrs], Ignore::class) !== null) {
+            // #[Ignore], and a route that answers with a page or a redirect: no API operation
+            if (self::findAttr([...$classAttrs, ...$methodAttrs], Ignore::class) !== null || ($this->methodCacheEntry($controllerClass, $methodName)['returnsPage'] ?? false) === true) {
                 continue;
             }
 
@@ -272,9 +273,14 @@ class OpenAPIGenerator
     {
         [$parameters, $requestBody] = $this->extractParameters($controllerClass, $methodName, $path);
 
-        $returnType = $this->methodCacheEntry($controllerClass, $methodName)['returnType'] ?? null;
-        $content = is_string($returnType) ? $this->pluginContent($returnType) : null;
-        $responses = ['200' => ['description' => 'Successful response', 'content' => $content ?? ['application/json' => ['schema' => ['type' => 'object']]]]];
+        $entry = $this->methodCacheEntry($controllerClass, $methodName);
+        $returnType = $entry['returnType'] ?? null;
+        $returnType = is_string($returnType) ? $returnType : null;
+        $content = $returnType !== null ? $this->pluginContent($returnType) : null;
+        $responses = [200 => array_filter([
+            'description' => 'Successful response',
+            'content' => $content ?? $this->resultContent($returnType, $entry, $methodAttrs),
+        ])];
         foreach ($methodAttrs as $attr) {
             if ($attr['name'] !== Throws::class) {
                 continue;
@@ -422,6 +428,40 @@ class OpenAPIGenerator
     {
         $schema = $parameter['schema'] ?? null;
         return is_array($schema) && (isset($schema['enum']) || in_array($schema['type'] ?? null, ['integer', 'number', 'boolean'], true));
+    }
+
+    /**
+     * The 200 content for what the method returns: an object by its public properties, an enum by its values, a list
+     * by its `@return list<X>`. A void method writes its response itself and a formatter's output is no JSON
+     * schema: neither says more than before.
+     * @param array<string, mixed> $entry The method's attribute cache entry
+     * @param list<array{name: string, args: array<int|string, mixed>}> $methodAttrs
+     * @return array<string, array<string, mixed>>|null
+     */
+    private function resultContent(?string $type, array $entry, array $methodAttrs): ?array
+    {
+        if ($type === 'void' || $type === 'never') {
+            return null;
+        }
+        foreach ([FileFormatter::class, SimpleXmlFormatter::class] as $formatter) {
+            if (self::findAttr($methodAttrs, $formatter) !== null) {
+                return ['application/json' => ['schema' => ['type' => 'object']]];
+            }
+        }
+        $element = $entry['returnElement'] ?? null;
+        $schema = match (true) {
+            $type === null, $type === 'object' => ['type' => 'object'],
+            $type === 'mixed' => [],
+            $type === 'array', $type === 'iterable' => is_array($element) && count($element) === 2 && in_array($element[0], ['list', 'map'], true) && is_string($element[1])
+                ? $this->schemas->arraySchema([$element[0], $element[1]])
+                : ['type' => 'object'],
+            is_a($type, \JsonSerializable::class, true) => [],
+            default => $this->schemas->typeSchema($type),
+        };
+        if ($type !== null && $type !== 'mixed' && ($entry['returnNullable'] ?? false) === true) {
+            $schema = SchemaBuilder::nullable($schema);
+        }
+        return ['application/json' => ['schema' => $schema]];
     }
 
     /** @return array<string, array<string, mixed>>|null The first plugin's description of $returnType. */
