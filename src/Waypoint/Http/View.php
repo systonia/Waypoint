@@ -13,7 +13,7 @@ use Waypoint\Options\RendererOptions;
  * A server-rendered template result: `return new View('Admin/Users', $model)`
  * renders views/Admin/Users.php inside RendererOptions::$layout (unless
  * $partial). Inside a template `$this` is this View and `$model` the model;
- * `$this->env`/`$this->csrf` are injected by Router before render().
+ * `$this->env`/`$this->csrf`/`$this->request` are set by Router before render().
  */
 class View
 {
@@ -24,6 +24,9 @@ class View
     /** Available inside templates as `$this->csrf` (already carrying this request's token). */
     #[Inject]
     protected Csrf $csrf;
+
+    /** The request being answered, inside templates `$this->request`; set by Router::renderView(), null for a View rendered outside one. */
+    public private(set) ?Request $request = null;
 
     protected string $view;
     protected mixed $model;
@@ -91,6 +94,11 @@ class View
     public function getViewName(): string
     {
         return $this->view;
+    }
+
+    public function setRequest(Request $request): void
+    {
+        $this->request = $request;
     }
 
     /** @param array{css: ?string, js: ?string} $assets */

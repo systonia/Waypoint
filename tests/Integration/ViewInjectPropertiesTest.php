@@ -37,6 +37,13 @@ final class ViewInjectPropertiesTest extends IntegrationTestCase
         $this->assertSame('staging-under-test', trim($output));
     }
 
+    public function testTheTemplateReadsTheRequestAsThisRequest(): void
+    {
+        $this->bootApp();
+
+        $this->assertSame('/view-env/request ada', trim($this->dispatch('GET', '/view-env/request?q=ada')));
+    }
+
     public function testAViewIsSentAsUtf8Html(): void
     {
         $this->bootApp();

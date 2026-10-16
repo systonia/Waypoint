@@ -900,6 +900,8 @@ explicit `.php` name, or no layout is applied and every render falls back to the
 Inside a view/layout `.php` file, `$model` is whatever was passed to `View`'s constructor (commonly an
 array, e.g. `$model['product']`), and `$this` is the `View` instance itself:
 
+- `$this->request` (read-only), `$this->env` and `$this->csrf`: the request being answered, the
+  `Environment` and the CSRF helper.
 - `$this->startSection('name')` / `$this->endSection()` / `$this->section('name', required: false)`:
   named content blocks a layout pulls in, e.g. for per-page `<head>` scripts.
 - `$this->assetTags()` / `$this->layoutAssetTags()`: `<link>`/`<script>` tags for the current view's own

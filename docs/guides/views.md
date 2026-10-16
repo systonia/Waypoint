@@ -112,6 +112,7 @@ The layout receives the rendered view as `$content`, along with `$model`:
 | `$this->pluginAssetTags()` | tags for the CSS and JS of plugins, after `waypointJsTag()` |
 | `$this->csrf->field()`, `$this->csrf->token()` | the CSRF hidden field and the token itself |
 | `$this->env` | the [`Environment`](../reference/Waypoint/Environment.md) |
+| `$this->request` | the [`Request`](../reference/Waypoint/Http/Request.md) being answered, read-only: `$this->request->path`, `$this->request->jwt` |
 | `$this->t(…)` and other names | view helpers that plugins provide (see [Plugins](plugins.md)) |
 
 `new View('Products/Index', $model, layout: '_Print.php')` uses another layout for one render, and `partial: true` renders the view alone, without a layout, for an HTML fragment.

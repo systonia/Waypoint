@@ -1,0 +1,1 @@
+<?= $this->request?->path ?> <?= $this->request?->query('q') ?>

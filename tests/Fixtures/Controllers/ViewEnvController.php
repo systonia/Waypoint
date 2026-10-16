@@ -17,4 +17,10 @@ class ViewEnvController
     {
         return new View('EnvView', partial: true);
     }
+
+    #[Get('/request')]
+    public function request(): View
+    {
+        return new View('RequestView', partial: true);
+    }
 }

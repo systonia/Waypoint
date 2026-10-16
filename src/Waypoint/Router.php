@@ -581,6 +581,7 @@ class Router
         $this->container?->get(Csrf::class)->issueFor($req, $res);
 
         $this->injector->injectReflected($view);
+        $view->setRequest($req);
         $view->setHelpers($this->viewHelpers);
         $view->setAssetsPath($this->fileSystemOptions->assetsPath);
         $view->setPluginAssetUrls(array_map(fn(string $file): string => "{$this->fileSystemOptions->assetsPath}/$file", $this->pluginAssetFiles));
