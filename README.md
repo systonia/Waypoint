@@ -11,6 +11,8 @@
 
 A lightweight PHP framework for building APIs and server-rendered UIs, with attribute-based routing.
 
+**Documentation:** the [guides](docs/guides/index.md) explain each part of Waypoint with complete examples, and the [reference](docs/reference/index.md) lists every class and method. Start at [docs/index.md](docs/index.md).
+
 ---
 
 ## Overview
