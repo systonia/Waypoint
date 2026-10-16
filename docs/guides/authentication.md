@@ -1,6 +1,6 @@
 ---
 title: Authentication
-description: Sign users in with JWTs as bearer tokens or cookies, protect forms with CSRF tokens, and guard routes with #[Authenticated], #[Role] and #[Permissions].
+description: "Sign users in with JWTs as bearer tokens or cookies, protect forms with CSRF tokens, and guard routes with #[Authenticated], #[Role] and #[Permissions]."
 order: 70
 ---
 

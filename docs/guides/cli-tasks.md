@@ -1,6 +1,6 @@
 ---
 title: CLI tasks
-description: Run maintenance jobs from the same front controller with #[Manager] classes and #[Task] methods.
+description: "Run maintenance jobs from the same front controller with #[Manager] classes and #[Task] methods."
 order: 130
 ---
 

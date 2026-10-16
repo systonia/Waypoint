@@ -1,6 +1,6 @@
 ---
 title: Dependency injection
-description: Inject services with #[Inject], register services that need constructor arguments, and keep per-request state out of shared services.
+description: "Inject services with #[Inject], register services that need constructor arguments, and keep per-request state out of shared services."
 order: 50
 ---
 
