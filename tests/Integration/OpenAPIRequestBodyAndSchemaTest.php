@@ -84,15 +84,13 @@ final class OpenAPIRequestBodyAndSchemaTest extends IntegrationTestCase
         $this->assertArrayNotHasKey('CustomerDTO', $spec['components']['schemas']);
     }
 
-    public function testNullablePropertiesAreExcludedFromRequired(): void
+    public function testOnlyPropertiesWithNeitherADefaultNorNullAreRequired(): void
     {
         $spec = $this->generate();
         $schema = $spec['components']['schemas']['Customer'];
 
-        $this->assertContains('name', $schema['required']);
-        $this->assertContains('address', $schema['required']);
-        $this->assertNotContains('nickname', $schema['required']);
-        $this->assertNotContains('legacyContact', $schema['required']);
+        // name and loyaltyPoints have defaults, nickname and legacyContact take null
+        $this->assertSame(['address'], $schema['required']);
     }
 
     public function testNestedDtoPropertyGeneratesAReferencedComponentSchema(): void
@@ -127,11 +125,11 @@ final class OpenAPIRequestBodyAndSchemaTest extends IntegrationTestCase
 
         $this->assertArrayHasKey('CyclicNodeDTO', $spec['components']['schemas']);
         $this->assertSame(
-            ['$ref' => '#/components/schemas/CyclicNodeDTO'],
+            ['anyOf' => [['$ref' => '#/components/schemas/CyclicNodeDTO'], ['type' => 'null']]],
             $spec['components']['schemas']['CyclicNodeDTO']['properties']['parent']
         );
         // The self-reference is nullable, so it must not be required.
-        $this->assertNotContains('parent', $spec['components']['schemas']['CyclicNodeDTO']['required']);
+        $this->assertArrayNotHasKey('required', $spec['components']['schemas']['CyclicNodeDTO']);
     }
 
     public function testUnionTypedPropertyDoesNotCrashGeneration(): void

@@ -40,7 +40,14 @@ For each route:
 - **request body**: a `#[Body]` DTO as `application/json` with a `$ref` to its schema, `#[Body]` with `of:` as an array of them;
 - **responses**: `200`, plus one problem response (`application/problem+json`, the shared `ProblemDetails` schema) for each `#[Throws]`.
 
-Each DTO becomes a component schema named after its short class name: its public properties with their types, nested DTOs as `$ref` (also self-referencing ones), non-nullable properties as `required`. `errors` and `isValid` from `FromArray` are left out.
+Each DTO becomes a component schema named after its short class name: its public properties with their types, nested DTOs as `$ref` (also self-referencing ones). In detail:
+
+- A backed enum is `{"type": "string", "enum": ["open", "done"]}` (or `integer`), for properties and for path and query parameters alike.
+- A nullable property allows `null`: `"type": ["string", "null"]`, or `anyOf` with `{"type": "null"}` next to a `$ref`.
+- A property is `required` when it has neither a default nor a nullable type, the same rule `FromArray` applies.
+- An `array` property documented as `@var list<Item>` or `@var Item[]` gets `items`, one documented as `@var array<string, Item>` gets `additionalProperties`.
+- A property the request cannot set (`readonly`, `protected(set)`, `private(set)`) is `readOnly`.
+- `errors` and `isValid` from `FromArray` are left out.
 
 ```php
 <?php

@@ -10,11 +10,12 @@ use stdClass;
 use Waypoint\Attributes\{Property, Schema};
 use Waypoint\Enums\Message;
 use Waypoint\Logger;
+use Waypoint\Support\DocType;
 
 /**
  * Builds and collects the `components.schemas` of a spec: one object schema
  * per DTO class (public properties, typed; nested DTOs by $ref, recursion-
- * safe), plus the shared RFC 9457 ProblemDetails schema. Also owns the
+ * safe; enums inline with their values; lists from `@var list<X>`), plus the shared RFC 9457 ProblemDetails schema. Also owns the
  * PHP-type -> OpenAPI-type mapping parameters use.
  */
 final class SchemaBuilder
@@ -85,9 +86,9 @@ final class SchemaBuilder
     }
 
     /**
-     * An object schema from $fqcn's public properties. A non-nullable property is required:
-     * PHP defaults aren't a usable "optional" signal, since FromArray DTOs give every
-     * property some type-safe default.
+     * An object schema from $fqcn's public properties. A property is required when it has no default and is not
+     * nullable: FromArray reports exactly those as missing. A nullable one allows null (`type: [x, "null"]`), and one
+     * the request cannot set (readonly, protected(set), private(set)) is `readOnly`, as FromArray never fills it.
      *
      * @return array<string, mixed>
      */
@@ -100,7 +101,7 @@ final class SchemaBuilder
         $properties = [];
         $required = [];
         foreach ((new ReflectionClass($fqcn))->getProperties(ReflectionProperty::IS_PUBLIC) as $prop) {
-            if ($prop->isVirtual()) {
+            if ($prop->isVirtual() || $prop->isStatic()) {
                 continue; // FromArray's $errors/$isValid are computed, never part of the payload
             }
             $name = $prop->getName();
@@ -114,10 +115,16 @@ final class SchemaBuilder
                 $nullable = true;
             }
 
-            $schema = $this->propertySchema($typeName, $name, $fqcn);
+            $schema = $this->propertySchema($typeName, $name, $fqcn, $prop);
+            if ($nullable && $typeName !== null) {
+                $schema = self::nullable($schema);
+            }
             $this->applyPropertyAnnotation($prop, $schema);
+            if ($prop->isReadOnly() || $prop->isProtectedSet() || $prop->isPrivateSet()) {
+                $schema['readOnly'] = true;
+            }
             $properties[$name] = $schema;
-            if (!$nullable) {
+            if (!$nullable && !$prop->hasDefaultValue() && !self::promotedWithDefault($prop)) {
                 $required[] = $name;
             }
         }
@@ -129,8 +136,42 @@ final class SchemaBuilder
         return $schema;
     }
 
+    /** A promoted constructor property's default lives on the parameter. */
+    private static function promotedWithDefault(ReflectionProperty $prop): bool
+    {
+        if (!$prop->isPromoted()) {
+            return false;
+        }
+        foreach ($prop->getDeclaringClass()->getConstructor()?->getParameters() ?? [] as $param) {
+            if ($param->getName() === $prop->getName()) {
+                return $param->isDefaultValueAvailable();
+            }
+        }
+        return false;
+    }
+
+    /**
+     * $schema that also allows null: `type: [x, "null"]` (with null among an enum's values), or anyOf for a $ref.
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public static function nullable(array $schema): array
+    {
+        if (isset($schema['$ref'])) {
+            return ['anyOf' => [$schema, ['type' => 'null']]];
+        }
+        if (!isset($schema['type']) || !is_string($schema['type'])) {
+            return $schema;
+        }
+        $schema['type'] = [$schema['type'], 'null'];
+        if (isset($schema['enum']) && is_array($schema['enum'])) {
+            $schema['enum'][] = null;
+        }
+        return $schema;
+    }
+
     /** @return array<string, mixed> */
-    private function propertySchema(?string $typeName, string $propertyName, string $ownerFqcn): array
+    private function propertySchema(?string $typeName, string $propertyName, string $ownerFqcn, ?ReflectionProperty $prop = null): array
     {
         if ($typeName === null || in_array($typeName, ['mixed', 'object', 'callable', 'self', 'static', 'null'], true)) {
             return [];
@@ -139,13 +180,61 @@ final class SchemaBuilder
             return ['type' => self::mapType($typeName)];
         }
         if ($typeName === 'array' || $typeName === 'iterable') {
-            return ['type' => 'array'];
+            return $this->arraySchema($prop !== null ? DocType::element($prop) : null);
         }
         if (!class_exists($typeName) && !interface_exists($typeName) && !enum_exists($typeName)) {
             $this->logger->warning(Message::GeneratorPropertyDoesNotExist->interpolate(property: $typeName, name: $propertyName, rc: $ownerFqcn));
             return [];
         }
-        return ['$ref' => $this->refFor($typeName)];
+        return $this->typeSchema($typeName);
+    }
+
+    /**
+     * An array from its docblock's element type: `list<X>` / `X[]` as items, `array<string, X>` as additionalProperties.
+     * @param array{0: 'list'|'map', 1: string}|null $element
+     * @return array<string, mixed>
+     */
+    public function arraySchema(?array $element): array
+    {
+        if ($element === null) {
+            return ['type' => 'array'];
+        }
+        [$kind, $type] = $element;
+        $items = $this->typeSchema($type);
+        return $kind === 'map' ? ['type' => 'object', 'additionalProperties' => $items] : ['type' => 'array', 'items' => $items];
+    }
+
+    /**
+     * A scalar keyword, an enum (inline, with its values) or a class (by $ref).
+     * @return array<string, mixed>
+     */
+    public function typeSchema(string $type): array
+    {
+        if (self::isScalar($type)) {
+            return ['type' => self::mapType($type)];
+        }
+        if (enum_exists($type)) {
+            return self::enumSchema($type);
+        }
+        return class_exists($type) || interface_exists($type) ? ['$ref' => $this->refFor($type)] : [];
+    }
+
+    /**
+     * `{type, enum}`: a backed enum's values, a pure enum's case names.
+     * @return array<string, mixed>
+     */
+    public static function enumSchema(string $enum): array
+    {
+        if (!enum_exists($enum)) {
+            return [];
+        }
+        $reflection = new \ReflectionEnum($enum);
+        $backing = (string) $reflection->getBackingType();
+        $values = array_map(
+            static fn (\ReflectionEnumUnitCase $case): int|string => $case instanceof \ReflectionEnumBackedCase ? $case->getBackingValue() : $case->getName(),
+            $reflection->getCases()
+        );
+        return ['type' => $backing === 'int' ? 'integer' : 'string', 'enum' => $values];
     }
 
     /**
@@ -178,6 +267,7 @@ final class SchemaBuilder
             $type === null => ['type' => 'string'],
             self::isScalar($type) => ['type' => self::mapType($type)],
             $type === 'array', $type === 'iterable' => ['type' => 'array'],
+            enum_exists($type) => self::enumSchema($type),
             default => new stdClass(),
         };
     }

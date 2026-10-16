@@ -20,4 +20,9 @@ class ShipmentDTO
 
     /** @var Priority[] */
     public array $levels = [];
+
+    /** @var array<string, int> */
+    public array $weights = [];
+
+    public private(set) int $id = 0;
 }

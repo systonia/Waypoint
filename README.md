@@ -1130,6 +1130,9 @@ reflection on every request, so serving the spec is cheap even under trust mode.
 
 - Path/query parameters with their real PHP types (`#[Param]`/`#[Query]`, and unattributed scalars)
 - `#[Body]` DTO request bodies, including nested and self-/mutually-referencing (cyclic) models
+- Backed enums as `{type, enum}`, nullable types as `type: [x, "null"]`, `@var list<X>`/`X[]`/`array<string, X>`
+  as `items`/`additionalProperties`, `required` for properties with neither a default nor `null`, and
+  `readOnly` for properties a request cannot set
 - `#[Body(of: ...)]` array/collection request bodies (see [above](#arraycollection-request-bodies))
 - `#[Summary]`, `#[Tags]`, `#[Throws]`, `#[Deprecated]`, `#[Ignore]`
 - `#[Schema(name: ...)]` to override a model's generated component name
