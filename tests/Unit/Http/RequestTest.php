@@ -296,7 +296,8 @@ final class RequestTest extends TestCase
     public function testThePathIsWhatComesBeforeTheQueryEvenWhereParseUrlGivesUp(): void
     {
         $this->assertSame(['/foo:123', '/a', ['b' => 'c']], [Request::fromParts('GET', '/foo:123')->path, Request::fromParts('GET', '/a?b=c#d')->path, Request::fromParts('GET', '/a?b=c#d')->query]);
-        $this->assertSame('///x', Request::fromParts('GET', '///x')->path);
+        $this->assertSame('/x', Request::fromParts('GET', '///x/')->path);
+        $this->assertSame(['/my file.txt', '/a%2Fb'], [Request::fromParts('GET', '/my%20file.txt')->path, Request::fromParts('GET', '/a%2Fb')->path]);
         $this->assertSame('/p', Request::fromParts('GET', 'http://example.com/p?q=1')->path);
     }
 }

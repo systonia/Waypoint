@@ -55,6 +55,14 @@ final class AppMiddlewareExceptionTest extends IntegrationTestCase
         $this->assertSame(401, json_decode($output, true)['status'] ?? null);
     }
 
+    public function testMiddlewareSeesThePathTheRouterMatches(): void
+    {
+        foreach (['//unauthorized/', '/%75nauthorized'] as $uri) {
+            $this->dispatch('GET', $uri);
+            $this->assertSame(401, $this->lastResponse?->status(), $uri);
+        }
+    }
+
     public function testAnyOtherExceptionFromAnAppMiddlewareBecomesAGeneric500WithoutItsMessage(): void
     {
         $output = $this->dispatch('GET', '/broken');

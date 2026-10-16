@@ -276,7 +276,7 @@ class App
     private function dispatch(Request $req, Response $res): Response
     {
         try {
-            $this->router->dispatch(uri: $req->path, httpMethod: $req->method, req: $req, res: $res);
+            $this->router->dispatch(path: $req->path, httpMethod: $req->method, req: $req, res: $res);
         } catch (Throwable $e) {
             $this->handleException($e, $req, $res);
         }

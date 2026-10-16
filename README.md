@@ -582,6 +582,10 @@ $app->use(function ($req, $res, $next) {
 
 `useCors()` and `useJwt()` (see below) are both just built-in middleware registered this way.
 
+`$req->path` is the path the router matches: slashes at either end trimmed and percent-decoded, so `//admin/`
+and `/%61dmin` are both `/admin`, and a check on it covers every spelling that reaches the same route. A path
+with an encoded slash (`%2F`) or NUL in a segment stays encoded as a whole.
+
 Per-route middleware is declared with `#[Middleware(Class::class)]` directly on a controller method
 (repeatable). **The class must extend `Waypoint\Http\MiddlewareBase`**: its `handle()` is what runs, and a
 `#[Middleware(...)]` naming a class that doesn't exist or doesn't extend it fails the route compile with an

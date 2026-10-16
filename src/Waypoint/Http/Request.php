@@ -12,6 +12,12 @@ use Waypoint\Support\Arr;
 class Request
 {
     public string $method;
+
+    /**
+     * The path the router matches, and so what middleware should check: slashes at either end trimmed, each
+     * segment percent-decoded (/my%20file.txt is "/my file.txt", /%C3%BCber is "/über"). A segment that decodes to
+     * a slash or a NUL leaves the whole path encoded, so an encoded slash never makes a new segment.
+     */
     public string $path;
 
     /** @var array<string, string> Header names normalized to "X-Some-Header" casing. */
@@ -87,7 +93,7 @@ class Request
         if (preg_match('#^[a-z][a-z0-9+.-]*://[^/]*(/.*)?$#i', $path, $absolute) === 1) {
             $path = $absolute[1] ?? '/';
         }
-        $req->path = $path !== '' ? $path : '/';
+        $req->path = self::decodedPath('/' . trim($path, '/'));
         foreach ($headers as $name => $value) {
             $req->headers[self::normalizeHeaderName($name)] = $value;
         }
@@ -214,6 +220,18 @@ class Request
             },
             $error,
         );
+    }
+
+    /** See $path. */
+    private static function decodedPath(string $path): string
+    {
+        $segments = array_map('rawurldecode', explode('/', $path));
+        foreach ($segments as $segment) {
+            if (str_contains($segment, '/') || str_contains($segment, "\0")) {
+                return $path;
+            }
+        }
+        return implode('/', $segments);
     }
 
     /** "CONTENT_TYPE" or "content-type" -> "Content-Type". */
