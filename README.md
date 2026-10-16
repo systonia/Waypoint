@@ -1070,8 +1070,10 @@ $app->configure(function (JWTOptions $opts, Environment $env) {
 $app->useJwt();
 ```
 
-Once enabled, a valid token's decoded payload is available as `$req->jwt` in any controller/middleware
-that receives the `Request`.
+Once enabled, a valid token's decoded payload is available as `$req->jwt` (an array, or `null`) in any
+controller/middleware that receives the `Request`. `#[Claims] UserClaims $user` binds it to a `FromArray` DTO
+instead; it implies `#[Authenticated]` (401 without a token, or with claims that don't fill the DTO), and a
+nullable `?UserClaims` makes the user optional.
 
 A plain browser page navigation never sends a bearer `Authorization` header; only an explicit
 `fetch()`/XHR call that sets one itself does. Set `JWTOptions::$cookieName` to also read the token back

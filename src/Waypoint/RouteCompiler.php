@@ -16,7 +16,7 @@ use Waypoint\Http\{MiddlewareBase, Redirect, Request, Response, View};
 use Waypoint\Plugin\{ArgumentBinder, RouteAttributeCompiler};
 use Waypoint\Routing\PropertyInjector;
 use Waypoint\Attributes\{
-    Authenticated, Body, Controller, FileFormatter, Inject, JSONFormatter, Manager, Middleware, NoGzip,
+    Authenticated, Body, Claims, Controller, FileFormatter, Inject, JSONFormatter, Manager, Middleware, NoGzip,
     Param, Permissions, Query, Role, RouteAttribute, SimpleXmlFormatter, SkipCsrf, Sunset, Task, Version
 };
 
@@ -121,7 +121,7 @@ final class RouteCompiler
                 'deprecated' => self::hasEither($rc, $method, Deprecated::class),
                 'sunsetHeader' => $sunsetDate !== null ? $this->formatSunsetHeader($sunsetDate, $httpMethod, $path) : null,
                 // #[Role]/#[Permissions] imply #[Authenticated].
-                'authenticated' => self::hasEither($rc, $method, Authenticated::class) || $role !== null || $permissions !== null,
+                'authenticated' => self::hasEither($rc, $method, Authenticated::class) || $role !== null || $permissions !== null || self::requiresClaims($method),
                 'role' => $role,
                 'permissions' => $permissions,
                 'throws' => [],
@@ -378,6 +378,17 @@ final class RouteCompiler
         return "#^{$pattern}$#";
     }
 
+    /** Whether a non-nullable #[Claims] parameter makes the route need a signed-in user. */
+    private static function requiresClaims(ReflectionMethod $method): bool
+    {
+        foreach ($method->getParameters() as $param) {
+            if (!$param->allowsNull() && $param->getAttributes(Claims::class) !== []) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * $argPlan, unless a parameter nothing binds would get null without taking it: a route that could only ever
      * fail with a TypeError stops the boot instead.
@@ -411,6 +422,7 @@ final class RouteCompiler
                 $type === Request::class => ['inject' => 'Request'],
                 $type === Response::class => ['inject' => 'Response'],
                 $body !== null && $type !== null && class_exists($type) => ['inject' => 'Body', 'class' => $type, 'validate' => true],
+                $type !== null && class_exists($type) && self::attribute($param, Claims::class) !== null => ['inject' => 'Claims', 'class' => $type, 'nullable' => $param->allowsNull()],
                 $body !== null && in_array($type, ['array', 'iterable'], true) && $of !== null && class_exists($of) => ['inject' => 'BodyCollection', 'class' => $of, 'validate' => true],
                 $body !== null && in_array($type, ['array', 'iterable'], true) => ['inject' => 'BodyArray'],
                 ($query = self::attribute($param, Query::class)) !== null => ['inject' => 'Query', 'name' => $query->name ?? $param->getName()] + self::scalarPlan($param, $type),

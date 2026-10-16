@@ -57,7 +57,7 @@ final class RouteGuard
         }
 
         $role = $route['role'] ?? null;
-        if (is_string($role) && (!is_array($req->jwt) || ($req->jwt['role'] ?? null) !== $role)) {
+        if (is_string($role) && ($req->jwt['role'] ?? null) !== $role) {
             throw new ForbiddenException();
         }
 

@@ -5,7 +5,7 @@ namespace Waypoint\OpenAPI;
 use Deprecated;
 use stdClass;
 use Waypoint\{Logger, Router, Waypoint};
-use Waypoint\Attributes\{Authenticated, Body, FileFormatter, Ignore, Param, Permissions, Query, Role, SimpleXmlFormatter, Summary, Tags, Throws};
+use Waypoint\Attributes\{Authenticated, Body, Claims, FileFormatter, Ignore, Param, Permissions, Query, Role, SimpleXmlFormatter, Summary, Tags, Throws};
 use Waypoint\Enums\Message;
 use Waypoint\Exceptions\HttpException;
 use Waypoint\Options\OpenAPIOptions;
@@ -297,7 +297,7 @@ class OpenAPIGenerator
             }
         }
 
-        [$security, $guardResponses] = $this->guardOf($methodAttrs, $classAttrs);
+        [$security, $guardResponses] = $this->guardOf($methodAttrs, $classAttrs, $this->requiresClaims($controllerClass, $methodName));
         if ($requestBody !== null || array_filter($parameters, self::converted(...)) !== []) {
             $guardResponses[422] = 'Validation failed';
         }
@@ -334,12 +334,12 @@ class OpenAPIGenerator
      * @param list<array{name: string, args: array<int|string, mixed>}> $classAttrs
      * @return array{0: list<array<string, list<string>>>|null, 1: array<int, string>}
      */
-    private function guardOf(array $methodAttrs, array $classAttrs): array
+    private function guardOf(array $methodAttrs, array $classAttrs, bool $claims = false): array
     {
         $role = self::stringArg(self::findAttr($methodAttrs, Role::class) ?? self::findAttr($classAttrs, Role::class) ?? [], 0, 'role');
         $permissions = self::findAttr($methodAttrs, Permissions::class) ?? self::findAttr($classAttrs, Permissions::class);
         $permissions = $permissions !== null ? Arr::stringList($permissions[0] ?? $permissions['permissions'] ?? []) : null;
-        $guarded = $role !== null || $permissions !== null || self::findAttr([...$classAttrs, ...$methodAttrs], Authenticated::class) !== null;
+        $guarded = $claims || $role !== null || $permissions !== null || self::findAttr([...$classAttrs, ...$methodAttrs], Authenticated::class) !== null;
         if (!$guarded) {
             // A public route opts out of the document's security
             return [$this->globalSecurity ? [] : null, []];
@@ -354,6 +354,18 @@ class OpenAPIGenerator
             return [null, $responses];
         }
         return [array_map(static fn (string $scheme): array => [$scheme => []], $this->schemeNames), $responses];
+    }
+
+    /** Whether the method takes a non-nullable #[Claims] parameter, which requires a signed-in user like #[Authenticated]. */
+    private function requiresClaims(string $controllerClass, string $methodName): bool
+    {
+        foreach (Arr::stringKeyed($this->methodCacheEntry($controllerClass, $methodName)['parameters'] ?? null) as $meta) {
+            $meta = Arr::stringKeyed($meta);
+            if (($meta['nullable'] ?? true) === false && self::findAttr(self::attrList($meta['attributes'] ?? null), Claims::class) !== null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

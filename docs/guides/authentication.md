@@ -196,6 +196,36 @@ final class DashboardController
 
 `#[Role]` and `#[Permissions]` imply `#[Authenticated]`. All three work on a class (every route, also of subclasses) and on a method; for `#[Role]` and `#[Permissions]` the method's attribute replaces the class's. The checks run before route middlewares and before arguments are bound.
 
+### Claims as a DTO
+
+`#[Claims]` binds the token's payload to a parameter typed with a [`FromArray`](binding.md#fromarray) DTO, so a route works with typed claims instead of `$req->jwt['sub']`:
+
+```php
+<?php
+
+namespace App\Auth;
+
+use Waypoint\FromArray;
+
+final class UserClaims
+{
+    use FromArray;
+
+    public int $sub;
+    public string $role = 'user';
+}
+```
+
+```php
+#[Get('/me')]
+public function me(#[Claims] UserClaims $user): array
+{
+    return ['id' => $user->sub, 'role' => $user->role];
+}
+```
+
+`#[Claims]` implies `#[Authenticated]`: without a valid token the route answers `401`, and so does a token whose claims don't fill the DTO (here, one without a `sub`). A nullable parameter (`#[Claims] ?UserClaims $user`) makes the user optional: it is `null` then. `$req->jwt` itself is the payload as an array, or `null`.
+
 ### Roles and permissions
 
 `#[Role]` compares one claim. For anything finer, `#[Permissions]` asks a [`PermissionProvider`](../reference/Waypoint/PermissionProvider.md), which the app implements and registers in [`PermissionOptions`](../reference/Waypoint/Options/PermissionOptions.md):

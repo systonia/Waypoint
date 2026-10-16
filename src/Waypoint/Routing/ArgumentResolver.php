@@ -3,7 +3,7 @@
 namespace Waypoint\Routing;
 
 use Waypoint\Enums\Message;
-use Waypoint\Exceptions\{HttpException, ValidationException};
+use Waypoint\Exceptions\{HttpException, UnauthorizedException, ValidationException};
 use Waypoint\Http\{Request, Response};
 use Waypoint\Plugin\ArgumentBinder;
 use Waypoint\FromArray;
@@ -36,6 +36,7 @@ final class ArgumentResolver
                 'Body' => self::body($arg, self::parsed($req)),
                 'BodyCollection' => self::bodyCollection($arg, self::parsed($req)),
                 'BodyArray' => self::parsed($req)->body,
+                'Claims' => self::claims($arg, $req),
                 'Scalar' => self::scalar($arg, $name, $req, $params),
                 'plugin' => $this->plugin($arg, $req, $res, $params),
                 default => null,
@@ -63,6 +64,25 @@ final class ArgumentResolver
             throw new HttpException(400, 'Bad Request', "Malformed JSON body: {$req->bodyError}.");
         }
         return $req;
+    }
+
+    /**
+     * The JWT claims as the parameter's DTO; a 401 without a token, or when its claims don't fill the DTO, unless the
+     * parameter is nullable.
+     * @param array<string, mixed> $arg
+     */
+    private static function claims(array $arg, Request $req): ?object
+    {
+        $class = $arg['class'] ?? null;
+        $optional = ($arg['nullable'] ?? false) === true;
+        if ($req->jwt === null || !is_string($class) || !class_exists($class)) {
+            return $optional ? null : throw new UnauthorizedException();
+        }
+        $claims = new $class($req->jwt);
+        if (self::errors($claims, new Validator()) !== []) {
+            return $optional ? null : throw new UnauthorizedException();
+        }
+        return $claims;
     }
 
     /** @param array<string, mixed> $arg */

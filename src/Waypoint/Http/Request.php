@@ -52,8 +52,8 @@ class Request
     /** The client's address: the connection's ('' if the runtime doesn't say), or behind a proxy listed in ProxyOptions::$trusted, what its X-Forwarded-For says. */
     public string $ip = '';
 
-    /** The decoded JWT payload, set by useJwt() when the request carried a valid token. */
-    public mixed $jwt = null;
+    /** @var array<string, mixed>|null The decoded JWT payload, set by useJwt() when the request carried a valid token; #[Claims] binds it as a DTO. */
+    public ?array $jwt = null;
 
     /** Whether $jwt came from the cookie (JWTOptions::$cookieName), which the browser sends on its own: a #[SkipCsrf] route ignores it. */
     public bool $jwtFromCookie = false;
