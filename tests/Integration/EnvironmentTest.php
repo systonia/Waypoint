@@ -28,6 +28,35 @@ final class EnvironmentTest extends IntegrationTestCase
         $this->assertSame('dev', (new Environment())->get('DYNAMIC'));
     }
 
+    public function testTypedGettersConvertTheTextAndThrowNamingAMissingKey(): void
+    {
+        Waypoint::create()->configure(function (EnvironmentOptions $opts) {
+            $opts->load(self::FIXTURES_DIR);
+            $opts->set('PORT', '8080')->set('RATIO', '0.5')->set('DEBUG', 'off')->set('VERBOSE', 'true');
+        });
+        $env = new Environment();
+
+        $this->assertSame(8080, $env->int('PORT'));
+        $this->assertSame(0.5, $env->float('RATIO'));
+        $this->assertFalse($env->bool('DEBUG'));
+        $this->assertTrue($env->bool('VERBOSE'));
+        $this->assertSame('dev', $env->string('DYNAMIC'));
+        // config.json keeps JSON types
+        $this->assertSame(42, $env->int('JSON_INT'));
+        $this->assertTrue($env->bool('JSON_BOOL'));
+        $this->assertSame(25, $env->int('PAGE_SIZE', 25));
+        $this->assertFalse($env->bool('FEATURE_X', false));
+
+        try {
+            $env->string('DATABASE_URL');
+            $this->fail('No exception');
+        } catch (\RuntimeException $e) {
+            $this->assertSame("Environment value 'DATABASE_URL' is not set.", $e->getMessage());
+        }
+        $this->expectExceptionMessage("Environment value 'DYNAMIC' is not an integer.");
+        $env->int('DYNAMIC');
+    }
+
     public function testIsDevReflectsTheConfiguredEnvironmentOptions(): void
     {
         Waypoint::create()->configure(function (EnvironmentOptions $opts) {

@@ -1384,6 +1384,10 @@ to/override) earlier ones:
 A value given with `set($key, $value)` wins over all of them, also when it was set before the first or a
 later `load()`.
 
+`get($key, $default)` returns the value as read (a string from `.env`, the JSON type from a JSON file);
+`string()`, `int()`, `float()` and `bool()` (`"false"`, `"0"`, `"off"` are `false`) convert it, and without a
+default throw a `RuntimeException` naming a missing key: `$env->int('PAGE_SIZE', 20)`, `$env->string('DATABASE_URL')`.
+
 `$dir` **defaults to the current working directory** (the project root, for how PHP is normally invoked:
 `php -S ... -t public`, `composer`/CLI tasks, most process managers), not this file's own location.
 Call it explicitly with an absolute path if your entry point's cwd isn't reliable in your deployment,

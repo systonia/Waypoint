@@ -133,10 +133,21 @@ final class Pagination
 
     public function pageSize(): int
     {
-        return (int) $this->env->get('PAGE_SIZE', 20);
+        return $this->env->int('PAGE_SIZE', 20);
     }
 }
 ```
+
+`get()` returns the value as it was read: a string from `.env` and the process environment, the JSON type from the JSON files. The typed getters convert it:
+
+| Method | Returns |
+|---|---|
+| `string($key, $default)` | the value as a string |
+| `int($key, $default)` | `"25"` or `25` as `25`; `"25px"` throws |
+| `float($key, $default)` | `"0.5"` as `0.5` |
+| `bool($key, $default)` | `true` for `"true"`, `"1"`, `"yes"`, `"on"`; `false` for `"false"`, `"0"`, `"no"`, `"off"` and `""`; anything else throws |
+
+Without a default, a missing key throws a `RuntimeException` naming it (`Environment value 'DATABASE_URL' is not set.`), so a required setting fails at boot instead of somewhere later.
 
 ### APP_ENV
 
