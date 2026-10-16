@@ -85,7 +85,9 @@ Wraps $css in one native CSS Nesting rule, `[data-view="$viewName"] { ... }`, an
 browser resolve the scope: nested rules become descendant selectors, and nesting is spec'd to
 work inside @media/@supports/@container too. Selector text is never touched, so a comma inside
 `:is(.a, .b)` can't break anything. Top-level @keyframes/@font-face are global constructs that
-can't be nested, so extractUnscopable() lifts them out unchanged first.
+can't be nested, and a top-level `:root`/`html` rule is about the document, never inside the view:
+extractUnscopable() lifts them out unchanged first. Top-level @charset/@import/@layer statements
+go in front of everything, where CSS requires them.
 
 **Parameters**
 

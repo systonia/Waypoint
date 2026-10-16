@@ -31,12 +31,13 @@ public function __construct(private \Waypoint\Options\FileSystemOptions $options
 ### serve()
 
 ```php
-public function serve(string $path, \Waypoint\Http\Response $res): bool
+public function serve(string $path, \Waypoint\Http\Response $res, ?\Waypoint\Http\Request $req = null): bool
 ```
 
 **Parameters**
 
 - `$path` `string`
 - `$res` [`Response`](Response.md)
+- `$req` [`Request`](Request.md)`|null`: Its If-Modified-Since answers 304 for a file not changed since.
 
 **Returns** `bool`

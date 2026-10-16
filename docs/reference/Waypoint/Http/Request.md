@@ -69,6 +69,14 @@ public array $body = [];
 
 A JSON object/form body (string keys) or a JSON list body (int keys, see #[Body(of: ...)]).
 
+### $bodyError
+
+```php
+public ?string $bodyError = null;
+```
+
+Why a JSON body could not be decoded (json_last_error_msg()), null when it could or there was none: #[Body] answers 400 then.
+
 ### $cookies
 
 ```php
@@ -111,10 +119,12 @@ The client's address: the connection's ('' if the runtime doesn't say), or behin
 ### $jwt
 
 ```php
-public mixed $jwt = null;
+public ?array $jwt = null;
 ```
 
-The decoded JWT payload, set by useJwt() when the request carried a valid token.
+**Type** `array<string, mixed>|null`
+
+The decoded JWT payload, set by useJwt() when the request carried a valid token; #[Claims] binds it as a DTO.
 
 ### $jwtFromCookie
 

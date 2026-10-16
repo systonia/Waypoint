@@ -129,7 +129,7 @@ public function withCookie(
     ?int $maxAge = null,
     string $path = '/',
     ?string $domain = null,
-    bool $secure = false,
+    ?bool $secure = null,
     bool $httpOnly = true,
     ?string $sameSite = 'Lax',
 ): \Waypoint\Http\Response
@@ -144,7 +144,7 @@ Queues a Set-Cookie. HttpOnly and SameSite=Lax by default, the right defaults fo
 - `$maxAge` `int|null`: Seconds; null makes it a session cookie.
 - `$path` `string`
 - `$domain` `?string`
-- `$secure` `bool`
+- `$secure` `bool|null`: Null: Secure when the request this answers came over HTTPS (Request::$https).
 - `$httpOnly` `bool`
 - `$sameSite` `string|null`: 'Lax', 'Strict', 'None', or null to omit the attribute.
 

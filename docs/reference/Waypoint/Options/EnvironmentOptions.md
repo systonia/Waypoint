@@ -1,6 +1,6 @@
 ---
 title: "EnvironmentOptions"
-description: "The env key/values Waypoint\\Environment reads: system env, $_ENV, $_SERVER, .env, .env.$APP_ENV, config.json, config.$APP_ENV.json, then $localConfigFile, each overlaid on the last."
+description: "The env key/values Waypoint\\Environment reads, each layer overriding the one before: the committed defaults config.json and config.$APP_ENV.json, then .env and .env.$APP_ENV, then the real process environment (system env, $_ENV, $_SERVER), then $localConfigFile, then set()."
 order: 100
 generated: true
 ---
@@ -11,10 +11,10 @@ generated: true
 class EnvironmentOptions
 ```
 
-The env key/values Waypoint\Environment reads: system env, $_ENV, $_SERVER,
-.env, .env.$APP_ENV, config.json, config.$APP_ENV.json, then
-$localConfigFile, each overlaid on the last. get()/isDev() load lazily on
-first use; configure explicitly only to point load() at another directory.
+The env key/values Waypoint\Environment reads, each layer overriding the one before: the committed defaults
+config.json and config.$APP_ENV.json, then .env and .env.$APP_ENV, then the real process environment (system
+env, $_ENV, $_SERVER), then $localConfigFile, then set(). get()/isDev() load lazily on first use; configure
+explicitly only to point load() at another directory.
 
 ## Properties
 

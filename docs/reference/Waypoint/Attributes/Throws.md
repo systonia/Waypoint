@@ -12,6 +12,7 @@ class Throws
 ```
 
 Documents an error response (OpenAPI only): which exception, its HTTP status, and an optional description.
+Without a status, an HttpException's own default code is used (404 for NotFoundException), 500 for any other.
 
 ## Properties
 
@@ -24,7 +25,7 @@ public string $exception;
 ### $status
 
 ```php
-public int $status;
+public ?int $status = null;
 ```
 
 ### $description
@@ -40,7 +41,7 @@ public ?string $description = null;
 ```php
 public function __construct(
     public string $exception,
-    public int $status,
+    public ?int $status = null,
     public ?string $description = null,
 )
 ```
@@ -48,5 +49,5 @@ public function __construct(
 **Parameters**
 
 - `$exception` `string`
-- `$status` `int`
+- `$status` `?int`
 - `$description` `?string`

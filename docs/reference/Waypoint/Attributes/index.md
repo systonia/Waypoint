@@ -9,6 +9,7 @@ generated: true
 
 - [`Authenticated`](Authenticated.md) · class: Requires a valid, decoded JWT (see useJwt()) for this route, on the class (every route on it, also those of subclasses) or a single method.
 - [`Body`](Body.md) · class: Binds the request body to a method parameter: a DTO class (hydrated via its array constructor, see FromArray, then validated), or, for an `array` parameter with `of: SomeDto::class`, a list of them, one per element.
+- [`Claims`](Claims.md) · class: Binds the signed-in user's JWT claims (`$req->jwt`) to a parameter typed with a FromArray DTO: `#[Claims] UserClaims $user`.
 - [`Controller`](Controller.md) · class: Marks a class as an HTTP controller, with an optional path prefix for every route on it (e.g.
 - [`Delete`](Delete.md) · class: Routes a controller method for HTTP DELETE.
 - [`Email`](Email.md) · class: Validation: a non-null property must be a syntactically valid email address.

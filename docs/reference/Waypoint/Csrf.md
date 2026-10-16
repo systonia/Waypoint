@@ -85,12 +85,12 @@ public function reset(): void
 ### field()
 
 ```php
-public function field(): string
+public function field(): \Waypoint\Html
 ```
 
-`<input type="hidden" name="{fieldName}" value="{token}">` for a plain `<form>`.
+`<input type="hidden" name="{fieldName}" value="{token}">` for a plain `<form>`, as Html a view prints unescaped.
 
-**Returns** `string`
+**Returns** [`Html`](Html.md)
 
 ### verify()
 

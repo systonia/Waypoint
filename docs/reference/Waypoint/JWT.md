@@ -28,6 +28,34 @@ public static function encode(array $payload, ?int $ttl = null): string
 
 **Returns** `string`
 
+### signIn()
+
+```php
+public static function signIn(\Waypoint\Http\Response $res, array $claims): string
+```
+
+Signs $claims into a token and sets it as the JWTOptions::$cookieName session cookie: HttpOnly, SameSite=Lax,
+Max-Age JWTOptions::$ttl, Secure when the request came over HTTPS. Returns the token, e.g. for an API client.
+
+**Parameters**
+
+- `$res` [`Response`](Http/Response.md)
+- `$claims` `array<string, mixed>`
+
+**Returns** `string`
+
+### signOut()
+
+```php
+public static function signOut(\Waypoint\Http\Response $res): void
+```
+
+Removes the JWTOptions::$cookieName session cookie.
+
+**Parameters**
+
+- `$res` [`Response`](Http/Response.md)
+
 ### decode()
 
 ```php

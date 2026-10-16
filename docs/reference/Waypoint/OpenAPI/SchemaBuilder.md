@@ -1,6 +1,6 @@
 ---
 title: "SchemaBuilder"
-description: "Builds and collects the `components.schemas` of a spec: one object schema per DTO class (public properties, typed; nested DTOs by $ref, recursion- safe), plus the shared RFC 9457 ProblemDetails schema."
+description: "Builds and collects the `components.schemas` of a spec: one object schema per DTO class (public properties, typed; nested DTOs by $ref, recursion- safe; enums inline with their values; lists from `@var list<X>`), plus the shared RFC 9457 ProblemDetails schema."
 order: 100
 generated: true
 ---
@@ -13,7 +13,7 @@ final class SchemaBuilder
 
 Builds and collects the `components.schemas` of a spec: one object schema
 per DTO class (public properties, typed; nested DTOs by $ref, recursion-
-safe), plus the shared RFC 9457 ProblemDetails schema. Also owns the
+safe; enums inline with their values; lists from `@var list<X>`), plus the shared RFC 9457 ProblemDetails schema. Also owns the
 PHP-type -> OpenAPI-type mapping parameters use.
 
 ## Methods
@@ -56,7 +56,8 @@ Registers $fqcn's schema (once) and returns its "#/components/schemas/..." refer
 public function nameFor(string $fqcn): string
 ```
 
-#[Schema(name: ...)] or the short class name.
+#[Schema(name: ...)] or the short class name; when another class has that name already, the full class name
+with dots for backslashes (`App.Billing.Item`), so two DTOs never share a schema.
 
 **Parameters**
 
@@ -78,13 +79,69 @@ Registers the shared RFC 9457 schema every #[Throws] response $refs.
 public function generateModelSchema(string $fqcn): array
 ```
 
-An object schema from $fqcn's public properties. A non-nullable property is required:
-PHP defaults aren't a usable "optional" signal, since FromArray DTOs give every
-property some type-safe default.
+An object schema from $fqcn's public properties. A property is required when it has no default and is not
+nullable: FromArray reports exactly those as missing. A nullable one allows null (`type: [x, "null"]`), and one
+the request cannot set (readonly, protected(set), private(set)) is `readOnly`, as FromArray never fills it.
 
 **Parameters**
 
 - `$fqcn` `string`
+
+**Returns** `array<string, mixed>`
+
+### nullable()
+
+```php
+public static function nullable(array $schema): array
+```
+
+$schema that also allows null: `type: [x, "null"]` (with null among an enum's values), or anyOf for a $ref.
+
+**Parameters**
+
+- `$schema` `array<string, mixed>`
+
+**Returns** `array<string, mixed>`
+
+### arraySchema()
+
+```php
+public function arraySchema(?array $element): array
+```
+
+An array from its docblock's element type: `list<X>` / `X[]` as items, `array<string, X>` as additionalProperties.
+
+**Parameters**
+
+- `$element` `array{0: 'list'|'map', 1: string}|null`
+
+**Returns** `array<string, mixed>`
+
+### typeSchema()
+
+```php
+public function typeSchema(string $type): array
+```
+
+A scalar keyword, an enum (inline, with its values) or a class (by $ref).
+
+**Parameters**
+
+- `$type` `string`
+
+**Returns** `array<string, mixed>`
+
+### enumSchema()
+
+```php
+public static function enumSchema(string $enum): array
+```
+
+`{type, enum}`: a backed enum's values, a pure enum's case names.
+
+**Parameters**
+
+- `$enum` `string`
 
 **Returns** `array<string, mixed>`
 

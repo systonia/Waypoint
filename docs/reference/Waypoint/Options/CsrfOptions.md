@@ -59,10 +59,10 @@ Body field checked second (the plain `<form>` path, see Csrf::field()).
 ### $cookieSecure
 
 ```php
-public bool $cookieSecure = true;
+public ?bool $cookieSecure = null;
 ```
 
-Cookie Secure attribute. True by default; set false only for HTTP-only local dev.
+Cookie Secure attribute. Null (default): Secure when the request came over HTTPS (behind a trusted proxy, as it says).
 
 ### $cookieSameSite
 

@@ -14,7 +14,7 @@ class NotFoundException extends \Waypoint\Exceptions\HttpException implements \P
 Extends [`HttpException`](HttpException.md)  
 Implements `Psr\Container\NotFoundExceptionInterface`
 
-HTTP 404 "Not Found": $message becomes the RFC 9457 'detail', $code overrides the status. Also thrown by Container::get() for a missing service, hence the PSR NotFoundExceptionInterface.
+HTTP 404 "Not Found": $message becomes the RFC 9457 'detail', $code overrides the status. It implements PSR-11's NotFoundExceptionInterface for handlers registered on that interface; Container::get() throws ServiceNotFoundException.
 
 ## Methods
 

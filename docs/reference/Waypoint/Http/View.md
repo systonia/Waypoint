@@ -14,7 +14,9 @@ class View
 A server-rendered template result: `return new View('Admin/Users', $model)`
 renders views/Admin/Users.php inside RendererOptions::$layout (unless
 $partial). Inside a template `$this` is this View and `$model` the model;
-`$this->env`/`$this->csrf` are injected by Router before render().
+`$this->env`/`$this->csrf`/`$this->request` are set by Router before render().
+`<?= $value ?>` is HTML-escaped; Waypoint\Html (what section(), assetTags() and
+the like return) and `<?php echo ?>` print as they are.
 
 ## Properties
 
@@ -33,6 +35,14 @@ protected \Waypoint\Csrf $csrf;
 ```
 
 Available inside templates as `$this->csrf` (already carrying this request's token).
+
+### $request
+
+```php
+public private(set) ?\Waypoint\Http\Request $request = null;
+```
+
+The request being answered, inside templates `$this->request`; set by Router::renderView(), null for a View rendered outside one.
 
 ### $view
 
@@ -200,6 +210,16 @@ public function getViewName(): string
 
 **Returns** `string`
 
+### setRequest()
+
+```php
+public function setRequest(\Waypoint\Http\Request $request): void
+```
+
+**Parameters**
+
+- `$request` [`Request`](Request.md)
+
 ### setAssets()
 
 ```php
@@ -269,64 +289,64 @@ public function __call(string $name, array $arguments): mixed
 ### pluginAssetTags()
 
 ```php
-public function pluginAssetTags(): string
+public function pluginAssetTags(): \Waypoint\Html
 ```
 
 `<link>`/`<script>` tags for every plugin-shipped asset; place after waypointJsTag().
 
-**Returns** `string`
+**Returns** [`Html`](../Html.md)
 
 ### assetTags()
 
 ```php
-public function assetTags(): string
+public function assetTags(): \Waypoint\Html
 ```
 
 `<link>`/`<script>` tags for this view's own CSS/JS, for the layout's `<head>`.
 
-**Returns** `string`
+**Returns** [`Html`](../Html.md)
 
 ### layoutAssetTags()
 
 ```php
-public function layoutAssetTags(): string
+public function layoutAssetTags(): \Waypoint\Html
 ```
 
 Same for the layout's own CSS/JS; empty in a partial render.
 
-**Returns** `string`
+**Returns** [`Html`](../Html.md)
 
 ### waypointJsTag()
 
 ```php
-public function waypointJsTag(): string
+public function waypointJsTag(): \Waypoint\Html
 ```
 
 `<script>` tag for the bundled waypoint.js client (content-hashed, served like any view asset).
 Carries the CSRF cookie/header names as data attributes when CsrfOptions differs from the
 client's defaults, so the layout never repeats what the options already say.
 
-**Returns** `string`
+**Returns** [`Html`](../Html.md)
 
 ### scopeAttribute()
 
 ```php
-public function scopeAttribute(): string
+public function scopeAttribute(): \Waypoint\Html
 ```
 
 `data-view="..."` for the element wrapping `$content` (what the view's scoped CSS matches on); '' when it has no assets.
 
-**Returns** `string`
+**Returns** [`Html`](../Html.md)
 
 ### layoutScopeAttribute()
 
 ```php
-public function layoutScopeAttribute(): string
+public function layoutScopeAttribute(): \Waypoint\Html
 ```
 
 Same for the layout's own scoped CSS, e.g. on `<body>`.
 
-**Returns** `string`
+**Returns** [`Html`](../Html.md)
 
 ### startSection()
 
@@ -347,15 +367,31 @@ public function endSection(): void
 ### section()
 
 ```php
-public function section(string $name, bool $required = false): string|bool
+public function section(string $name, bool $required = false): \Waypoint\Html
 ```
+
+The section's markup, empty when it was never started (or an exception for a $required one).
 
 **Parameters**
 
 - `$name` `string`
 - `$required` `bool`
 
-**Returns** `string|bool`
+**Returns** [`Html`](../Html.md)
+
+### hasSection()
+
+```php
+public function hasSection(string $name): bool
+```
+
+Whether the view started the section, e.g. to leave out its wrapper.
+
+**Parameters**
+
+- `$name` `string`
+
+**Returns** `bool`
 
 ### render()
 
@@ -366,5 +402,20 @@ public function render(): string
 Renders the view, then the layout around it. Should a template throw, every output buffer it
 opened (its own and any unfinished section) is discarded: the half-rendered page must neither
 end up in the error response nor stay open in a persistent worker for the next request.
+
+**Returns** `string`
+
+### escape()
+
+```php
+public static function escape(mixed ...$values): string
+```
+
+What `<?= ?>` prints: scalars and Stringable HTML-escaped, Html as it is, null as nothing. Anything else (an
+array, an object without __toString()) is a TypeError rather than "Array".
+
+**Parameters**
+
+- `...$values` `mixed`
 
 **Returns** `string`

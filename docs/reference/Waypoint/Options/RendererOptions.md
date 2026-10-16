@@ -41,7 +41,7 @@ public array $errors { get; }
 
 **Type** `array<string, string>`
 
-field => message; attribute rules first, then fail() entries.
+field => message; attribute rules first, then fail() entries, required fields left unset, and nested DTOs' errors ("address.city").
 
 ### $isValid
 

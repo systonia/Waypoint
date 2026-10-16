@@ -97,7 +97,9 @@ public function serve(?int $port = null, array|string|null $static = null): void
 
 The one line at the end of index.php, whatever runs it. Under Tenma it starts the server on $port, or on
 PORT from the Environment (8080 without one), and Tenma serves FileSystemOptions::$publicDirectory itself,
-without PHP; under FPM, php -S or the CLI it is run(), and Waypoint serves that directory.
+without PHP; started with arguments (`tenma index.php users:sync`) it runs that CLI task instead, in a Tenma
+task so it can wait on Postgres or fetch(), and exits with its code. Under FPM, php -S or the CLI it is run(),
+and Waypoint serves that directory.
 
 **Parameters**
 
@@ -181,10 +183,29 @@ doing so anyway is harmless).
 ### get()
 
 ```php
-public function get(string $class): ?object
+public function get(string $class): object
 ```
 
-The container's instance of $class (a service, an Options class, Environment), or null when it can't be built.
+The container's instance of $class (a service, an Options class, Environment). A class it can't build throws
+(ServiceNotFoundException, or ContainerException when its constructor fails); find() returns null instead.
+
+**Parameters**
+
+- `$class` `class-string<T>`
+
+**Returns** `T`
+
+**Template parameters**
+
+- `T` of `object`
+
+### find()
+
+```php
+public function find(string $class): ?object
+```
+
+Like get(), but null when the container can't build $class.
 
 **Parameters**
 
