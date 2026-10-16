@@ -589,7 +589,7 @@ class Router
         if ($view->getDirectory() === null) {
             $view->setAssets($this->getViewAssets($view->getViewName())); // the layout renders the tags
         }
-        $res->withHeader('Content-Type', 'text/html')->write($view->render());
+        $res->withHeader('Content-Type', 'text/html; charset=utf-8')->write($view->render());
     }
 
     /**

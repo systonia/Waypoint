@@ -34,7 +34,7 @@ final class OpenAPIEndpointTest extends IntegrationTestCase
         $output = $this->dispatch('GET', '/openapi/swagger.html');
 
         $this->assertStringContainsString('<html', $output);
-        $this->assertStringStartsWith('text/html', $this->sentHeaders()['content-type'] ?? '');
+        $this->assertSame('text/html; charset=utf-8', $this->sentHeaders()['content-type'] ?? null);
     }
 
     public function testSpecRouteServesTheGeneratedOpenApiDocument(): void

@@ -38,7 +38,7 @@ final class OpenAPIEndpoint implements Endpoint
 
         $file = substr($path, strlen($prefix));
         if ($file === 'swagger.html') {
-            $res->withHeader('Content-Type', 'text/html')->write($this->swaggerHtml());
+            $res->withHeader('Content-Type', 'text/html; charset=utf-8')->write($this->swaggerHtml());
             return true;
         }
         if ($file === 'spec.json') {

@@ -37,6 +37,15 @@ final class ViewInjectPropertiesTest extends IntegrationTestCase
         $this->assertSame('staging-under-test', trim($output));
     }
 
+    public function testAViewIsSentAsUtf8Html(): void
+    {
+        $this->bootApp();
+
+        $this->dispatch('GET', '/view-env');
+
+        $this->assertSame('text/html; charset=utf-8', $this->sentHeaders()['content-type'] ?? null);
+    }
+
     public function testDefaultsToTheLazilyDetectedEnvironmentWhenNothingWasConfigured(): void
     {
         $app = $this->bootApp();
