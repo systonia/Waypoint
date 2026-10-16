@@ -14,7 +14,7 @@ final class FileSystemCacheTest extends IntegrationTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // A dedicated, unique directory per test -- never the shared default
+        // A dedicated, unique directory per test, never the shared default
         // (sys_get_temp_dir() . '/cache'), so these tests can never
         // collide with each other or with any other Router construction
         // that falls back to that default.
@@ -116,7 +116,7 @@ final class FileSystemCacheTest extends IntegrationTestCase
         $this->router([CustomersController::class, OrdersController::class], [], $options);
 
         // A cache built for two controllers must not be considered valid
-        // for just one of them -- otherwise the removed controller's routes
+        // for just one of them; otherwise the removed controller's routes
         // would keep being served from the stale cache.
         $this->assertFalse($fileSystem->isAvailable([CustomersController::class]));
     }
@@ -373,7 +373,7 @@ final class FileSystemCacheTest extends IntegrationTestCase
         $spec = require $this->tempDir . '/routes.php';
         $cssFilename = $spec['viewAssetsByName']['WithBoth']['css'];
         $this->assertNotNull($cssFilename);
-        // routes.php itself only ever holds {filename => mime} -- the
+        // routes.php itself only ever holds {filename => mime}; the
         // actual CSS text lives as a real file under getAssetsDirectory().
         $this->assertSame('text/css; charset=utf-8', $spec['viewAssetFiles'][$cssFilename]);
         $this->assertSame(
@@ -383,7 +383,7 @@ final class FileSystemCacheTest extends IntegrationTestCase
 
         // Trust mode: a fresh Router must report the exact same mapping by
         // reading it back from the cache, proving it never re-ran
-        // ViewAssets::compile() -- the real proof is that this still works
+        // ViewAssets::compile(). The real proof is that this still works
         // even though the fixture directory itself no longer resolves the
         // way it did at compile time (RendererOptions isn't reconfigured on
         // this second Router at all).
@@ -402,7 +402,7 @@ final class FileSystemCacheTest extends IntegrationTestCase
     public function testTrustModeReusesACompiledLayoutsOwnAssetsWithoutRescanningTheViewsDirectory(): void
     {
         // LayoutWithAssets.php/.css/.js (see Tests/Fixtures/Views/) is a
-        // layout template, not a view -- ViewAssets::compile() discovers
+        // layout template, not a view. ViewAssets::compile() discovers
         // its sibling CSS/JS the exact same way it does for any view, so
         // it must be equally present in the cache and equally exempt from
         // re-scanning under trust mode.
@@ -427,7 +427,7 @@ final class FileSystemCacheTest extends IntegrationTestCase
 
         // Trust mode: a fresh Router must report the exact same layout
         // asset mapping read back from the cache, without ever re-running
-        // ViewAssets::compile() -- proven the same way the sibling test
+        // ViewAssets::compile(), proven the same way the sibling test
         // above proves it for a plain view: RendererOptions isn't
         // reconfigured on this second Router at all, yet the lookup still
         // resolves correctly.
@@ -456,7 +456,7 @@ final class FileSystemCacheTest extends IntegrationTestCase
         $firstHash = require $this->tempDir . '/routes.php';
         $firstFilename = $firstHash['viewAssetsByName']['ScratchView']['css'];
 
-        // Edit the CSS -- content AND mtime both change.
+        // Edit the CSS: content AND mtime both change.
         file_put_contents("$scratchDir/ScratchView.css", '.v2 { color: blue; }');
         touch("$scratchDir/ScratchView.css", time() + 5);
 
@@ -517,7 +517,7 @@ final class FileSystemCacheTest extends IntegrationTestCase
 
     public function testStoreViewAssetFilesDoesNotRewriteAnAlreadyExistingFile(): void
     {
-        // Content-hashed filenames are immutable -- storeViewAssetFiles()
+        // Content-hashed filenames are immutable: storeViewAssetFiles()
         // trusts an existing file as-is rather than rewriting it, proven
         // here directly by writing the same filename twice with different
         // content and confirming the first write wins.

@@ -78,7 +78,7 @@ final class RouterDispatchTest extends IntegrationTestCase
         $this->assertSame("sku,name\nA-1,Widget\n", $output);
         $headers = $this->sentHeaders();
         // PHP's default_charset ini setting appends ";charset=UTF-8" to any
-        // Content-Type header that doesn't already specify one -- not
+        // Content-Type header that doesn't already specify one. That's not
         // something Waypoint itself adds, so we only check the prefix.
         $this->assertStringStartsWith('text/plain', $headers['content-type'] ?? '');
         $this->assertSame('attachment; filename="report.txt"', $headers['content-disposition'] ?? null);
@@ -152,8 +152,8 @@ final class RouterDispatchTest extends IntegrationTestCase
 
     public function testViewWithSiblingCssAndJsLinksBothFromThePage(): void
     {
-        // HomePage.css/HomePage.js are real sibling fixture files -- see
-        // Tests/Fixtures/Views/.
+        // HomePage.css/HomePage.js are real sibling fixture files (see
+        // Tests/Fixtures/Views/).
         $output = $this->dispatch('GET', '/customers');
 
         $this->assertNotNull(self::linkedViewAsset($output, 'css'));
@@ -167,7 +167,7 @@ final class RouterDispatchTest extends IntegrationTestCase
         $output = $this->dispatch('GET', "/assets/$cssFilename");
         $headers = $this->sentHeaders();
 
-        // Scoped by ViewAssets::compile() -- wrapped in the view's own
+        // Scoped by ViewAssets::compile(): wrapped in the view's own
         // [data-view="HomePage"] nesting parent, not served raw.
         $this->assertSame("[data-view=\"HomePage\"] {\n    .home-page {\n        color: navy;\n    }\n}\n", $output);
         $this->assertStringStartsWith('text/css', $headers['content-type'] ?? '');
@@ -197,9 +197,9 @@ final class RouterDispatchTest extends IntegrationTestCase
         // The compiled {filename => mime} manifest says this filename is
         // legit, but the physical file under FileSystem::getAssetsDirectory()
         // was removed from under it (e.g. a partially cleared cache
-        // directory) -- must 404 gracefully, not throw trying to read it.
+        // directory) must 404 gracefully, not throw trying to read it.
         // A dedicated cache dir, not the shared default the rest of this
-        // class's tests rely on -- deleting a file out of that would leak
+        // class's tests rely on; deleting a file out of that would leak
         // into whichever other test happens to run next.
         $tempDir = sys_get_temp_dir() . '/waypoint-test-' . bin2hex(random_bytes(6));
         try {

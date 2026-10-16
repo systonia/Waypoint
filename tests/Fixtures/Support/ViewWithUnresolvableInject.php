@@ -7,7 +7,7 @@ use Waypoint\Attributes\Inject;
 
 /**
  * A View subclass with an #[Inject] property typed to a class that doesn't
- * exist -- exercises Router::injectViewProperties()'s !class_exists($type)
+ * exist. Exercises Router::injectViewProperties()'s !class_exists($type)
  * skip branch, which a plain View::$env (always resolvable) never reaches.
  */
 class ViewWithUnresolvableInject extends View

@@ -87,7 +87,7 @@ class App
 
     /**
      * Constructs (or reuses an already-configured instance of) every class, registers all of
-     * them, and only then wires #[Inject] properties -- so injection works regardless of
+     * them, and only then wires #[Inject] properties, so injection works regardless of
      * discovery order.
      *
      * @param class-string[] $classes
@@ -322,7 +322,7 @@ class App
         });
 
         // Anything else: logged, and a generic 500 that never leaks the message (a file path,
-        // a query, a driver error) -- not even in development. Override via useExceptionHandler().
+        // a query, a driver error), not even in development. Override via useExceptionHandler().
         $this->useExceptionHandler(Throwable::class, function (Throwable $e, Request $req, Response $res): void {
             $this->container->get(Logger::class)->error($e->getMessage(), ['exception' => $e]);
             $this->writeProblemDetails($res, 500, ['type' => 'about:blank', 'title' => 'Internal Server Error', 'status' => 500]);
@@ -338,7 +338,7 @@ class App
             ->write($body !== false ? $body : '{"type":"about:blank","title":"Internal Server Error","status":500}');
     }
 
-    /** Sec-Fetch-Mode: navigate -- a top-level navigation, where only a real 3xx can react; absent (curl, old browser) counts as "no". */
+    /** Sec-Fetch-Mode: navigate, i.e. a top-level navigation where only a real 3xx can react; absent (curl, old browser) counts as "no". */
     private static function isBrowserNavigation(Request $req): bool
     {
         foreach ($req->headers as $name => $value) {

@@ -17,7 +17,7 @@ class JWTOptions
     /** Request header the token is read from. */
     public string $header = 'Authorization';
 
-    /** Cookie to also read the token from when the header has none -- what lets a signed-in session survive a full page load. Null disables it. */
+    /** Cookie to also read the token from when the header has none. This lets a signed-in session survive a full page load. Null disables it. */
     public ?string $cookieName = null;
 
     /**

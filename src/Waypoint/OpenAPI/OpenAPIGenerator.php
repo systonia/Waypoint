@@ -13,7 +13,7 @@ use Waypoint\Support\Arr;
 
 /**
  * Builds an OpenAPI 3.1 document from the Router's route list and the
- * attribute cache RouteCompiler::exportAllAttributes() wrote -- no
+ * attribute cache RouteCompiler::exportAllAttributes() wrote, with no
  * controller reflection at request time; only DTO classes are reflected,
  * by SchemaBuilder.
  */
@@ -64,7 +64,7 @@ class OpenAPIGenerator
         ], fn($value) => $value !== null);
     }
 
-    /** True if any compiled route carries #[Version($version)] -- so a spec.vX.json for an unknown version can 404. */
+    /** True if any compiled route carries #[Version($version)], so a spec.vX.json for an unknown version can 404. */
     public function hasVersion(string $version): bool
     {
         foreach ($this->router->getRoutes() as $route) {
@@ -166,7 +166,7 @@ class OpenAPIGenerator
     }
 
     /**
-     * [controllerClass, methodName] from a route's handlerSpec -- a plain pair, or one nested under
+     * [controllerClass, methodName] from a route's handlerSpec: a plain pair, or one nested under
      * 'spec'. The class isn't verified to exist: a missing attribute-cache entry just means "no attributes".
      *
      * @return array{0: string, 1: string}|null

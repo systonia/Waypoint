@@ -6,7 +6,7 @@ use Waypoint\Attributes\{Controller, Get, Sunset};
 
 /**
  * Native PHP #[\Deprecated] (8.4+, not a Waypoint attribute) at the
- * method level, paired with #[Sunset] -- RouteCompiler reads both via
+ * method level, paired with #[Sunset]. RouteCompiler reads both via
  * Reflection and bakes them into the compiled plan (see
  * RouteCompilerVersioningTest, which inspects the plan directly rather
  * than dispatching, so this fixture's real PHP-level deprecation notice

@@ -21,7 +21,7 @@ final class ErrorLogLogger extends AbstractLogger
             $line .= ' ' . json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
         }
         if ($exception instanceof Throwable) {
-            $line .= ' — ' . get_class($exception) . ': ' . $exception->getMessage() . ' in ' . $exception->getFile() . ':' . $exception->getLine();
+            $line .= ' | ' . get_class($exception) . ': ' . $exception->getMessage() . ' in ' . $exception->getFile() . ':' . $exception->getLine();
         }
         error_log($line);
     }

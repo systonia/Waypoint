@@ -6,7 +6,7 @@ use Waypoint\Attributes\{Controller, Get};
 use Waypoint\Logger;
 
 /**
- * Logs from inside a real dispatched request -- proves Logger::log()
+ * Logs from inside a real dispatched request. Proves Logger::log()
  * picks up the current request's id (RequestContext, set by
  * App::handleHttp()) on its own, without the route handler passing it in.
  */

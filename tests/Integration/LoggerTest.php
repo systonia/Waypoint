@@ -12,7 +12,7 @@ use Waypoint\Tests\Fixtures\Services\ServiceWithInjectedLogger;
 /**
  * Logger is a stateless service: every call resolves the live LoggerOptions
  * the container currently holds (Waypoint::getConfig()), rather than capturing
- * one at construction time -- so, unlike the old static Logger, these tests
+ * one at construction time. So, unlike the old static Logger, these tests
  * need a real App/container (Waypoint::create()) to configure LoggerOptions
  * against. Pure add()/addMono()/getLoggers() behavior, which needs none of
  * that, is covered directly by LoggerOptionsTest instead.
@@ -52,7 +52,7 @@ final class LoggerTest extends IntegrationTestCase
         }
 
         $this->assertStringNotContainsString('only chatter', $log);
-        $this->assertStringContainsString('[error] it broke {"order":7} — RuntimeException: disk full in ' . __FILE__, $log);
+        $this->assertStringContainsString('[error] it broke {"order":7} | RuntimeException: disk full in ' . __FILE__, $log);
     }
 
     #[DataProvider('psrLevelMethodProvider')]
@@ -100,8 +100,8 @@ final class LoggerTest extends IntegrationTestCase
 
     public function testConfiguringLoggerOptionsAfterAttachStillReachesAnAlreadyInjectedLogger(): void
     {
-        // Logger never captures LoggerOptions at construction time -- it
-        // resolves the live one on every call -- so configure() order
+        // Logger never captures LoggerOptions at construction time (it
+        // resolves the live one on every call), so configure() order
         // relative to attach()/injection doesn't matter.
         $app = Waypoint::create();
         $app->attach([ServiceWithInjectedLogger::class]);

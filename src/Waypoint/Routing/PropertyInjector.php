@@ -14,7 +14,7 @@ use Waypoint\Support\Arr;
 
 /**
  * Sets #[Inject] properties. Two sources: a compiled propInject plan
- * (controllers, #[Middleware] classes, task managers -- reflected once by
+ * (controllers, #[Middleware] classes, task managers; reflected once by
  * RouteCompiler), or live reflection for objects user code constructs
  * itself (a View, an $app->use()d middleware, a discovered service).
  */

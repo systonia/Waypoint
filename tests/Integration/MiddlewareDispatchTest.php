@@ -45,7 +45,7 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
     {
         // Unlike a per-route #[Middleware(...)] class, an instance passed
         // to $app->use() never goes through Router::resolveController()/
-        // injectControllerProperties() -- App::use() wires #[Inject]
+        // injectControllerProperties(). App::use() wires #[Inject]
         // itself (injectServiceProperties(), the same pass attach() runs
         // for eagerly-constructed services), or this would stay unset.
         Waypoint::create()->use(new InjectingMiddleware());
@@ -70,7 +70,7 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
     {
         // Response::send() only runs once, in App::handleHttp(), after
         // the entire chain (per-route #[Middleware(...)] included) has
-        // unwound -- so a header set from either hook actually reaches
+        // unwound, so a header set from either hook actually reaches
         // the client, not just before().
         $this->dispatch('GET', '/middleware/before-after');
         $headers = $this->sentHeaders();
@@ -133,7 +133,7 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
     {
         // Not dispatched: Router's 'Unknown' binding always passes null,
         // which would TypeError against this method's non-nullable union
-        // parameter -- the point here is only that *compiling* the route
+        // parameter. The point here is only that *compiling* the route
         // (buildArgPlan() can't map string|int to one builtin type) doesn't
         // crash App::attach() itself.
         $routes = Waypoint::create()->getRouter()->getRoutes();

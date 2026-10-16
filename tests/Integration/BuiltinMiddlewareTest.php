@@ -61,7 +61,7 @@ final class BuiltinMiddlewareTest extends IntegrationTestCase
 
     public function testCorsMiddlewareReflectsConfigureCallsMadeAfterUseCors(): void
     {
-        // Resolved fresh from the container on every request -- configure()
+        // Resolved fresh from the container on every request, so configure()
         // doesn't have to run before useCors() itself.
         $app = Waypoint::create();
         $app->attach([OrdersController::class]);

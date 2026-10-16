@@ -69,7 +69,7 @@ final class StaticFileServingTest extends IntegrationTestCase
     public function testPathTraversalOutsideThePublicDirectoryIsRejectedEvenWhenTheTargetFileExists(): void
     {
         // Tests/Fixtures/Env/.env genuinely exists one directory above the
-        // public root -- proving the containment check (not just a missing
+        // public root, proving the containment check (not just a missing
         // file) is what blocks this.
         $output = $this->dispatch('GET', '/../Env/.env');
         $this->assertSame(['error' => 'Not found'], json_decode($output, true));

@@ -230,7 +230,7 @@ final class ValidatorTest extends TestCase
         // an accumulated list): it checks NotBlank, then Email, then Length,
         // then Regex, in that fixed order, so when several rules on the
         // same property fail, whichever is checked last overwrites earlier
-        // messages -- here Length (checked after NotBlank) wins.
+        // messages. Here Length (checked after NotBlank) wins.
         $dto = new ValidatorTest_MultiRuleDTO();
         $dto->code = ''; // fails both #[NotBlank] and #[Length(min:3)]
 

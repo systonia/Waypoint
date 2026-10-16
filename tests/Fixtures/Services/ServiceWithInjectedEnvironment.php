@@ -6,7 +6,7 @@ use Waypoint\Attributes\Inject;
 use Waypoint\Environment;
 
 /**
- * A container-managed service that #[Inject]s Environment -- proves
+ * A container-managed service that #[Inject]s Environment. Proves
  * Environment is genuinely usable via #[Inject]/container resolution, not
  * just via `new Environment()` directly.
  */

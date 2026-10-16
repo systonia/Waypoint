@@ -15,7 +15,7 @@ class NestedViewsController
         return new View('Admin/Users');
     }
 
-    /** Builds the view name from request input -- what View's constructor guards against. */
+    /** Builds the view name from request input: what View's constructor guards against. */
     #[Get('/by-name')]
     public function byName(#[Query] string $name): View
     {

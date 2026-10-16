@@ -24,14 +24,14 @@ class MaintenanceManager
         return isset($this->service) ? get_class($this->service) : 'MISSING';
     }
 
-    // No #[Task] attribute at all -- Router::compileManager() must skip it,
+    // No #[Task] attribute at all. Router::compileManager() must skip it,
     // not expose it as a runnable task.
     public function helper(): string
     {
         return 'not a task';
     }
 
-    // #[Task] with no name -- also skipped, since an unnamed task can never
+    // #[Task] with no name: also skipped, since an unnamed task can never
     // be looked up by executeTask().
     #[Task]
     public function unnamedTask(): string

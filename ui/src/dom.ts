@@ -2,7 +2,7 @@
 
 /**
  * One delegated listener on `document` for every element carrying `attribute`,
- * present now or inserted later -- nothing is ever bound per element, so a swap
+ * present now or inserted later. Nothing is ever bound per element, so a swap
  * never needs re-binding. `capture` is for events that don't bubble.
  */
 export function delegate(

@@ -136,7 +136,7 @@ class View
         return $helper(...$arguments);
     }
 
-    /** `<link>`/`<script>` tags for every plugin-shipped asset -- place after waypointJsTag(). */
+    /** `<link>`/`<script>` tags for every plugin-shipped asset; place after waypointJsTag(). */
     public function pluginAssetTags(): string
     {
         $tags = '';
@@ -149,7 +149,7 @@ class View
         return $tags;
     }
 
-    /** `<link>`/`<script>` tags for this view's own CSS/JS -- for the layout's `<head>`. */
+    /** `<link>`/`<script>` tags for this view's own CSS/JS, for the layout's `<head>`. */
     public function assetTags(): string
     {
         return $this->renderAssetTags($this->assets);
@@ -191,7 +191,7 @@ class View
         return $tags;
     }
 
-    /** `data-view="..."` for the element wrapping `$content` -- what the view's scoped CSS matches on; '' when it has no assets. */
+    /** `data-view="..."` for the element wrapping `$content` (what the view's scoped CSS matches on); '' when it has no assets. */
     public function scopeAttribute(): string
     {
         return $this->scopeAttributeFor($this->assets, $this->view);

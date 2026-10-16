@@ -7,7 +7,7 @@ use Waypoint\ViewAssets;
 
 /**
  * Direct unit coverage for ViewAssets, independent of Router/FileSystem's
- * caching machinery -- RouterDispatchTest exercises the same class through
+ * caching machinery. RouterDispatchTest exercises the same class through
  * a real request, but which code path (fresh compile vs. cache-hit) that
  * takes depends on what's already sitting in the shared temp cache
  * directory from earlier tests, so it can't reliably exercise every branch
@@ -120,7 +120,7 @@ final class ViewAssetsTest extends TestCase
         // splitting a selector list on every comma breaks as soon as one
         // selector uses a functional pseudo-class with its own comma.
         // Wrapping instead of rewriting means there's no selector text to
-        // split at all -- the browser's own nesting resolution handles it.
+        // split at all: the browser's own nesting resolution handles it.
         $css = ':is(.a, .b) > .c { color: red; }';
 
         $this->assertSame(
@@ -132,7 +132,7 @@ final class ViewAssetsTest extends TestCase
     public function testScopeCssNestsAMediaBlockInsideTheWrapperUnchanged(): void
     {
         // CSS Nesting is explicitly spec'd to work inside @media/@supports/
-        // @container too -- the wrapper doesn't need to know @media exists.
+        // @container too, so the wrapper doesn't need to know @media exists.
         $css = '@media (max-width: 600px) { .card { padding: 4px; } }';
 
         $this->assertSame(
@@ -143,7 +143,7 @@ final class ViewAssetsTest extends TestCase
 
     public function testScopeCssLeavesKeyframesCompletelyUnwrapped(): void
     {
-        // @keyframes is a global construct, not a selector -- CSS Nesting
+        // @keyframes is a global construct, not a selector. CSS Nesting
         // doesn't allow nesting it inside a style rule, so it has to stay
         // outside the wrapper entirely.
         $css = '@keyframes spin { 0% { opacity: 0; } 100% { opacity: 1; } }';
@@ -172,7 +172,7 @@ final class ViewAssetsTest extends TestCase
     {
         // Regression test: this exact shape (a file-header comment whose
         // prose contains commas) is what waypoint-bakery's ProductDetail.css
-        // actually has -- verifying it's inert now that comments just ride
+        // actually has, verifying it's inert now that comments just ride
         // along inside the wrapper rather than needing to be parsed at all.
         $css = "/* a note, with a comma, right here */\n.price { color: red; }";
 
@@ -194,7 +194,7 @@ final class ViewAssetsTest extends TestCase
 
     public function testScopeCssHandlesAnUnclosedKeyframesBlockWithoutCrashing(): void
     {
-        // Malformed/truncated CSS -- an @keyframes block that never closes
+        // Malformed/truncated CSS: an @keyframes block that never closes
         // before the file ends (note the trailing space after the last
         // brace, so end-of-string is reached mid-chunk rather than
         // exactly on a brace). Must not crash; everything from the

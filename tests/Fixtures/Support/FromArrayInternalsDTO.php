@@ -4,7 +4,7 @@ namespace Waypoint\Tests\Fixtures\Support;
 
 use Waypoint\FromArray;
 
-/** One public field plus internal state in every non-public shape a request must never reach -- see FromArrayTest. */
+/** One public field plus internal state in every non-public shape a request must never reach (see FromArrayTest). */
 class FromArrayInternalsDTO
 {
     use FromArray;

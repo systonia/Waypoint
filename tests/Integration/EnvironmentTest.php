@@ -9,7 +9,7 @@ use Waypoint\Tests\Fixtures\Services\ServiceWithInjectedEnvironment;
 /**
  * Environment is a stateless service: every call resolves the live
  * EnvironmentOptions the container currently holds (Waypoint::getConfig()),
- * rather than capturing one at construction time -- so, unlike the old
+ * rather than capturing one at construction time. So, unlike the old
  * static Env, these tests need a real App/container (Waypoint::create()) to
  * configure EnvironmentOptions against. Pure load()/get()/set()/isDev()
  * behavior, which needs none of that, is covered directly by
@@ -69,7 +69,7 @@ final class EnvironmentTest extends IntegrationTestCase
     public function testConfiguringEnvironmentOptionsAfterAttachStillReachesAnAlreadyInjectedEnvironment(): void
     {
         // Environment never captures EnvironmentOptions at construction
-        // time -- it resolves the live one on every call -- so configure()
+        // time (it resolves the live one on every call), so configure()
         // order relative to attach()/injection doesn't matter.
         $app = Waypoint::create();
         $app->attach([ServiceWithInjectedEnvironment::class]);

@@ -106,8 +106,8 @@ final class EnvironmentOptionsTest extends TestCase
     {
         // Regression test: load()'s default used to be __DIR__, which
         // resolves inside the framework's own src/Waypoint/Options under a
-        // real Composer install (vendor/systonia/waypoint/src/Waypoint/Options)
-        // -- never where an application's .env actually lives. It must
+        // real Composer install (vendor/systonia/waypoint/src/Waypoint/Options),
+        // never where an application's .env actually lives. It must
         // default to cwd instead, so chdir()-ing into the fixtures dir is
         // enough to pick up its .env/.env.development without passing a
         // path at all.
@@ -140,7 +140,7 @@ final class EnvironmentOptionsTest extends TestCase
         $this->assertSame('dev', $first->get('DYNAMIC'));
 
         // A brand new instance must not see $first's loaded/overridden
-        // state -- each EnvironmentOptions is its own independent store,
+        // state: each EnvironmentOptions is its own independent store,
         // unlike the old static Env's single process-wide array.
         $second = new EnvironmentOptions();
         $this->assertNotSame('dev', $second->get('DYNAMIC'));
@@ -169,7 +169,7 @@ final class EnvironmentOptionsTest extends TestCase
         $opts = (new EnvironmentOptions())->load(self::FIXTURES_DIR);
 
         // config.json -> config.development.json -> config.local.json,
-        // each overlaid on top of the last -- config.local.json must win.
+        // each overlaid on top of the last, so config.local.json must win.
         $this->assertSame('config.local.json', $opts->get('PRECEDENCE'));
     }
 
@@ -193,7 +193,7 @@ final class EnvironmentOptionsTest extends TestCase
         $opts->load(self::FIXTURES_DIR);
 
         $this->assertNull($opts->get('FROM_CONFIG_LOCAL_JSON'));
-        // The other JSON layers still apply -- only the local one is off.
+        // The other JSON layers still apply; only the local one is off.
         $this->assertSame('base', $opts->get('FROM_CONFIG_JSON'));
     }
 
@@ -211,7 +211,7 @@ final class EnvironmentOptionsTest extends TestCase
 
     public function testMissingJsonConfigFilesAreSilentlySkipped(): void
     {
-        // Tests/Unit/Options itself has no config*.json at all -- must not throw.
+        // Tests/Unit/Options itself has no config*.json at all, so this must not throw.
         $opts = (new EnvironmentOptions())->load(__DIR__);
         $this->assertNull($opts->get('FROM_CONFIG_JSON'));
     }

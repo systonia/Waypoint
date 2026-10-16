@@ -2,7 +2,7 @@
 
 /**
  * Real front controller for the end-to-end suite. Run standalone by PHP's
- * built-in web server (php -S), not included by PHPUnit directly -- every
+ * built-in web server (php -S), not included by PHPUnit directly: every
  * request re-executes this file from scratch, exactly like a real
  * deployment (no shared state between requests), which is the whole point
  * of testing against it instead of calling App::handleHttp() in-process.

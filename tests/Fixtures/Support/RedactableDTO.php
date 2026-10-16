@@ -4,7 +4,7 @@ namespace Waypoint\Tests\Fixtures\Support;
 
 use Waypoint\Attributes\{Sensitive, PII};
 
-/** Plain object (not FromArray) exercising Waypoint::redact() -- see WaypointTest. */
+/** Plain object (not FromArray) exercising Waypoint::redact() (see WaypointTest). */
 class RedactableDTO
 {
     public string $username = '';
@@ -18,7 +18,7 @@ class RedactableDTO
     #[PII]
     public string $email = '';
 
-    /** Never assigned -- exercises redact()'s isInitialized() guard. */
+    /** Never assigned: exercises redact()'s isInitialized() guard. */
     public string $uninitialized;
 
     private string $internal = 'never exposed';

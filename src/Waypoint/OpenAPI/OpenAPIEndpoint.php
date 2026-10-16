@@ -11,7 +11,7 @@ use Waypoint\Router;
 
 /**
  * Serves the OpenAPI document and Swagger UI under OpenAPIOptions::$path
- * once OpenAPIOptions::$enabled is set -- no controller to attach:
+ * once OpenAPIOptions::$enabled is set. No controller to attach:
  *
  *   GET {path}/spec.json           the combined document
  *   GET {path}/spec.{version}.json one #[Version]'s document (404 for an unknown version)

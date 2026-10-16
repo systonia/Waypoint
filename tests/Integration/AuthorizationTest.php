@@ -99,7 +99,7 @@ final class AuthorizationTest extends IntegrationTestCase
         $editorToken = JWT::encode(['sub' => '1', 'role' => 'editor']);
         $adminToken = JWT::encode(['sub' => '1', 'role' => 'admin']);
 
-        // Class says 'editor'; the method overrides it to 'admin' -- an
+        // Class says 'editor'; the method overrides it to 'admin', so an
         // editor token must now be rejected on this specific route, even
         // though it satisfies every *other* route on the same class.
         $this->dispatch('GET', '/authz-role/override', ['Authorization' => "Bearer $editorToken"]);
@@ -169,7 +169,7 @@ final class AuthorizationTest extends IntegrationTestCase
 
     public function testUnauthenticatedRequestStaysPlainJsonWithNoLoginRedirectUrlConfigured(): void
     {
-        // Default JWTOptions::$loginRedirectUrl is null -- a real browser
+        // Default JWTOptions::$loginRedirectUrl is null: a real browser
         // navigation must still get plain 401 Problem Details, not a
         // surprise redirect nothing asked for.
         $output = $this->dispatch('GET', '/authz/authenticated', ['Sec-Fetch-Mode' => 'navigate']);
@@ -197,7 +197,7 @@ final class AuthorizationTest extends IntegrationTestCase
         });
 
         // Sec-Fetch-Mode: same-origin is what an ordinary same-origin
-        // fetch()/XHR call sends -- never 'navigate' -- so this must fall
+        // fetch()/XHR call sends (never 'navigate'), so this must fall
         // through to the plain 401 below regardless of the option.
         $output = $this->dispatch('GET', '/authz/authenticated', ['Sec-Fetch-Mode' => 'same-origin']);
 
@@ -212,7 +212,7 @@ final class AuthorizationTest extends IntegrationTestCase
         });
 
         // No Sec-Fetch-Mode at all (an older browser, or a non-browser
-        // client like curl) -- treated as "not a navigation", the safe
+        // client like curl) is treated as "not a navigation", the safe
         // default.
         $output = $this->dispatch('GET', '/authz/authenticated');
 

@@ -50,7 +50,7 @@ final class ViewAssets
     }
 
     /**
-     * {path => mtime} of every sibling asset -- the cheap freshness check (no hashing) that lets
+     * {path => mtime} of every sibling asset: the cheap freshness check (no hashing) that lets
      * FileSystem::isAvailable() notice an edited .css/.js the same way it notices an edited controller.
      *
      * @return array<string, int>
@@ -123,7 +123,7 @@ final class ViewAssets
 
     /**
      * Wraps $css in one native CSS Nesting rule, `[data-view="$viewName"] { ... }`, and lets the
-     * browser resolve the scope -- nested rules become descendant selectors, and nesting is spec'd to
+     * browser resolve the scope: nested rules become descendant selectors, and nesting is spec'd to
      * work inside @media/@supports/@container too. Selector text is never touched, so a comma inside
      * `:is(.a, .b)` can't break anything. Top-level @keyframes/@font-face are global constructs that
      * can't be nested, so extractUnscopable() lifts them out unchanged first.

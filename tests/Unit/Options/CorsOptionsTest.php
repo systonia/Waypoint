@@ -58,7 +58,7 @@ final class CorsOptionsTest extends TestCase
         // Regression guard: the original array-based useCors() cast
         // isset($options['allowCredentials']) ? (string) false : ... which
         // sent an empty-valued header when explicitly false, instead of
-        // omitting it -- allowCredentials being a plain bool makes that
+        // omitting it. allowCredentials being a plain bool makes that
         // shape unrepresentable.
         $opts = new CorsOptions();
         $opts->allowCredentials = false;

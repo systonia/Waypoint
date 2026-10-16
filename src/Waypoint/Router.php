@@ -20,7 +20,7 @@ use Waypoint\Support\Arr;
  *
  * Plans are plain string-keyed arrays: they are loaded from a `require`d
  * cache file, so consumers read keys defensively (`?? default`) rather than
- * trusting a shape -- which also keeps a routes.php written by an older
+ * trusting a shape, which also keeps a routes.php written by an older
  * Waypoint working until it is rebuilt.
  */
 class Router
@@ -206,7 +206,7 @@ class Router
     }
 
     /**
-     * Plugin cache inputs plus the source mtime of every plugin asset, plugin and hook class -- editing either rebuilds
+     * Plugin cache inputs plus the source mtime of every plugin asset, plugin and hook class; editing either rebuilds
      * the cache.
      * @return array<string, int>
      */
@@ -229,7 +229,7 @@ class Router
         return $meta;
     }
 
-    // -- Plans --
+    // Plans
 
     /** @param RoutePlan|TaskPlan $plan */
     public function addCompiledRoute(array $plan, RouteType $type = RouteType::Unset): void
@@ -319,7 +319,7 @@ class Router
         }
     }
 
-    // -- HTTP dispatch --
+    // HTTP dispatch
 
     /** @param string $path Request::$path: trimmed and decoded already */
     public function dispatch(string $path, string $httpMethod, Request $req, Response $res): void
@@ -543,7 +543,7 @@ class Router
         return $this->container !== null ? $this->container->get($class) : new $class();
     }
 
-    // -- Results --
+    // Results
 
     /** A View renders here (it needs this Router's asset lookups and injection); a Redirect is just status + Location; anything else goes through ResultRenderer. */
     private function renderResult(mixed $result, Request $req, Response $res, mixed $formatter): void
@@ -595,7 +595,7 @@ class Router
     /**
      * The data-* attributes waypoint.js reads off its <script> tag: the CSRF cookie/header names,
      * only when CsrfOptions was changed from the client's own defaults. The client must know them
-     * to mirror the cookie into the header on every fetch() -- the one thing the server can't do for it.
+     * to mirror the cookie into the header on every fetch(), the one thing the server can't do for it.
      *
      * @return array<string, string>
      */
@@ -621,7 +621,7 @@ class Router
         return $this->viewAssetsByName[$name] ?? ['css' => null, 'js' => null];
     }
 
-    // -- Listing (OpenAPI) --
+    // Listing (OpenAPI)
 
     /**
      * The registered plugins' hooks of one type (OpenAPIGenerator asks for OpenApiExtension).
@@ -636,7 +636,7 @@ class Router
 
     /**
      * A flat summary of every route. 'version'/'unversionedPath' fall back to null/path for a
-     * plan predating #[Version] -- what an unversioned route looks like anyway.
+     * plan predating #[Version], which is what an unversioned route looks like anyway.
      * @return array<int, RouteSummary>
      */
     public function getRoutes(): array
@@ -688,7 +688,7 @@ class Router
         return null;
     }
 
-    // -- CLI tasks --
+    // CLI tasks
 
     /**
      * Runs the task named $name: an exact "prefix:name" key, else the unique task whose name or

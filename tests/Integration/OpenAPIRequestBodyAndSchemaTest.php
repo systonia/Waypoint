@@ -10,7 +10,7 @@ use Waypoint\Tests\Fixtures\Controllers\DocumentedController;
  * Covers the parts of OpenAPIGenerator that go beyond path/operation
  * metadata: query/path parameter typing, #[Body] DTO request-body and
  * $ref generation, nested/cyclic model schemas, and the #[Schema]/#[Property]
- * annotations -- none of which worked before (query params were dropped
+ * annotations. None of which worked before (query params were dropped
  * entirely, request bodies were never detected, and a cyclic or
  * union-typed model would either loop forever or fatal).
  */
@@ -74,7 +74,7 @@ final class OpenAPIRequestBodyAndSchemaTest extends IntegrationTestCase
         $spec = $this->generate();
         $operation = $spec['paths']['/documented/customers']['post'];
 
-        // CustomerDTO carries #[Schema('Customer')] -- the $ref and the
+        // CustomerDTO carries #[Schema('Customer')]: the $ref and the
         // registered component must both use that name, not the class name.
         $this->assertSame(
             ['$ref' => '#/components/schemas/Customer'],
@@ -139,7 +139,7 @@ final class OpenAPIRequestBodyAndSchemaTest extends IntegrationTestCase
         $spec = $this->generate();
 
         $this->assertArrayHasKey('LegacyDTO', $spec['components']['schemas']);
-        // No single OpenAPI type fits a PHP union -- an open/"any" schema
+        // No single OpenAPI type fits a PHP union; an open/"any" schema
         // is the honest fallback, not a guess at one of the two types.
         $this->assertSame([], $spec['components']['schemas']['LegacyDTO']['properties']['identifier']);
     }
@@ -165,7 +165,7 @@ final class OpenAPIRequestBodyAndSchemaTest extends IntegrationTestCase
         $methods = $this->generate()['paths']['/documented/{id}'];
 
         // get before put, matching the fixed GET/POST/PUT/PATCH/DELETE order
-        // buildPaths() sorts by -- this only exercises that sort at all
+        // buildPaths() sorts by. This only exercises that sort at all
         // when a path has more than one method.
         $this->assertSame(['get', 'put'], array_keys($methods));
     }

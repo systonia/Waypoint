@@ -6,7 +6,7 @@ use Attribute;
 
 /**
  * Opts a controller class, or one specific route method, out of CSRF
- * verification (see Waypoint\Csrf/Router::dispatch()) -- e.g. a token-
+ * verification (see Waypoint\Csrf/Router::dispatch()), e.g. a token-
  * auth-only JSON API with no HTML forms behind it, where a double-submit
  * cookie makes no sense in the first place. Present on either the
  * controller class or the method is enough to skip it for that route;

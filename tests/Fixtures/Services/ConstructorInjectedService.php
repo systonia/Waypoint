@@ -6,7 +6,7 @@ use Waypoint\Attributes\Inject;
 
 /**
  * $example is constructed as null (App::initDependencyInjection() always
- * calls `new $cls()` with zero arguments -- constructor arguments
+ * calls `new $cls()` with zero arguments; constructor arguments
  * themselves are never resolved/passed), but it IS a real property (a
  * promoted constructor property is visible on both the parameter and
  * property reflection surfaces), so App's post-construction #[Inject]

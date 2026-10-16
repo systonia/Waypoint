@@ -71,7 +71,7 @@ abstract class TestCase extends PHPUnitTestCase
         return $this->request($method, $uri)->withJson($data)->withHeaders($headers)->send();
     }
 
-    /** A fresh empty directory, removed after the test -- e.g. for FileSystemOptions::$cacheDirectory. */
+    /** A fresh empty directory, removed after the test, e.g. for FileSystemOptions::$cacheDirectory. */
     protected function tempDir(): string
     {
         $dir = sys_get_temp_dir() . '/waypoint-test-' . bin2hex(random_bytes(6));

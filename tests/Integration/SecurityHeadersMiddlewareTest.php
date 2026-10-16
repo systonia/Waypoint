@@ -109,7 +109,7 @@ final class SecurityHeadersMiddlewareTest extends IntegrationTestCase
         $headers = $this->sentHeaders();
 
         $this->assertArrayNotHasKey('x-frame-options', $headers);
-        // The others stay on -- disabling one doesn't disable the rest.
+        // The others stay on: disabling one doesn't disable the rest.
         $this->assertSame('nosniff', $headers['x-content-type-options'] ?? null);
     }
 
@@ -147,7 +147,7 @@ final class SecurityHeadersMiddlewareTest extends IntegrationTestCase
         // Confirms the "onion" execution model: App::handleHttp() nests
         // $app->use() middlewares LIFO, so before() runs in registration
         // order (First, Second) but after() runs in the *reverse* order
-        // (Second, First) -- the last-registered middleware is the
+        // (Second, First), since the last-registered middleware is the
         // innermost wrap, closest to the controller.
         $app = Waypoint::create();
         $app->attach([SecurityHeaderController::class]);

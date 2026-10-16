@@ -1,5 +1,5 @@
 /**
- * waypoint.js -- Waypoint's client half. One dependency-free script that
+ * waypoint.js: Waypoint's client half. One dependency-free script that
  * enhances plain HTML through wp-* attributes; nothing to mount or hydrate.
  * Served by the framework itself (View::waypointJsTag()), which also passes
  * non-default CSRF names as data attributes on the <script> tag.

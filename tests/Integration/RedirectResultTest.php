@@ -7,8 +7,8 @@ use Waypoint\Options\RendererOptions;
 use Waypoint\Tests\Fixtures\Controllers\RedirectsController;
 
 /**
- * A route handler returning Waypoint\Http\Redirect -- see
- * Router::renderResult(): status + Location, no body, whatever the
+ * A route handler returning Waypoint\Http\Redirect (see
+ * Router::renderResult()): status + Location, no body, whatever the
  * handler already queued on the Response kept intact.
  */
 final class RedirectResultTest extends IntegrationTestCase

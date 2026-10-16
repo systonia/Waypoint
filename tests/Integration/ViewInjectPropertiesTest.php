@@ -8,7 +8,7 @@ use Waypoint\Tests\Fixtures\Controllers\ViewEnvController;
 
 /**
  * View is a plain value object controller code `new`s up directly, never
- * through the container -- so #[Inject] on a View property (View::$env)
+ * through the container, so #[Inject] on a View property (View::$env)
  * only works because Router::renderResult() runs a dedicated
  * injectViewProperties() pass on it right before render(). These tests
  * exercise that end to end, through a real dispatch().
@@ -43,7 +43,7 @@ final class ViewInjectPropertiesTest extends IntegrationTestCase
 
         $output = $this->dispatch('GET', '/view-env');
 
-        // Nothing configured -- EnvironmentOptions lazily loads under the
+        // Nothing configured: EnvironmentOptions lazily loads under the
         // CLI SAPI, which detects "development".
         $this->assertSame('development', trim($output));
     }

@@ -5,8 +5,8 @@ namespace Waypoint\Tests\Fixtures\Services;
 use Waypoint\Attributes\Inject;
 
 /**
- * A container-managed service that itself has an #[Inject] property --
- * proves App::initDependencyInjection() wires up a service's own
+ * A container-managed service that itself has an #[Inject] property.
+ * Proves App::initDependencyInjection() wires up a service's own
  * dependencies, not just a controller's or #[Middleware] class's (which
  * Router::injectControllerProperties() already handled per-request).
  */

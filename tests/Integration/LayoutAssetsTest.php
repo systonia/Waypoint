@@ -8,7 +8,7 @@ use Waypoint\Tests\Fixtures\Controllers\LayoutAssetsController;
 
 /**
  * ViewAssets::compile() discovers a sibling .css/.js for *every* '*.php'
- * file in the views directory, views and layouts alike -- these prove that
+ * file in the views directory, views and layouts alike. These prove that
  * extends all the way through to the layout template itself getting its
  * own <link>/<script> tags and [data-view="..."] scope, no matter what the
  * layout is actually named (LayoutWithAssets.php here, not the app-wide
@@ -47,7 +47,7 @@ final class LayoutAssetsTest extends IntegrationTestCase
 
         // HomePage.css/HomePage.js (the view) and LayoutWithAssets.css/.js
         // (the layout) are different content, so they must hash to
-        // different filenames -- both sets of tags present, not just one.
+        // different filenames, with both sets of tags present, not just one.
         $this->assertSame(2, substr_count($output, '<link rel="stylesheet"'));
         $this->assertSame(2, substr_count($output, '<script src='));
     }

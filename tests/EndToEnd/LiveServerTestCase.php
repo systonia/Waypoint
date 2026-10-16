@@ -7,13 +7,13 @@ use PHPUnit\Framework\TestCase;
 /**
  * Boots the real app under PHP's built-in web server (php -S) once for the
  * whole test class and makes genuine HTTP requests against it over a real
- * socket -- as opposed to Tests/Integration, which calls App::handleHttp()
+ * socket, as opposed to Tests/Integration, which calls App::handleHttp()
  * in-process within the PHPUnit process itself. That in-process shortcut
  * can't observe things that only exist on a real request cycle: the SAPI's
  * own $_GET population, actual php://input body parsing, headers as
  * actually transmitted on the wire, and (most importantly) that the app
  * re-bootstraps from nothing on every single request, since php -S starts
- * each request with a clean PHP engine state -- there is no shared static
+ * each request with a clean PHP engine state. There is no shared static
  * state across requests the way there is across test methods in-process.
  */
 abstract class LiveServerTestCase extends TestCase
@@ -27,7 +27,7 @@ abstract class LiveServerTestCase extends TestCase
     {
         // The front controller uses a fixed cache path (sys_get_temp_dir()
         // . '/e2e-cache') so cache persistence across real, separate
-        // requests can be tested at all -- clear it first so the first
+        // requests can be tested at all. Clear it first so the first
         // request in this run deterministically compiles fresh rather than
         // silently reusing a still-valid cache left over from a prior run.
         self::removeDirectory(sys_get_temp_dir() . '/e2e-cache');

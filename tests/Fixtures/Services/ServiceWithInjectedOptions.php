@@ -6,7 +6,7 @@ use Waypoint\Attributes\Inject;
 use Waypoint\Options\FileSystemOptions;
 
 /**
- * A container-managed service that #[Inject]s an Options class -- proves
+ * A container-managed service that #[Inject]s an Options class. Proves
  * App::initDependencyInjection() reuses an Options instance the app already
  * configure()d (before attach()) instead of clobbering it with a fresh,
  * unconfigured one just because discoverAllClasses() also found it here.

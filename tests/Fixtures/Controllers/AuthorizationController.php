@@ -63,8 +63,8 @@ class ClassRoleController
         return ['ok' => true];
     }
 
-    // Method-level #[Role] overrides the class-level one -- see
-    // RouteCompiler::resolveOverridable()'s "method wins" precedence.
+    // Method-level #[Role] overrides the class-level one (see
+    // RouteCompiler::resolveOverridable()'s "method wins" precedence).
     #[Get('/override')]
     #[Role('admin')]
     public function override(): array

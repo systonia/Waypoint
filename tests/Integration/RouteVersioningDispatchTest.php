@@ -14,7 +14,7 @@ use Waypoint\Tests\Fixtures\Controllers\{
 
 /**
  * End-to-end: a real dispatched request against a versioned/deprecated
- * route, checking the actual response headers -- as opposed to
+ * route, checking the actual response headers, as opposed to
  * RouteVersioningTest, which inspects the compiled plan directly. Calling
  * DeprecatedRoutesController::methodLevel() for real is exactly what
  * triggers PHP's own native #[\Deprecated] runtime notice (that's the

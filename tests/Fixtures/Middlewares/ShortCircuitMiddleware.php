@@ -6,9 +6,9 @@ use Waypoint\Http\{MiddlewareBase, Request, Response};
 use Waypoint\Tests\Fixtures\Support\CallTracker;
 
 /**
- * Builds its own response and returns false from before() -- proves
+ * Builds its own response and returns false from before(), proving
  * MiddlewareBase's veto mechanism prevents $next() (and after(), and the
- * controller) from ever running. Doesn't call Response::send() itself --
+ * controller) from ever running. Doesn't call Response::send() itself;
  * nothing in this codebase does anymore; App::handleHttp() sends the
  * final $res exactly once, after the whole pipe (this veto included) has
  * run.

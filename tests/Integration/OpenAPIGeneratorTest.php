@@ -139,7 +139,7 @@ final class OpenAPIGeneratorTest extends IntegrationTestCase
     public function testTheSharedProblemDetailsSchemaIsRegisteredOnlyOnceAcrossMultipleThrowsUsages(): void
     {
         // DocumentedController::show() AND ::replace() both carry
-        // #[Throws(NotFoundException::class, ...)] -- this exercises
+        // #[Throws(NotFoundException::class, ...)]. This exercises
         // OpenAPIGenerator::ensureProblemDetailsSchema()'s early return for
         // an already-registered schema, not just its registration path.
         $spec = $this->generate();

@@ -20,11 +20,11 @@ use Waypoint\Tests\Fixtures\Support\DummyLogger;
 
 /**
  * Inspects the compiled route plan directly (Router::$staticRoutes), rather
- * than dispatching a real request -- #[Version]/#[Sunset]/native
+ * than dispatching a real request. #[Version]/#[Sunset]/native
  * #[\Deprecated] are all resolved once at compile time (RouteCompiler), so
  * this is enough to prove that resolution is correct without ever actually
  * invoking a controller method (which would, for the native #[\Deprecated]
- * fixtures, trigger a real PHP deprecation notice just by being called --
+ * fixtures, trigger a real PHP deprecation notice just by being called;
  * see RouteVersioningDispatchTest for that end-to-end path instead).
  */
 final class RouteVersioningTest extends IntegrationTestCase
@@ -91,7 +91,7 @@ final class RouteVersioningTest extends IntegrationTestCase
     public function testSunsetAtTheClassLevelAppliesToEveryRouteOnIt(): void
     {
         // Unlike #[Version]/#[Sunset], native #[\Deprecated] (PHP 8.4+)
-        // cannot target a class at all -- only functions/methods -- so
+        // cannot target a class at all (only functions/methods), so
         // there's no class-level-deprecated scenario to test; this covers
         // #[Sunset]'s own class-level override instead.
         $routes = $this->attachAndGetRoutes([DeprecatedClassController::class]);
@@ -156,7 +156,7 @@ final class RouteVersioningTest extends IntegrationTestCase
 
     public function testCompilingWithoutAnyAppNeverThrowsEvenThoughItWouldNormallyLog(): void
     {
-        // No Waypoint::create() at all -- a Router built directly the same
+        // No Waypoint::create() at all: a Router built directly the same
         // way FileSystemCacheTest does, proving RouteCompiler's logging
         // stays optional rather than fataling on a null Waypoint instance.
         $this->assertNull(Waypoint::getInstance());
@@ -195,7 +195,7 @@ final class RouteVersioningTest extends IntegrationTestCase
 
             // A second Router for the exact same controller set: isAvailable()
             // finds the fresh cache still valid, so this loads it instead of
-            // recompiling (see Router::__construct()) -- no further logging.
+            // recompiling (see Router::__construct()), so no further logging.
             new Router([CustomersController::class], [], null, null, $app->getContainer()->get(FileSystemOptions::class));
 
             $this->assertCount($firstCompileCount, $dummy->logs);

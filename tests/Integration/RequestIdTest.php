@@ -10,7 +10,7 @@ use Waypoint\Tests\Fixtures\Support\DummyLogger;
 
 /**
  * Request::$id / Response's X-Request-ID header / Logger's automatic
- * 'request_id' context -- see Request::capture()'s own doc for the
+ * 'request_id' context. See Request::capture()'s own doc for the
  * resolution order (X-Request-Id header, X-Correlation-Id fallback, else
  * a generated UUID v4) and RequestContext for how Logger picks it up
  * without any call site passing it in by hand.
@@ -85,7 +85,7 @@ final class RequestIdTest extends IntegrationTestCase
         // Scoped to INFO only: LoggingController's route is deliberately
         // unversioned, which RouteCompiler itself logs a WARNING about at
         // attach()-time (compile-time, before any request/RequestContext
-        // exists) -- scoping keeps this test about the one log call that
+        // exists). Scoping keeps this test about the one log call that
         // actually happens *during* the dispatched request.
         $app->configure(function (LoggerOptions $opts) use ($dummy) {
             $opts->add($dummy, [LogLevel::INFO]);
@@ -107,7 +107,7 @@ final class RequestIdTest extends IntegrationTestCase
             $opts->add($dummy);
         });
 
-        // No dispatch() at all -- RequestContext was never set (and
+        // No dispatch() at all: RequestContext was never set (and
         // handleHttp()'s finally already cleared it after any prior
         // request in this process), so there's nothing to stamp.
         (new Logger())->info('no request in flight');

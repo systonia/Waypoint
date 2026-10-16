@@ -4,7 +4,7 @@ namespace Waypoint\Tests\Fixtures\Controllers;
 
 use Waypoint\Attributes\{Controller, Get, NoGzip};
 
-/** Class-level #[NoGzip] -- every route on this controller must opt out. */
+/** Class-level #[NoGzip]: every route on this controller must opt out. */
 #[Controller('/gzip-class-disabled')]
 #[NoGzip]
 class GzipClassDisabledController

@@ -15,7 +15,7 @@ final class Base64Url
         return base64_decode(strtr($encoded, '-_', '+/'));
     }
 
-    /** base64url(HMAC-SHA256($data, $secret)) -- compare with hash_equals(). */
+    /** base64url(HMAC-SHA256($data, $secret)); compare with hash_equals(). */
     public static function sign(string $data, string $secret): string
     {
         // An empty secret (JWT_SECRET= in .env) signs too: then anyone can. Fails loudly instead

@@ -157,7 +157,7 @@ final class ResponseTest extends TestCase
     public function testSendIsIdempotentEvenWhenAHeaderIsAddedBetweenCalls(): void
     {
         // A header added after the first send() was never actually sent
-        // to the client -- the first call is the one that counts, exactly
+        // to the client. The first call is the one that counts, exactly
         // like a real HTTP response can only be sent once.
         $res = (new Response())->write('hello');
 

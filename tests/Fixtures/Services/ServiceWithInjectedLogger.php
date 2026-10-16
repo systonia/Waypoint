@@ -6,7 +6,7 @@ use Waypoint\Attributes\Inject;
 use Waypoint\Logger;
 
 /**
- * A container-managed service that #[Inject]s Logger -- proves Logger is
+ * A container-managed service that #[Inject]s Logger. Proves Logger is
  * genuinely usable via #[Inject]/container resolution, not just via `new
  * Logger()` directly.
  */

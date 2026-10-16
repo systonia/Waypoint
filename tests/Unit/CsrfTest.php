@@ -20,7 +20,7 @@ final class CsrfTest extends TestCase
         $this->cookieBackup = $_COOKIE;
 
         // PHP tracks "sent" headers process-wide, across the whole test
-        // run -- clear them so a test reading back Set-Cookie only ever
+        // run. Clear them so a test reading back Set-Cookie only ever
         // sees what *it* sent (see IntegrationTestCase::dispatch()'s
         // identical reasoning).
         header_remove();
@@ -44,7 +44,7 @@ final class CsrfTest extends TestCase
         return Request::capture($rawBody);
     }
 
-    // -- generateToken() / isValidToken() --
+    // generateToken() / isValidToken()
 
     public function testGenerateTokenProducesTwoBase64UrlSegments(): void
     {
@@ -146,7 +146,7 @@ final class CsrfTest extends TestCase
         $this->assertNull($res->queuedCookie('csrf_token'));
     }
 
-    // -- verify() --
+    // verify()
 
     public function testVerifyAcceptsAMatchingCookieAndHeaderToken(): void
     {
@@ -223,7 +223,7 @@ final class CsrfTest extends TestCase
     public function testVerifyRejectsAForgedCookieEvenIfItMatchesTheSubmittedValue(): void
     {
         // Same value on both sides, but neither is a genuine
-        // isValidToken() -- proves the double-submit *match* alone isn't
+        // isValidToken(), proving the double-submit *match* alone isn't
         // enough without the signature also checking out.
         $_COOKIE['csrf_token'] = 'forged-value';
         $_SERVER['HTTP_X_CSRF_TOKEN'] = 'forged-value';
@@ -235,7 +235,7 @@ final class CsrfTest extends TestCase
     public function testVerifyReturnsTrueWhenCsrfOptionsWasNeverConfigured(): void
     {
         // Router::dispatch() calls verify() automatically for every
-        // state-changing request -- an app that never opted into CSRF
+        // state-changing request; an app that never opted into CSRF
         // protection at all (never configured CsrfOptions) must not have
         // every POST/PUT/PATCH/DELETE start failing.
         Waypoint::reset();
@@ -245,7 +245,7 @@ final class CsrfTest extends TestCase
         $this->assertTrue($csrf->verify($this->captureRequest()));
     }
 
-    // -- issueFor() / token() / field() --
+    // issueFor() / token() / field()
 
     public function testIssueForSetsANonHttpOnlyCookieWhenNoneExistsYet(): void
     {
@@ -281,7 +281,7 @@ final class CsrfTest extends TestCase
         $cookieLine = $this->firstSetCookieLine();
         ob_end_clean();
 
-        // No new Set-Cookie at all -- the browser already has this exact
+        // No new Set-Cookie at all: the browser already has this exact
         // value, nothing to re-issue.
         $this->assertNull($cookieLine);
         $this->assertSame($existing, $csrf->token());

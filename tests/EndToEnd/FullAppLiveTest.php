@@ -10,7 +10,7 @@ use Waypoint\Options\JWTOptions;
  * Exercises the app as a real running server (see LiveServerTestCase).
  * Tests/Integration already covers the framework's logic exhaustively
  * in-process; these focus specifically on what only a real request cycle
- * can prove -- the SAPI's own query-string/body handling, headers as
+ * can prove: the SAPI's own query-string/body handling, headers as
  * actually transmitted, and cross-process route-cache reuse.
  */
 class FullAppLiveTest extends LiveServerTestCase
@@ -37,7 +37,7 @@ class FullAppLiveTest extends LiveServerTestCase
 
     public function testRealQueryStringIsParsedByTheSapiItself(): void
     {
-        // Unlike Tests/Integration, nothing here manually populates $_GET --
+        // Unlike Tests/Integration, nothing here manually populates $_GET;
         // this proves PHP's own built-in server does it correctly for a
         // route that binds both a path placeholder and a query parameter.
         $response = $this->request('GET', '/customers/1/orders?status=open');
@@ -176,8 +176,8 @@ class FullAppLiveTest extends LiveServerTestCase
 
     public function testRouteCachePersistsAcrossSeparateRealRequests(): void
     {
-        // Each request to php -S is a genuinely fresh PHP engine state --
-        // this is the one thing Tests/Integration structurally cannot
+        // Each request to php -S is a genuinely fresh PHP engine state.
+        // This is the one thing Tests/Integration structurally cannot
         // verify, since its whole suite shares one PHP process.
         $cacheDir = sys_get_temp_dir() . '/e2e-cache';
 

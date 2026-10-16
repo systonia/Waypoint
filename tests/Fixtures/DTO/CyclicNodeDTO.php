@@ -3,7 +3,7 @@
 namespace Waypoint\Tests\Fixtures\DTO;
 
 /**
- * Self-referencing on purpose -- proves OpenAPIGenerator::generateModelSchema()
+ * Self-referencing on purpose: proves OpenAPIGenerator::generateModelSchema()
  * doesn't infinite-loop/stack-overflow on a cyclic model graph.
  */
 class CyclicNodeDTO

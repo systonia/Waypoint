@@ -8,7 +8,7 @@ use Waypoint\Options\{RendererOptions, FileSystemOptions};
 use Waypoint\Tests\Fixtures\Controllers\NestedViewsController;
 
 /**
- * Views in subdirectories of RendererOptions::$directory -- addressed as
+ * Views in subdirectories of RendererOptions::$directory, addressed as
  * `new View('Admin/Users')`, with their sibling .css/.js discovered,
  * scoped and served exactly like a top-level view's (see
  * ViewAssets::discoverViewNames()).

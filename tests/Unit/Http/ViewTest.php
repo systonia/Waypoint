@@ -121,7 +121,7 @@ final class ViewTest extends TestCase
     {
         // RendererOptions defaults `layout` to '_Layout' (no .php), which
         // never matches a real file on disk (View appends no extension for
-        // the layout, unlike the view file itself) -- so render() falls
+        // the layout, unlike the view file itself), so render() falls
         // back to the bare view content instead of throwing.
         $this->configureRenderer();
         $view = new View('HomePage');
@@ -146,7 +146,7 @@ final class ViewTest extends TestCase
         $tags = $view->assetTags();
 
         // data-wp-asset must be present and match waypoint.js's own
-        // client-side dedup marker (see assets.ts's injectOnce()) -- a
+        // client-side dedup marker (see assets.ts's injectOnce()). A
         // server-rendered tag missing it is invisible to that dedup check,
         // and the client injects a second, duplicate tag for the same
         // asset the next time this view's CSS/JS is needed.
@@ -210,7 +210,7 @@ final class ViewTest extends TestCase
 
     public function testRenderWithoutAnAppRouterLeavesLayoutAssetsEmpty(): void
     {
-        // configureRenderer() only sets up RendererOptions -- attach() is
+        // configureRenderer() only sets up RendererOptions; attach() is
         // never called, so App has no Router yet. render() must degrade to
         // "no layout assets" rather than throwing on the uninitialized
         // Router property (see App::hasRouter()).
@@ -244,7 +244,7 @@ final class ViewTest extends TestCase
     public function testWaypointJsTagIsEmptyByDefault(): void
     {
         // No Router involved (bypassed by constructing View directly) ever
-        // called setWaypointJsPath() -- must render nothing, not a tag
+        // called setWaypointJsPath(), so it must render nothing, not a tag
         // pointing at a route that may not even exist.
         $view = new View('HomePage');
 

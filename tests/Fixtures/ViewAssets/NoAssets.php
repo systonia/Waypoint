@@ -1,2 +1,2 @@
 <?php
-// A minimal view file with no sibling .css/.js -- must be discovered but excluded from compile()'s 'views' map.
+// A minimal view file with no sibling .css/.js. It must be discovered but excluded from compile()'s 'views' map.

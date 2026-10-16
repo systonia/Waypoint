@@ -8,7 +8,7 @@ use Waypoint\Tests\Fixtures\Controllers\{CustomersController, UsersV1Controller,
 
 /**
  * The multi-file spec.json (combined, "latest version wins" per group) /
- * spec.vX.json (exact version) split -- OpenAPIEndpoint is the one that
+ * spec.vX.json (exact version) split. OpenAPIEndpoint is the one that
  * actually serves these as separate HTTP routes (see
  * OpenAPIVersioningControllerTest); this exercises OpenAPIGenerator's own
  * generate($version)/hasVersion() directly.
@@ -59,7 +59,7 @@ final class OpenAPIVersioningTest extends IntegrationTestCase
 
     public function testTheCombinedSpecKeepsOnlyTheNumericallyHighestVersionPerGroup(): void
     {
-        // v10 must win over v2 -- a plain string comparison ('v10' <=> 'v2')
+        // v10 must win over v2: a plain string comparison ('v10' <=> 'v2')
         // would pick 'v2', since '1' < '2' character-by-character; this is
         // exactly the bug semantic version comparison avoids.
         $generator = $this->generator([

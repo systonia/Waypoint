@@ -150,7 +150,7 @@ final class AppBootstrapTest extends IntegrationTestCase
         // constructor itself still never receives a resolved argument
         // (ConstructorInjectedService is always constructed as `new
         // ConstructorInjectedService()`, $example null via its own
-        // default) -- but since a promoted property IS a real property,
+        // default), but since a promoted property IS a real property,
         // App's post-construction #[Inject] wiring pass finds and resolves
         // it same as any other property, same as it would if $example had
         // been declared the ordinary way instead of via promotion.
@@ -166,7 +166,7 @@ final class AppBootstrapTest extends IntegrationTestCase
 
     public function testAttachWalksInjectAttributesOnAPlainConstructorParameterToo(): void
     {
-        // $dep is a plain, non-promoted parameter -- no matching property
+        // $dep is a plain, non-promoted parameter: no matching property
         // exists for the property walk to find first, so this is the one
         // path that actually exercises the constructor-parameter walk.
         $app = Waypoint::create();
@@ -179,7 +179,7 @@ final class AppBootstrapTest extends IntegrationTestCase
     public function testAttachWiresInjectPropertiesOnServicesToo(): void
     {
         // Regression test: initDependencyInjection() used to construct
-        // every discovered class with `new $cls()` and stop there --
+        // every discovered class with `new $cls()` and stop there.
         // #[Inject] on a controller or #[Middleware] class worked (Router
         // applies that wiring itself, per request, via
         // injectControllerProperties()), but #[Inject] on a plain
@@ -200,7 +200,7 @@ final class AppBootstrapTest extends IntegrationTestCase
     {
         // Regression test: initDependencyInjection() used to construct
         // *every* discovered class with `new $cls()`, including one that
-        // was already registered in the container -- so an Options class
+        // was already registered in the container, so an Options class
         // configured via configure() (before attach()) got silently
         // overwritten with a fresh, unconfigured instance the moment
         // anything else #[Inject]ed it too. Container::isRegistered() is
@@ -273,7 +273,7 @@ final class AppBootstrapTest extends IntegrationTestCase
     {
         $tempDir = sys_get_temp_dir() . '/test-' . bin2hex(random_bytes(6));
         try {
-            // Trust mode, but nothing cached yet -- must still work.
+            // Trust mode, but nothing cached yet: must still work.
             $app = Waypoint::create();
             $app->configure(function (FileSystemOptions $fs) use ($tempDir) {
                 $fs->cacheDirectory = $tempDir;

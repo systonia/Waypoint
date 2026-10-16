@@ -15,7 +15,7 @@ class MiscTypesDTO
     // Non-public: generateModelSchema() must skip it entirely.
     protected string $internalNote = '';
 
-    // A type name that genuinely doesn't resolve to any class/interface/enum --
+    // A type name that genuinely doesn't resolve to any class/interface/enum.
     // PHP only checks a property type against a real class when a value is
     // actually assigned, so declaring (and reflecting on) this is legal.
     public GhostClassThatDoesNotExist $ghost;

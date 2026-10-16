@@ -7,7 +7,7 @@ use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Implements the same interface Waypoint\Exceptions\NotFoundException does,
- * without extending it or being separately registered -- used to prove
+ * without extending it or being separately registered. Used to prove
  * App::resolveExceptionHandler() falls back to matching by interface.
  */
 class CustomNotFoundInterfaceException extends Exception implements NotFoundExceptionInterface

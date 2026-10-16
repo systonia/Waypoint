@@ -78,7 +78,7 @@ final class FileSystem
 
     /**
      * True if the cache exists and was built from exactly the current sources: every controller
-     * file (by mtime) plus $extraMeta (view .css/.js mtimes), no more and no fewer -- a cache built
+     * file (by mtime) plus $extraMeta (view .css/.js mtimes), no more and no fewer. A cache built
      * for a larger controller set must not keep serving a removed controller's routes.
      *
      * @param class-string[] $controllers
@@ -111,7 +111,7 @@ final class FileSystem
     /**
      * Everything the compiled cache depends on: $extraMeta, the framework's own client bundle and sources (an update
      * may change what the cache holds), and the source file mtime of each controller, its base classes and their
-     * traits (their attributes are inherited) -- or null if a controller's file is gone.
+     * traits (their attributes are inherited), or null if a controller's file is gone.
      * @param class-string[] $controllers
      * @param array<string, int> $extraMeta
      * @return array<string, int>|null
@@ -271,7 +271,7 @@ final class FileSystem
 
     /**
      * Writes each compiled asset to assets/{filename} and returns {filename => mime} for routes.php.
-     * Filenames are content hashes, so an existing file is never rewritten -- and a stale one is
+     * Filenames are content hashes, so an existing file is never rewritten, and a stale one is
      * never cleaned up here (clearing the cache directory is the deployment's job).
      *
      * @param array<string, array{content: string, mime: string}> $files

@@ -7,7 +7,7 @@ use Waypoint\Support\Arr;
 /**
  * The env key/values Waypoint\Environment reads: system env, $_ENV, $_SERVER,
  * .env, .env.$APP_ENV, config.json, config.$APP_ENV.json, then
- * $localConfigFile -- each overlaid on the last. get()/isDev() load lazily on
+ * $localConfigFile, each overlaid on the last. get()/isDev() load lazily on
  * first use; configure explicitly only to point load() at another directory.
  */
 class EnvironmentOptions

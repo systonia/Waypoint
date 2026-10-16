@@ -7,7 +7,7 @@ use Waypoint\Http\{MiddlewareBase, Request, Response};
 
 final class PlainMiddleware extends MiddlewareBase
 {
-    // No before()/after() overrides -- exercises MiddlewareBase's own
+    // No before()/after() overrides: exercises MiddlewareBase's own
     // default pass-through implementations directly.
 }
 
@@ -73,8 +73,8 @@ final class MiddlewareBaseTest extends TestCase
 
     public function testInstanceIsDirectlyUsableAsACallableForAppUse(): void
     {
-        // App::use(callable $middleware) is what this exists to satisfy --
-        // proves an instance is callable() without any wrapping closure.
+        // App::use(callable $middleware) is what this exists to satisfy.
+        // Proves an instance is callable() without any wrapping closure.
         $middleware = new PlainMiddleware();
         $this->assertTrue(is_callable($middleware));
 

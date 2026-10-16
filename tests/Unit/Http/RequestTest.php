@@ -173,7 +173,7 @@ final class RequestTest extends TestCase
         $this->assertSame('request-id-wins', $req->id);
     }
 
-    // -- fromParts(): the same request without superglobals --
+    // fromParts(): the same request without superglobals
 
     public function testFromPartsBuildsTheRequestWithoutTouchingTheSuperglobals(): void
     {

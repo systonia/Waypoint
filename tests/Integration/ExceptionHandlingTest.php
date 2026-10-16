@@ -83,7 +83,7 @@ final class ExceptionHandlingTest extends IntegrationTestCase
 
     /**
      * The generic Throwable fallback never exposes $e->getMessage() (or a
-     * stack trace), regardless of environment -- see App::
+     * stack trace), regardless of environment. See App::
      * registerDefaultExceptionHandlers()'s Throwable::class handler for why
      * isDev() alone was judged not to be a safe enough switch for that.
      * Both "development" and "production" are asserted explicitly so a
@@ -121,7 +121,7 @@ final class ExceptionHandlingTest extends IntegrationTestCase
     {
         // Regression test: the default Throwable handler resolves Logger
         // via the container (Container::get(Logger::class)), rather than
-        // calling a static Logger::error() -- must still reach whatever
+        // calling a static Logger::error(), and must still reach whatever
         // LoggerOptions the app configured.
         $logger = new DummyLogger();
         Waypoint::create()->configure(function (LoggerOptions $opts) use ($logger) {

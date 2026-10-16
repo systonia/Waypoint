@@ -36,7 +36,7 @@ class DocumentedController
 
     #[Get('/weird-params')]
     public function weirdParams(
-        int $page, // unattributed scalar -- Router's implicit "Scalar" binding
+        int $page, // unattributed scalar: Router's implicit "Scalar" binding
         #[Query] $untyped,
         #[Query] array $filters,
         #[Query] ExampleService $notReallyBindable

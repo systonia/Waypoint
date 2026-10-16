@@ -4,7 +4,7 @@ namespace Waypoint\Tests\Fixtures\Controllers;
 
 use Waypoint\Attributes\{Controller, Get, NoGzip};
 
-/** No class-level #[NoGzip] -- only one specific method opts out, proving the other stays eligible. */
+/** No class-level #[NoGzip]. Only one specific method opts out, proving the other stays eligible. */
 #[Controller('/gzip-method')]
 class GzipMethodController
 {

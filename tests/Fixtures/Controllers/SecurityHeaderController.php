@@ -15,7 +15,7 @@ class SecurityHeaderController
     }
 
     // Sets X-Frame-Options itself, before SecurityHeadersMiddleware's
-    // after() hook runs -- proves the middleware fills in only what's
+    // after() hook runs. Proves the middleware fills in only what's
     // missing rather than overwriting an explicit controller value.
     #[Get('/custom-frame-options')]
     public function customFrameOptions(Response $res): string

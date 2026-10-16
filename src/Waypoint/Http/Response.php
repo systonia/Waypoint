@@ -75,7 +75,7 @@ class Response
         return $this->withHeader('Vary', implode(', ', $listed));
     }
 
-    /** Case-insensitive -- lets an after() middleware fill in a header only if the controller didn't set it. */
+    /** Case-insensitive. Lets an after() middleware fill in a header only if the controller didn't set it. */
     public function hasHeader(string $name): bool
     {
         foreach ($this->headers as $existing => $value) {
@@ -86,7 +86,7 @@ class Response
         return false;
     }
 
-    /** The value queued for $name (case-insensitive), or null -- for an after() middleware or Plugin\ResponseHook that must inspect what the controller produced. */
+    /** The value queued for $name (case-insensitive), or null. For an after() middleware or Plugin\ResponseHook that must inspect what the controller produced. */
     public function getHeader(string $name): ?string
     {
         foreach ($this->headers as $existing => $value) {
@@ -110,7 +110,7 @@ class Response
     }
 
     /**
-     * Queues a Set-Cookie. HttpOnly and SameSite=Lax by default -- the right defaults for a session cookie.
+     * Queues a Set-Cookie. HttpOnly and SameSite=Lax by default, the right defaults for a session cookie.
      * @param int|null $maxAge Seconds; null makes it a session cookie.
      * @param string|null $sameSite 'Lax', 'Strict', 'None', or null to omit the attribute.
      */

@@ -7,7 +7,7 @@ use Waypoint\Options\CompressionOptions;
 use Waypoint\Tests\Fixtures\Controllers\{GzipClassDisabledController, GzipMethodController, CustomersController};
 
 /**
- * Exercises #[NoGzip] end to end -- through real attribute compilation
+ * Exercises #[NoGzip] end to end: through real attribute compilation
  * (RouteCompiler) and real dispatch (Router::dispatch()/Response::send()),
  * not by reflecting on the compiled plan directly.
  */

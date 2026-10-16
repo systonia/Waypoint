@@ -32,7 +32,7 @@ class ProductsController
     #[FileFormatter(mimetype: 'image/svg+xml')]
     public function logo(): \SplFileInfo
     {
-        // Unlike report(), this hands over a file -- read from disk, not written out as text.
+        // Unlike report(), this hands over a file, read from disk, not written out as text.
         return new \SplFileInfo(__DIR__ . '/../Public/style.css');
     }
 

@@ -5,7 +5,7 @@ namespace Waypoint\Tests\Fixtures\Support;
 use Waypoint\FromArray;
 use Waypoint\Attributes\{NotBlank, OneOf};
 
-/** Plain FromArray user, one excluded property -- see FromArrayTest. */
+/** Plain FromArray user, one excluded property (see FromArrayTest). */
 class FromArrayDTO
 {
     use FromArray;

@@ -84,7 +84,7 @@ final class FromArrayTest extends TestCase
     /**
      * A client sending JSON `null` for a non-nullable `string` property
      * (or any other value PHP's own type check rejects) must not crash
-     * the request -- left at its default instead, so #[NotBlank]/
+     * the request; it is left at its default instead, so #[NotBlank]/
      * Validator can catch the resulting empty value as a normal 422
      * rather than an uncaught TypeError becoming a 500. Regression test
      * for exactly that: Gaiden's TwoFactorLoginDTO 500'd on a null

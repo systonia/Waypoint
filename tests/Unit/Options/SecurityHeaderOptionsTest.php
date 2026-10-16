@@ -23,7 +23,7 @@ final class SecurityHeaderOptionsTest extends TestCase
         $this->assertTrue($opts->hstsEnabled);
         $this->assertSame('max-age=31536000; includeSubDomains', $opts->hsts);
 
-        // CSP is the one header with no safe universal default -- opt-in only.
+        // CSP is the one header with no safe universal default: opt-in only.
         $this->assertFalse($opts->cspEnabled);
         $this->assertNull($opts->csp);
     }

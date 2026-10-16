@@ -6,7 +6,7 @@ use Attribute;
 
 /**
  * Documents a DTO property in generated OpenAPI schemas. Purely descriptive
- * metadata read by Waypoint\OpenAPI\OpenAPIGenerator -- it has no effect on
+ * metadata read by Waypoint\OpenAPI\OpenAPIGenerator; it has no effect on
  * request binding or validation.
  */
 #[Attribute(Attribute::TARGET_PROPERTY)]

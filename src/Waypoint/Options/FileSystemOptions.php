@@ -29,7 +29,7 @@ class FileSystemOptions
 
     /**
      * True (default): the cache is re-verified against controller/view mtimes on every request.
-     * False ("trust mode"): the cache is loaded blindly -- clearing it on deploy is your job.
+     * False ("trust mode"): the cache is loaded blindly; clearing it on deploy is your job.
      */
     public bool $cacheValidate = true;
 

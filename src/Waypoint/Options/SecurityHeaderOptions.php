@@ -21,11 +21,11 @@ class SecurityHeaderOptions
     public bool $referrerPolicyEnabled = true;
     public string $referrerPolicy = 'strict-origin-when-cross-origin';
 
-    /** Strict-Transport-Security -- only ever sent on a request that itself arrived over HTTPS. */
+    /** Strict-Transport-Security, only ever sent on a request that itself arrived over HTTPS. */
     public bool $hstsEnabled = true;
     public string $hsts = 'max-age=31536000; includeSubDomains';
 
-    /** Content-Security-Policy -- sent only when enabled and $csp is set. */
+    /** Content-Security-Policy, sent only when enabled and $csp is set. */
     public bool $cspEnabled = false;
     public ?string $csp = null;
 }

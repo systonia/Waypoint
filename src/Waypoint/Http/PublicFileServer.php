@@ -8,7 +8,7 @@ use Waypoint\Options\FileSystemOptions;
  * Serves the app's own static files from FileSystemOptions::$publicDirectory, and only from there:
  * a path with a '..' or any other dot-segment, a dotfile or dot-directory (.env, .git/), or a PHP
  * source file is never served, and the resolved file (symlinks followed) must lie inside the
- * directory itself -- not merely start with its name, which a sibling like `public-backup` would.
+ * directory itself, not merely start with its name, which a sibling like `public-backup` would.
  */
 final class PublicFileServer
 {

@@ -6,7 +6,7 @@ use Attribute;
 
 /**
  * Opts a controller class, or one specific route method, out of gzip
- * response compression (see Response::send()/CompressionOptions) -- e.g.
+ * response compression (see Response::send()/CompressionOptions), e.g.
  * for a route that already streams pre-compressed bytes, or one where the
  * extra CPU cost per request isn't worth it. Present on either the
  * controller class or the method is enough to disable it for that route;

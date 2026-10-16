@@ -50,8 +50,8 @@ enum Message: string
     #endregion
 
     #region Route Versioning
-    case RouteUnversioned = 'RouteCompiler: {method} {path} has no #[Version] attribute -- served without a version prefix.';
-    case RouteInvalidSunsetDate = 'RouteCompiler: {method} {path} has an invalid #[Sunset] date "{date}" (expected YYYY-MM-DD) -- no Sunset header will be sent for it.';
+    case RouteUnversioned = 'RouteCompiler: {method} {path} has no #[Version] attribute; served without a version prefix.';
+    case RouteInvalidSunsetDate = 'RouteCompiler: {method} {path} has an invalid #[Sunset] date "{date}" (expected YYYY-MM-DD); no Sunset header will be sent for it.';
     #endregion
 }
 // phpcs:enable Generic.Files.LineLength
