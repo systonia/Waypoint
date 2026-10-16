@@ -252,12 +252,13 @@ class OpenAPIGenerator
             if ($attr['name'] !== Throws::class) {
                 continue;
             }
-            $status = $attr['args']['status'] ?? null;
+            $args = $attr['args'];
+            $status = $args[1] ?? $args['status'] ?? null;
             $status = is_int($status) || is_string($status) ? (string) $status : '500';
             if (!isset($responses[$status])) {
                 $this->schemas->ensureProblemDetails();
                 $responses[$status] = [
-                    'description' => $attr['args']['description'] ?? $attr['args']['exception'] ?? 'Error',
+                    'description' => self::stringArg($args, 2, 'description') ?? self::stringArg($args, 0, 'exception') ?? 'Error',
                     'content' => ['application/problem+json' => ['schema' => ['$ref' => '#/components/schemas/ProblemDetails']]],
                 ];
             }

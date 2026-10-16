@@ -120,6 +120,14 @@ final class OpenAPIGeneratorTest extends IntegrationTestCase
         $this->assertSame('Widget missing', $operation['responses']['404']['description']);
     }
 
+    public function testThrowsWithPositionalArgumentsGivesTheSameResponse(): void
+    {
+        $responses = $this->generate()['paths']['/documented/{id}']['put']['responses'];
+
+        $this->assertSame('Widget missing', $responses['404']['description']);
+        $this->assertArrayNotHasKey('500', $responses);
+    }
+
     public function testThrowsAttributeUsesTheSharedProblemDetailsSchema(): void
     {
         $spec = $this->generate();

@@ -123,7 +123,7 @@ final class NewOrder
 |---|---|---|
 | `#[Summary('…')]` | method | the operation's summary |
 | `#[Tags(['…'])]` | class, method | tags, merged from both |
-| `#[Throws]` with `exception:`, `status:` and an optional `description:` | method, repeatable | an error response with the problem schema; pass the arguments by name |
+| `#[Throws]` with `exception`, `status` and an optional `description` | method, repeatable | an error response with the problem schema |
 | `#[Ignore]` | class, method | leaves the routes out of the document |
 | `#[Schema('Name')]` | DTO class | the component name instead of the short class name |
 | `#[Property(…)]` | DTO property | `description`, `format`, `example`, `deprecated` |
