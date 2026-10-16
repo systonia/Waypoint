@@ -927,8 +927,8 @@ redirect on failure (no/expired JWT on an `#[Authenticated]` route) already go t
 ## Static Files
 
 Serve a plain public directory (images, fonts, a pre-built frontend bundle, etc.) by configuring
-`FileSystemOptions::$publicDirectory` — checked before routing, so a matching file always wins over a
-route at the same path:
+`FileSystemOptions::$publicDirectory` — checked before routing on `GET` and `HEAD`, so a matching file
+always wins over a route at the same path; any other method goes to routing:
 
 ```php
 use Waypoint\Options\FileSystemOptions;

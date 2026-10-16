@@ -28,6 +28,14 @@ final class StaticFileServingTest extends IntegrationTestCase
         $this->assertStringStartsWith('text/css', $this->sentHeaders()['content-type'] ?? '');
     }
 
+    public function testOnlyGetAndHeadReadAFile(): void
+    {
+        $this->assertSame(200, $this->request('HEAD', '/style.css')->send()->status());
+        foreach (['POST', 'PUT', 'DELETE'] as $method) {
+            $this->assertSame(404, $this->request($method, '/style.css')->send()->status(), $method);
+        }
+    }
+
     public function testAPercentEncodedPathFindsItsFileButAnEncodedSlashNeverMakesASegment(): void
     {
         $this->assertSame("spaced out\n", $this->dispatch('GET', '/my%20file.txt'));

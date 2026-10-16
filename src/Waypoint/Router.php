@@ -325,11 +325,11 @@ class Router
     /** @param string $path Request::$path: trimmed and decoded already */
     public function dispatch(string $path, string $httpMethod, Request $req, Response $res): void
     {
-
-        if ($this->publicFileServer->serve($path, $res) || $this->tryServeViewAsset($path, $res)) {
+        $method = strtoupper($httpMethod);
+        // Files are only read, as Tenma's own static server does: a POST to /style.css goes to routing
+        if (in_array($method, ['GET', 'HEAD'], true) && ($this->publicFileServer->serve($path, $res) || $this->tryServeViewAsset($path, $res))) {
             return;
         }
-        $method = strtoupper($httpMethod);
         foreach ($this->endpoints as $endpoint) {
             if ($endpoint->serve($method, $path, $req, $res)) {
                 return;
