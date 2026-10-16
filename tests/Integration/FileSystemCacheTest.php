@@ -186,6 +186,24 @@ final class FileSystemCacheTest extends IntegrationTestCase
         }
     }
 
+    public function testIsAvailableInvalidatesWhenAMiddlewareOfABaseControllerChanges(): void
+    {
+        [$options, $fileSystem] = $this->fileSystem();
+        $this->router([CacheChildController::class], [], $options);
+        $this->assertTrue($fileSystem->isAvailable([CacheChildController::class]));
+
+        $file = (string) (new \ReflectionClass(\Waypoint\Tests\Fixtures\Middlewares\AddHeaderMiddleware::class))->getFileName();
+        $original = filemtime($file);
+        touch($file, $original + 10);
+        clearstatcache();
+        try {
+            $this->assertFalse($fileSystem->isAvailable([CacheChildController::class]));
+        } finally {
+            touch($file, $original);
+            clearstatcache();
+        }
+    }
+
     public function testIsAvailableInvalidatesWhenTheControllerSetGrows(): void
     {
         [$options, $fileSystem] = $this->fileSystem();

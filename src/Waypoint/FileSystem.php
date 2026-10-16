@@ -172,14 +172,18 @@ final class FileSystem
     }
 
     /**
-     * The #[Middleware] classes of a controller and its routes, and the #[Body] DTO classes its routes take.
+     * The #[Middleware] classes of a controller, its base classes and its routes, and the #[Body] DTO classes its routes take.
      * @param ReflectionClass<object> $controller
      * @return list<class-string>
      */
     private static function referencedClasses(ReflectionClass $controller): array
     {
         $found = [];
-        $holders = [$controller, ...$controller->getMethods()];
+        // A base controller's #[Middleware] applies to its subclasses' routes too
+        $holders = $controller->getMethods();
+        for ($class = $controller; $class !== false; $class = $class->getParentClass()) {
+            $holders[] = $class;
+        }
         foreach ($holders as $holder) {
             foreach ($holder->getAttributes(\Waypoint\Attributes\Middleware::class) as $attribute) {
                 $class = $attribute->getArguments()[0] ?? $attribute->getArguments()['class'] ?? null;
