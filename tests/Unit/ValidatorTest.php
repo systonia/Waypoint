@@ -120,6 +120,14 @@ final class ValidatorTest extends TestCase
         $this->assertStringContainsString('too long', $errors['username']);
     }
 
+    public function testLengthSkipsNullSoAnOptionalFieldCanHaveAMinimum(): void
+    {
+        $dto = new ValidatorTest_AccountDTO();
+        $dto->username = null;
+        $errors = $this->validator->validate($dto);
+        $this->assertArrayNotHasKey('username', $errors);
+    }
+
     public function testLengthAcceptsWithinBounds(): void
     {
         $dto = new ValidatorTest_AccountDTO();

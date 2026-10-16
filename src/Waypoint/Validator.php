@@ -83,8 +83,12 @@ class Validator
         return $value === null || (is_string($value) && trim($value) === '') || (is_array($value) && $value === []);
     }
 
+    /** Null passes, like #[Email]/#[Regex]/#[OneOf]: an optional field may have a minimum length; #[NotBlank] requires it. */
     private function lengthError(mixed $value, Length $rule): ?string
     {
+        if ($value === null) {
+            return null;
+        }
         $len = is_string($value) ? mb_strlen($value) : 0;
         return match (true) {
             $len < $rule->min => $this->message('This value is too short. Minimum length is {min}.', ['min' => $rule->min]),

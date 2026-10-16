@@ -387,7 +387,7 @@ class CreateProductDTO
 }
 ```
 
-`#[OneOf]` compares strictly (`'1'` is not `1`) and, like `#[Email]`, skips `null`; `#[SameAs]` compares
+`#[OneOf]` compares strictly (`'1'` is not `1`) and, like `#[Email]`, `#[Regex]` and `#[Length]`, skips `null`; `#[SameAs]` compares
 against the named property of the same DTO.
 
 A failing DTO throws `ValidationException`, which the default exception handler turns into a `422`

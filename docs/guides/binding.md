@@ -213,7 +213,7 @@ The rules are attributes on the DTO's public properties:
 |---|---|
 | `#[NotBlank]` | the value is `null`, a string of only whitespace, or an empty array |
 | `#[Email]` | the value is not `null` and not a valid email address |
-| `#[Length]` with `min:` and `max:` | the string is shorter than `min` or longer than `max`, counted in characters (a missing value counts as length 0) |
+| `#[Length]` with `min:` and `max:` | the string is shorter than `min` or longer than `max`, counted in characters; `null` passes (add `#[NotBlank]` to require the value) |
 | `#[Regex('/^[A-Z]{2}\d{4}$/')]` | the value doesn't match; numbers match by their text, `null` passes, arrays and booleans never match |
 | `#[OneOf(['draft', 'live'])]` | the value is not `null` and not one of the values, compared strictly (`'1'` is not `1`) |
 | `#[SameAs('password')]` | the value differs from the named property, e.g. a password confirmation |
