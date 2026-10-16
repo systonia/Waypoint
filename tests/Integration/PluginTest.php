@@ -199,7 +199,7 @@ final class PluginTest extends IntegrationTestCase
             $attach([]);
             $attach([new \Waypoint\Tests\Fixtures\Plugins\FallbackPlugin()]);
             $meta = require "$tempDir/meta.php";
-            $this->assertArrayHasKey(realpath(__DIR__ . '/../Fixtures/Plugins/FallbackPlugin.php'), $meta);
+            $this->assertArrayHasKey(\Waypoint\Tests\Fixtures\Plugins\FallbackPlugin::class, $meta);
         } finally {
             foreach (glob("$tempDir/{,assets/}*", GLOB_BRACE) ?: [] as $f) {
                 is_file($f) && unlink($f);

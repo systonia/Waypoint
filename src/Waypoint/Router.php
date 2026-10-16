@@ -213,13 +213,12 @@ class Router
     private function pluginMeta(): array
     {
         $meta = $this->plugins->cacheInputs();
-        // The plans hold what the registered plugins compiled: adding, removing or updating one changes them
+        // The plans hold what the registered plugins compiled: adding, removing or updating one changes them. By class,
+        // not file: a plugin declared in a controller's file is a change as well.
         foreach ($this->plugins->all() as $plugin) {
             foreach ([$plugin, ...$plugin->hooks()] as $object) {
                 $file = (new \ReflectionClass($object))->getFileName();
-                if ($file !== false) {
-                    $meta[$file] = filemtime($file) ?: 0;
-                }
+                $meta[$object::class] = $file !== false ? (filemtime($file) ?: 0) : 0;
             }
         }
         foreach ($this->plugins->hooks(ClientAsset::class) as $hook) {
