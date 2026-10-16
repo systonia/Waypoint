@@ -945,7 +945,7 @@ public function loginSubmit(Request $req, Response $res): View|Redirect
     if (!$this->credentialsValid($req)) {
         return new View('Login', ['error' => 'Invalid email or password.']);
     }
-    $res->withCookie('auth_token', $token, secure: true);
+    JWT::signIn($res, ['sub' => $userId]);
     return new Redirect('/dashboard');
 }
 ```
@@ -1093,22 +1093,22 @@ A browser attaches that cookie to cross-site requests too, so signing in by cook
 protection: with `cookieName` set and no `CsrfOptions::$secret`, `useJwt()` fails every request with a
 500 instead of running unprotected.
 
-Issue that cookie from your own login endpoint with `Response::withCookie()` (HttpOnly and
-`SameSite=Lax` by default, `Secure` when the request came over HTTPS), and clear it on logout with `withoutCookie()`:
+Issue that cookie from your own login endpoint with `JWT::signIn($res, $claims)`: it signs the claims and
+sets the `cookieName` cookie (HttpOnly, `SameSite=Lax`, `Max-Age` of `ttl`, `Secure` when the request came over
+HTTPS). `JWT::signOut($res)` removes it on logout:
 
 ```php
 #[Post('/login')]
 public function login(#[Body] LoginDTO $data, Response $res): array
 {
-    $token = JWT::encode(['sub' => $userId]);
-    $res->withCookie('auth_token', $token, secure: true); // maxAge: null -> a session cookie
+    $token = JWT::signIn($res, ['sub' => $userId]);
     return ['accessToken' => $token];        // also usable as a Bearer token directly
 }
 
 #[Post('/logout')]
 public function logout(Response $res): array
 {
-    $res->withoutCookie('auth_token');
+    JWT::signOut($res);
     return ['loggedOut' => true];
 }
 ```

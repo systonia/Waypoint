@@ -4,6 +4,7 @@ namespace Waypoint\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Waypoint\{Waypoint, JWT};
+use Waypoint\Http\{Request, Response};
 use Waypoint\Options\JWTOptions;
 
 final class JWTTest extends TestCase
@@ -29,6 +30,27 @@ final class JWTTest extends TestCase
         $this->assertSame('123', $payload['sub']);
         $this->assertSame('Ada', $payload['name']);
         $this->assertArrayHasKey('exp', $payload);
+    }
+
+    public function testSignInSetsTheSessionCookieAndSignOutRemovesIt(): void
+    {
+        Waypoint::getConfig(JWTOptions::class)->cookieName = 'session';
+        Waypoint::getConfig(JWTOptions::class)->ttl = 600;
+        $res = (new Response())->forRequest(Request::fromParts('POST', '/login', https: true));
+
+        $token = JWT::signIn($res, ['sub' => 7]);
+
+        $this->assertSame(7, JWT::decode($token)['sub'] ?? null);
+        $this->assertSame("session=$token; Path=/; Max-Age=600; Secure; HttpOnly; SameSite=Lax", $res->getCookies()[0]);
+
+        JWT::signOut($res);
+        $this->assertSame('session=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax', $res->getCookies()[1]);
+    }
+
+    public function testSignInNeedsACookieName(): void
+    {
+        $this->expectException(\LogicException::class);
+        JWT::signIn(new Response(), ['sub' => 1]);
     }
 
     public function testEncodeProducesThreeBase64UrlSegments(): void

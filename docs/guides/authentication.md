@@ -81,7 +81,7 @@ final class TokenController
 
 ## Signing in with a cookie
 
-A browser that navigates to a page sends no `Authorization` header, so pages use a cookie. The login form posts to a route that sets it; `withCookie()` makes it HttpOnly and `SameSite=Lax` by default:
+A browser that navigates to a page sends no `Authorization` header, so pages use a cookie. The login form posts to a route that sets it: [`JWT::signIn()`](../reference/Waypoint/JWT.md#signin) signs the claims and sets the `JWTOptions::$cookieName` cookie (HttpOnly, `SameSite=Lax`, `Max-Age` of `JWTOptions::$ttl`, `Secure` over HTTPS), and `JWT::signOut()` removes it:
 
 ```php
 <?php
@@ -90,7 +90,6 @@ namespace App\Controllers;
 
 use App\Services\Accounts;
 use Waypoint\Attributes\{Controller, Get, Inject, Post};
-use Waypoint\Environment;
 use Waypoint\Http\{Redirect, Request, Response, View};
 use Waypoint\JWT;
 
@@ -99,9 +98,6 @@ final class SessionController
 {
     #[Inject]
     private Accounts $accounts;
-
-    #[Inject]
-    private Environment $env;
 
     #[Get('/login')]
     public function form(): View
@@ -116,15 +112,14 @@ final class SessionController
         if ($user === null) {
             return new View('Login', ['error' => 'Wrong email or password.']);
         }
-        $token = JWT::encode(['sub' => $user['id'], 'role' => $user['role']]);
-        $res->withCookie('session', $token, secure: !$this->env->isDev());
+        JWT::signIn($res, ['sub' => $user['id'], 'role' => $user['role']]);
         return new Redirect('/dashboard', 303);
     }
 
     #[Post('/logout')]
     public function logout(Response $res): Redirect
     {
-        $res->withoutCookie('session');
+        JWT::signOut($res);
         return new Redirect('/login', 303);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Waypoint;
 
+use Waypoint\Http\Response;
 use Waypoint\Options\JWTOptions;
 use Waypoint\Support\{Arr, Base64Url};
 
@@ -18,6 +19,30 @@ class JWT
         $h = Base64Url::encodeJson(['alg' => 'HS256', 'typ' => 'JWT']);
         $p = Base64Url::encodeJson($payload);
         return "$h.$p." . Base64Url::sign("$h.$p", $opts->secret);
+    }
+
+    /**
+     * Signs $claims into a token and sets it as the JWTOptions::$cookieName session cookie: HttpOnly, SameSite=Lax,
+     * Max-Age JWTOptions::$ttl, Secure when the request came over HTTPS. Returns the token, e.g. for an API client.
+     * @param array<string, mixed> $claims
+     */
+    public static function signIn(Response $res, array $claims): string
+    {
+        $opts = Waypoint::getConfig(JWTOptions::class);
+        $token = self::encode($claims);
+        $res->withCookie(self::cookieName($opts), $token, maxAge: $opts->ttl, httpOnly: true, sameSite: 'Lax');
+        return $token;
+    }
+
+    /** Removes the JWTOptions::$cookieName session cookie. */
+    public static function signOut(Response $res): void
+    {
+        $res->withoutCookie(self::cookieName(Waypoint::getConfig(JWTOptions::class)));
+    }
+
+    private static function cookieName(JWTOptions $opts): string
+    {
+        return $opts->cookieName ?? throw new \LogicException('JWT::signIn()/signOut() set the session cookie: set JWTOptions::$cookieName.');
     }
 
     /** @return array<string, mixed>|null The payload, or null for a malformed, wrongly-signed, non-HS256, expired or never-expiring token. */
