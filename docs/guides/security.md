@@ -56,7 +56,7 @@ Waypoint's defaults are chosen to fail closed: a missing secret stops the app in
 ## Checklist before going live
 
 - [ ] `JWT_SECRET` and `CSRF_SECRET` set from the environment, 32 bytes or more, different from development
-- [ ] `APP_ENV=production` (or unset under PHP-FPM)
+- [ ] `APP_ENV=production` (or unset under PHP-FPM and Tenma without `--watch`)
 - [ ] `$app->use(new SecurityHeadersMiddleware())`, with a Content Security Policy where possible
 - [ ] HTTPS in front, `ProxyOptions::$trusted` listing exactly the proxies
 - [ ] a [cache directory](caching.md) writable only by the app's user

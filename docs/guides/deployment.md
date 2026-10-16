@@ -21,7 +21,7 @@ CSRF_SECRET=…
 DATABASE_URL=postgres://shop@localhost/shop
 ```
 
-`APP_ENV` is `production` by default under PHP-FPM. Under Tenma, which runs on the command line, it defaults to `development`: set `APP_ENV=production` there explicitly.
+`APP_ENV` is `production` by default under PHP-FPM and under Tenma; only `tenma --watch`, `php -S` and the command line default to `development`. Setting `APP_ENV=production` explicitly does no harm and keeps a server from depending on how it was started.
 
 ## Under Tenma
 
