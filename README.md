@@ -1421,8 +1421,8 @@ order of magnitude faster than uncached Reflection-based discovery under repeate
 The cache directory holds `routes.php` (route and task plans, the service list, plugin route data),
 `attributes.php` (every controller attribute, for the OpenAPI generator), `meta.php` (the mtimes the
 cache was built from) and `assets/` (content-hashed view CSS/JS, `waypoint.js`, plugin assets). With
-`cacheValidate = true` the cache is rebuilt as soon as any controller file or base controller file,
-view asset, plugin `cacheInputs()` entry, the client bundle or the framework itself changes, or a
+`cacheValidate = true` the cache is rebuilt as soon as any controller file, base controller file or
+trait they use, view asset, plugin `cacheInputs()` entry, the client bundle or the framework itself changes, or a
 controller is added or removed; in trust mode
 you clear the directory on deploy.
 

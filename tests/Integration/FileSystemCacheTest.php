@@ -5,7 +5,7 @@ namespace Waypoint\Tests\Integration;
 use RuntimeException;
 use Waypoint\{Waypoint, FileSystem, Router};
 use Waypoint\Options\{FileSystemOptions, RendererOptions};
-use Waypoint\Tests\Fixtures\Controllers\{CacheBaseController, CacheChildController, CustomersController, OrdersController};
+use Waypoint\Tests\Fixtures\Controllers\{CacheBaseController, CacheChildController, CacheRoutes, CustomersController, OrdersController};
 
 final class FileSystemCacheTest extends IntegrationTestCase
 {
@@ -166,6 +166,24 @@ final class FileSystemCacheTest extends IntegrationTestCase
         $meta[dirname((new \ReflectionClass(FileSystem::class))->getFileName())] = 1;
         file_put_contents($fileSystem->getMetaFile(), '<?php return ' . var_export($meta, true) . ';');
         $this->assertFalse($fileSystem->isAvailable([CacheChildController::class]));
+    }
+
+    public function testIsAvailableInvalidatesWhenATraitOfABaseControllerChanges(): void
+    {
+        [$options, $fileSystem] = $this->fileSystem();
+        $this->router([CacheChildController::class], [], $options);
+        $this->assertTrue($fileSystem->isAvailable([CacheChildController::class]));
+
+        $trait = (string) (new \ReflectionClass(CacheRoutes::class))->getFileName();
+        $original = filemtime($trait);
+        touch($trait, $original + 10);
+        clearstatcache();
+        try {
+            $this->assertFalse($fileSystem->isAvailable([CacheChildController::class]));
+        } finally {
+            touch($trait, $original);
+            clearstatcache();
+        }
     }
 
     public function testIsAvailableInvalidatesWhenTheControllerSetGrows(): void

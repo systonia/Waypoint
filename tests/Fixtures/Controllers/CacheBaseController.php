@@ -8,4 +8,5 @@ use Waypoint\Attributes\Authenticated;
 #[Authenticated]
 abstract class CacheBaseController
 {
+    use CacheRoutes;
 }

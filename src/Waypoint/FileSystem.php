@@ -110,8 +110,8 @@ final class FileSystem
 
     /**
      * Everything the compiled cache depends on: $extraMeta, the framework's own client bundle and sources (an update
-     * may change what the cache holds), and the source file mtime of each controller and its base classes (their
-     * attributes are inherited) -- or null if a controller's file is gone.
+     * may change what the cache holds), and the source file mtime of each controller, its base classes and their
+     * traits (their attributes are inherited) -- or null if a controller's file is gone.
      * @param class-string[] $controllers
      * @param array<string, int> $extraMeta
      * @return array<string, int>|null
@@ -133,25 +133,42 @@ final class FileSystem
                 continue;
             }
             for ($class = new ReflectionClass($controller); $class !== false; $class = $class->getParentClass()) {
-                $file = $class->getFileName();
-                if ($file === false && $class->getName() !== $controller) {
-                    // A built-in parent class has no source file to watch
-                    continue;
+                // A trait's methods and their attributes become the class's own
+                foreach ([$class, ...self::traitsOf($class)] as $source) {
+                    $file = $source->getFileName();
+                    if ($file === false && $source->getName() !== $controller) {
+                        // A built-in parent class has no source file to watch
+                        continue;
+                    }
+                    if (!$file || !file_exists($file)) {
+                        return null;
+                    }
+                    $mtime = filemtime($file);
+                    if ($mtime === false) {
+                        // @codeCoverageIgnoreStart
+                        // only a delete race after file_exists().
+                        return null;
+                        // @codeCoverageIgnoreEnd
+                    }
+                    $meta[$file] = $mtime;
                 }
-                if (!$file || !file_exists($file)) {
-                    return null;
-                }
-                $mtime = filemtime($file);
-                if ($mtime === false) {
-                    // @codeCoverageIgnoreStart
-                    // only a delete race after file_exists().
-                    return null;
-                    // @codeCoverageIgnoreEnd
-                }
-                $meta[$file] = $mtime;
             }
         }
         return $meta;
+    }
+
+    /**
+     * The traits a class uses, and the traits they use in turn.
+     * @param ReflectionClass<object> $class
+     * @return list<ReflectionClass<object>>
+     */
+    private static function traitsOf(ReflectionClass $class): array
+    {
+        $traits = [];
+        foreach ($class->getTraits() as $trait) {
+            $traits = [...$traits, $trait, ...self::traitsOf($trait)];
+        }
+        return $traits;
     }
 
     /**
