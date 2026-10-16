@@ -3,6 +3,8 @@
 namespace Waypoint\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Waypoint\Tests\Fixtures\DTO\{CityDTO, ShipmentDTO};
+use Waypoint\Tests\Fixtures\Enums\{OrderStatus, Priority};
 use Waypoint\Tests\Fixtures\Support\FromArrayDTO;
 use Waypoint\Tests\Fixtures\Support\FromArrayInternalsDTO;
 
@@ -120,6 +122,51 @@ final class FromArrayTest extends TestCase
         $this->assertSame(['name' => 'This value is required.'], $dto->errors);
 
         $this->assertTrue((new \Waypoint\Tests\Fixtures\DTO\RequiredNameDTO(['name' => 'Ada']))->isValid);
+    }
+
+    public function testABackedEnumPropertyGetsTheCaseItsValueNames(): void
+    {
+        $dto = new ShipmentDTO(['status' => 'done', 'priority' => '2', 'to' => ['city' => 'Freiburg']]);
+
+        $this->assertSame(OrderStatus::Done, $dto->status);
+        $this->assertSame(Priority::High, $dto->priority);
+        $this->assertTrue($dto->isValid);
+    }
+
+    public function testAValueNoCaseHasIsAFailureNamingTheValues(): void
+    {
+        $dto = new ShipmentDTO(['status' => 'gone', 'priority' => 7, 'to' => ['city' => 'Freiburg']]);
+
+        $this->assertSame(OrderStatus::Open, $dto->status);
+        $this->assertSame([
+            'status' => 'This value should be one of: open, done.',
+            'priority' => 'This value should be one of: 1, 2.',
+        ], $dto->errors);
+    }
+
+    public function testANestedDtoIsBuiltFromItsArrayAndItsErrorsArePrefixed(): void
+    {
+        $dto = new ShipmentDTO(['to' => ['city' => 'Freiburg'], 'via' => ['city' => '']]);
+
+        $this->assertSame('Freiburg', $dto->to->city);
+        $this->assertSame(['via.city' => 'This value should not be blank.'], $dto->errors);
+
+        $this->assertSame(['to' => 'This value is required.'], (new ShipmentDTO([]))->errors);
+        $this->assertSame(['to' => 'Expected a value of type ' . CityDTO::class . '.'], (new ShipmentDTO(['to' => 'Freiburg']))->errors);
+    }
+
+    public function testAListOfDtosOrEnumsIsBuiltAsItsVarTagSays(): void
+    {
+        $dto = new ShipmentDTO(['to' => ['city' => 'A'], 'stops' => [['city' => 'B'], ['city' => ''], 'C'], 'levels' => [1, '2', 3]]);
+
+        $this->assertCount(2, $dto->stops);
+        $this->assertContainsOnlyInstancesOf(CityDTO::class, $dto->stops);
+        $this->assertSame([Priority::Low, Priority::High], $dto->levels);
+        $this->assertSame([
+            'stops.2' => 'Expected a value of type ' . CityDTO::class . '.',
+            'levels.2' => 'This value should be one of: 1, 2.',
+            'stops.1.city' => 'This value should not be blank.',
+        ], $dto->errors);
     }
 
     public function testAFormsTextForNumbersAndBooleansIsConvertedStrictly(): void

@@ -3,7 +3,7 @@
 namespace Waypoint\Tests\Fixtures\Controllers;
 
 use Waypoint\Attributes\{Body, Controller, Post};
-use Waypoint\Tests\Fixtures\DTO\RequiredNameDTO;
+use Waypoint\Tests\Fixtures\DTO\{RequiredNameDTO, ShipmentDTO};
 
 /** #[Body] binding cases: required fields, malformed bodies */
 #[Controller('/body')]
@@ -20,5 +20,11 @@ class BodyBindingController
     public function raw(#[Body] array $data): array
     {
         return $data;
+    }
+
+    #[Post('/shipment')]
+    public function shipment(#[Body] ShipmentDTO $dto): array
+    {
+        return ['status' => $dto->status->value, 'to' => $dto->to->city, 'stops' => count($dto->stops)];
     }
 }
