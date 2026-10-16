@@ -539,6 +539,10 @@ Notes:
   constructor parameter marked `#[Inject]` is *discovered* (so its type is pulled into the container
   graph) but not itself resolved/passed as a constructor argument. Prefer property injection.
 
+PHPStan would report an `#[Inject]` property as only read, since the container writes it: the package's
+`extension.neon` counts such properties as written and initialized (loaded by phpstan/extension-installer, or
+add `vendor/systonia/waypoint/extension.neon` to `includes`).
+
 Outside controllers and services (the front controller, a script), `$app->get(Service::class)` returns the
 container's instance and throws `ServiceNotFoundException` when it can't be built; `$app->find(Service::class)`
 returns `null` instead.

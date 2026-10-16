@@ -61,6 +61,13 @@
     "phpunit/phpunit": "Required by the Waypoint\\Testing kit for app and plugin tests.",
     "tenma/psr": "Response::upgrade() through the PSR-15 handler under Tenma"
   },
+  "extra": {
+    "phpstan": {
+      "includes": [
+        "extension.neon"
+      ]
+    }
+  },
   "minimum-stability": "stable",
   "prefer-stable": true
 }

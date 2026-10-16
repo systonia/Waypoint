@@ -191,6 +191,15 @@ $app->use(new ResolveTenant());
 
 Waypoint can't enforce this rule. Test an app that is meant to run under Tenma under Tenma, with parallel requests.
 
+## PHPStan
+
+The container writes `#[Inject]` properties, so PHPStan would report each as only read. Waypoint ships a PHPStan extension that counts them as written and initialized: with [phpstan/extension-installer](https://github.com/phpstan/extension-installer) it is loaded on its own, otherwise add it to `phpstan.neon`:
+
+```neon
+includes:
+    - vendor/systonia/waypoint/extension.neon
+```
+
 ## Outside controllers
 
 [`$app->get()`](../reference/Waypoint/App.md#get) returns the container's instance of a class from the front controller or a script (and throws when it can't be built; [`$app->find()`](../reference/Waypoint/App.md#find) returns `null` then); [`$app->getContainer()`](../reference/Waypoint/App.md#getcontainer) is the [`Container`](../reference/Waypoint/Container.md) itself, a PSR-11 container. Prefer `#[Inject]` everywhere else.

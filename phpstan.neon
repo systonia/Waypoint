@@ -1,5 +1,6 @@
 includes:
     - vendor/tenma/stubs/extension.neon
+    - extension.neon
 
 parameters:
     level: 10
