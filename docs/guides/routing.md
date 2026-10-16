@@ -92,7 +92,7 @@ matches `/reports/2026-10.csv`, but not `/reports/2026-10xcsv`.
 
 A parameter named like a placeholder receives its value. A scalar parameter (`string`, `int`, `float`, `bool`) is converted to its type, and a value that doesn't fit answers `422` instead of reaching the method: `/products/abc` for `int $id` never calls `show()`. [Binding and validation](binding.md) has the details, including `#[Param('name')]` for a parameter named differently from its placeholder.
 
-Paths without placeholders are looked up first; paths with placeholders are then tried in the order the controllers were attached and the methods declared. `#[Get('/products/new')]` therefore wins over `#[Get('/products/{id}')]` wherever both are declared.
+Paths without placeholders are looked up first; paths with placeholders are then tried in the order the controllers were attached and the methods declared. `#[Get('/products/new')]` therefore wins over `#[Get('/products/{id}')]` wherever both are declared. Two routes with the same method and path, or the same placeholder pattern (`/{id}` and `/{slug}`), stop the app at boot with an `InvalidArgumentException` naming both actions.
 
 ## Methods, HEAD and 405
 

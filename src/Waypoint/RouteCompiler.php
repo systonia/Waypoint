@@ -128,6 +128,14 @@ final class RouteCompiler
                 'plugins' => $this->compilePluginData($rc, $method),
             ];
 
+            // Same method and path (or the same pattern): one of the two would never be reached
+            $existing = $dynamic
+                ? array_find($dynamicRoutes[$httpMethod] ?? [], fn (array $other): bool => $other['regex'] === $plan['regex'])
+                : $staticRoutes[$httpMethod][$path] ?? null;
+            if ($existing !== null) {
+                $other = is_string($existing['controller']) ? $existing['controller'] : $existing['controller']::class;
+                throw new InvalidArgumentException("Duplicate route {$httpMethod} {$path}: {$other}::{$existing['method']}() and {$controller}::{$method->getName()}().");
+            }
             if ($dynamic) {
                 $dynamicRoutes[$httpMethod][] = $plan;
             } else {
