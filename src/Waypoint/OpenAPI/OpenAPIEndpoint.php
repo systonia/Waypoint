@@ -69,6 +69,6 @@ final class OpenAPIEndpoint implements Endpoint
     /** @param array<string, mixed> $spec */
     private function writeJson(Response $res, array $spec): void
     {
-        $res->withHeader('Content-Type', 'application/json')->write(json_encode($spec) ?: 'null');
+        $res->withHeader('Content-Type', 'application/json')->write(json_encode($spec, JSON_THROW_ON_ERROR));
     }
 }

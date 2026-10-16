@@ -17,6 +17,12 @@ final class ResultRendererTest extends TestCase
         return (string) ob_get_clean();
     }
 
+    public function testDataJsonCannotHoldThrowsInsteadOfBecomingNull(): void
+    {
+        $this->expectException(\JsonException::class);
+        (new ResultRenderer())->render(['name' => "Caf\xE9"], new Response(), []);
+    }
+
     public function testXmlEscapesTextInsteadOfBreakingTheDocument(): void
     {
         $xml = self::xml(['name' => 'Tom & Jerry <3', 'note' => '</name><admin>true</admin>']);

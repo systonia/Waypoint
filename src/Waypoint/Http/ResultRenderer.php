@@ -87,9 +87,9 @@ final class ResultRenderer
         }
     }
 
+    /** Throws for what JSON can't hold (invalid UTF-8, say): a logged 500 instead of a 200 with "null". */
     private static function json(mixed $value): string
     {
-        $encoded = json_encode($value);
-        return $encoded !== false ? $encoded : 'null';
+        return json_encode($value, JSON_THROW_ON_ERROR);
     }
 }
