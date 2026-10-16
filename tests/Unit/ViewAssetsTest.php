@@ -168,6 +168,31 @@ final class ViewAssetsTest extends TestCase
         );
     }
 
+    public function testScopeCssLiftsTopLevelStatementsInFrontOfEverything(): void
+    {
+        $scoped = ViewAssets::scopeCss("@charset \"utf-8\";\n@import url(base.css);\n@layer base, view;\n.card { color: red; }\n", 'Home');
+
+        $this->assertSame(
+            "@charset \"utf-8\";\n@import url(base.css);\n@layer base, view;\n[data-view=\"Home\"] {\n    .card { color: red; }\n}\n",
+            $scoped,
+        );
+    }
+
+    public function testScopeCssLeavesRootAndHtmlRulesUnscoped(): void
+    {
+        $scoped = ViewAssets::scopeCss("/* tokens */ :root { --brand: red; } html, :root { color: black; } .card { color: var(--brand); }", 'Home');
+
+        $this->assertStringStartsWith('/* tokens */ :root { --brand: red; } html, :root { color: black; }', $scoped);
+        $this->assertStringContainsString("[data-view=\"Home\"] {\n     .card { color: var(--brand); }\n}", $scoped);
+    }
+
+    public function testScopeCssKeepsALayerBlockAndANestedStatementInsideTheScope(): void
+    {
+        $scoped = ViewAssets::scopeCss('@layer view { .card { color: red; } }', 'Home');
+
+        $this->assertStringStartsWith('[data-view="Home"] {', $scoped);
+    }
+
     public function testScopeCssHandlesACommentContainingACommaWithoutBreaking(): void
     {
         // Regression test: this exact shape (a file-header comment whose

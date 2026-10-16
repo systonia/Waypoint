@@ -126,7 +126,9 @@ final class ViewAssets
      * browser resolve the scope: nested rules become descendant selectors, and nesting is spec'd to
      * work inside @media/@supports/@container too. Selector text is never touched, so a comma inside
      * `:is(.a, .b)` can't break anything. Top-level @keyframes/@font-face are global constructs that
-     * can't be nested, so extractUnscopable() lifts them out unchanged first.
+     * can't be nested, and a top-level `:root`/`html` rule is about the document, never inside the view:
+     * extractUnscopable() lifts them out unchanged first. Top-level @charset/@import/@layer statements
+     * go in front of everything, where CSS requires them.
      */
     public static function scopeCss(string $css, string $viewName): string
     {
@@ -150,10 +152,11 @@ final class ViewAssets
      * single brace-depth-aware scan that skips comments so a `{` inside one can't desynchronize it.
      * Only a top-level (depth 0) at-rule is lifted.
      *
-     * @return array{0: string, 1: string} [unscopable blocks, everything else]
+     * @return array{0: string, 1: string} [statements and unscopable blocks, everything else]
      */
     private static function extractUnscopable(string $css): array
     {
+        $statements = '';
         $unscopable = '';
         $rest = '';
         $length = strlen($css);
@@ -168,6 +171,9 @@ final class ViewAssets
             $i += $span;
 
             if ($i >= $length) {
+                if ($depth === 0) {
+                    $statements .= self::liftStatements($chunk);
+                }
                 if ($captureDepth !== null) {
                     $unscopable .= $chunk;
                 } else {
@@ -191,8 +197,12 @@ final class ViewAssets
             }
 
             if ($char === '{') {
-                if ($depth === 0 && $captureDepth === null && preg_match('/^@(?:-\w+-)?keyframes\b|^@font-face\b/i', trim($chunk)) === 1) {
-                    $captureDepth = $depth;
+                if ($depth === 0 && $captureDepth === null) {
+                    $statements .= self::liftStatements($chunk);
+                    $prelude = trim((string) preg_replace('#/\*.*?\*/#s', '', $chunk));
+                    if (preg_match('/^@(?:-\w+-)?keyframes\b|^@font-face\b|^(?::root|html)(?:\s*,\s*(?::root|html))*$/i', $prelude) === 1) {
+                        $captureDepth = $depth;
+                    }
                 }
                 if ($captureDepth !== null) {
                     $unscopable .= $chunk . '{';
@@ -216,6 +226,17 @@ final class ViewAssets
             $i++;
         }
 
-        return [$unscopable, $rest];
+        return [$statements . $unscopable, $rest];
+    }
+
+    /** Takes the @charset/@import/@layer statements (`;`-terminated, no block) out of a top-level $chunk and returns them. */
+    private static function liftStatements(string &$chunk): string
+    {
+        $statements = '';
+        $chunk = (string) preg_replace_callback('/@(?:charset|import|layer)\b[^;{}]*;[ \t]*\n?/i', function (array $match) use (&$statements): string {
+            $statements .= rtrim($match[0]) . "\n";
+            return '';
+        }, $chunk);
+        return $statements;
     }
 }

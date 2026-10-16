@@ -130,7 +130,7 @@ ul { list-style: none; padding: 0; }
 .price { color: #555; }
 ```
 
-`@keyframes` and `@font-face` at the top level stay global. JavaScript is not changed.
+`@keyframes`, `@font-face`, `:root` and `html` rules at the top level stay global, and top-level `@charset`, `@import` and `@layer` statements move to the front of the file. JavaScript is not changed.
 
 The compiled files are named by a hash of their content and served under `/assets/` (`FileSystemOptions::$assetsPath`) with `Cache-Control: public, max-age=31536000, immutable`: a browser keeps them until they change, and a change gives them a new name. With a [cache directory](caching.md) they are written to `<cacheDirectory>/assets/`; without one they are kept in memory. With `cacheValidate` on, an edited `.css` or `.js` is picked up on the next request.
 
