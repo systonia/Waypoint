@@ -15,12 +15,18 @@ class EnvironmentOptions
     /** @var array<string, mixed> */
     private array $data = [];
 
+    /** @var array<string, string> What set() put in: it stays over whatever a later load() reads. */
+    private array $overrides = [];
+
+    private bool $loaded = false;
+
     /** A gitignored, per-developer JSON override read last (so it wins over everything); null disables it. */
     public ?string $localConfigFile = 'config.local.json';
 
     /** @param string|null $dir Where .env/config files live; defaults to getcwd() (the project root under a normal invocation, never vendor/). */
     public function load(?string $dir = null): self
     {
+        $this->loaded = true;
         $this->data = getenv();
         foreach ($_ENV as $key => $val) {
             if (is_string($key)) {
@@ -37,7 +43,7 @@ class EnvironmentOptions
         $base = rtrim($dir ?? (getcwd() ?: __DIR__), '/\\');
         $this->extendWithEnvFile("$base/.env");
 
-        $env = $this->data['APP_ENV'] ?? null;
+        $env = $this->overrides['APP_ENV'] ?? $this->data['APP_ENV'] ?? null;
         $env = is_string($env) ? $env : $this->detectEnvironment();
         $this->data['APP_ENV'] = $env;
 
@@ -47,18 +53,20 @@ class EnvironmentOptions
         if ($this->localConfigFile !== null) {
             $this->extendWithJsonFile("$base/{$this->localConfigFile}");
         }
+        $this->data = $this->overrides + $this->data;
         return $this;
     }
 
     public function set(string $key, string $value): self
     {
+        $this->overrides[$key] = $value;
         $this->data[$key] = $value;
         return $this;
     }
 
     public function get(string $key, mixed $default = null): mixed
     {
-        if ($this->data === []) {
+        if (!$this->loaded) {
             $this->load();
         }
         return $this->data[$key] ?? $default;
@@ -66,7 +74,7 @@ class EnvironmentOptions
 
     public function isDev(): bool
     {
-        if ($this->data === []) {
+        if (!$this->loaded) {
             $this->load();
         }
         return ($this->data['APP_ENV'] ?? 'production') === 'development';

@@ -1333,6 +1333,9 @@ to/override) earlier ones:
 3. `config.json`, then `config.$APP_ENV.json`
 4. `$opts->localConfigFile` (default `config.local.json`) — see below
 
+A value given with `set($key, $value)` wins over all of them, also when it was set before the first or a
+later `load()`.
+
 `$dir` **defaults to the current working directory** — the project root, for how PHP is normally invoked
 (`php -S ... -t public`, `composer`/CLI tasks, most process managers) — not this file's own location.
 Call it explicitly with an absolute path if your entry point's cwd isn't reliable in your deployment,

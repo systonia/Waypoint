@@ -60,6 +60,21 @@ final class EnvironmentOptionsTest extends TestCase
         $this->assertNotNull($opts->get('APP_ENV'));
     }
 
+    public function testSetBeforeTheFirstReadStillLoadsTheEnvironment(): void
+    {
+        $cwd = getcwd();
+        chdir(self::FIXTURES_DIR);
+        try {
+            $opts = (new EnvironmentOptions())->set('DYNAMIC', 'set-first');
+
+            $this->assertSame('set-first', $opts->get('DYNAMIC'));
+            $this->assertSame('base', $opts->get('FROM_CONFIG_JSON'));
+            $this->assertNotNull($opts->get('PATH'));
+        } finally {
+            chdir($cwd);
+        }
+    }
+
     public function testSetOverridesLoadedValues(): void
     {
         $opts = (new EnvironmentOptions())->load(self::FIXTURES_DIR);
