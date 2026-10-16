@@ -6,6 +6,7 @@ use Waypoint\Enums\Message;
 use Waypoint\Exceptions\ValidationException;
 use Waypoint\Http\{Request, Response};
 use Waypoint\Plugin\ArgumentBinder;
+use Waypoint\FromArray;
 use Waypoint\Validator;
 
 /** Turns a compiled argPlan (see RouteCompiler::buildArgPlan()) into the actual argument list for a route method call. */
@@ -67,8 +68,7 @@ final class ArgumentResolver
         $dto = new $class($req->body());
         $req->bodyDto = $dto;
         if ($arg['validate'] ?? false) {
-            // A FromArray DTO also knows what didn't fit its types
-            $errors = property_exists($dto, 'errors') && is_array($dto->errors) ? $dto->errors : (new Validator())->validate($dto);
+            $errors = self::errors($dto, new Validator());
             if ($errors) {
                 throw new ValidationException('Validation failed', $errors);
             }
@@ -103,7 +103,7 @@ final class ArgumentResolver
             }
             $dto = new $class($item);
             if ($validator !== null) {
-                $itemErrors = property_exists($dto, 'errors') && is_array($dto->errors) ? $dto->errors : $validator->validate($dto);
+                $itemErrors = self::errors($dto, $validator);
                 if ($itemErrors) {
                     $errors["$index"] = $itemErrors;
                 }
@@ -114,6 +114,17 @@ final class ArgumentResolver
             throw new ValidationException('Validation failed', $errors);
         }
         return $items;
+    }
+
+    /**
+     * A FromArray DTO also knows what didn't fit its types. Any other DTO's own $errors is no verdict: it may be a
+     * default or a value the client sent, and the rules would never run.
+     * @return array<array-key, mixed>
+     */
+    private static function errors(object $dto, Validator $validator): array
+    {
+        $traits = array_merge(class_uses($dto), ...array_map(class_uses(...), array_values(class_parents($dto))));
+        return in_array(FromArray::class, $traits, true) && property_exists($dto, 'errors') && is_array($dto->errors) ? $dto->errors : $validator->validate($dto);
     }
 
     /**
