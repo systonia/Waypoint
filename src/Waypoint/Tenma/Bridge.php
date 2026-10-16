@@ -8,7 +8,7 @@ use Waypoint\Http\{Request, Response, UploadedFile};
 use Waypoint\Support\FiberLocal;
 
 /**
- * Translates between Tenma (PHP with a Node-style event loop) and Waypoint for App::__invoke(), which makes
+ * Translates between Tenma (PHP with an event loop) and Waypoint for App::__invoke(), which makes
  * an app Tenma's request handler: `Tenma::serve(3000, $app)`. One process then serves many requests,
  * each in a Fiber of its own, interleaved while they wait on I/O. Only used under Tenma; Waypoint has no
  * dependency on it.

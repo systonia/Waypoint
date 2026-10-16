@@ -63,7 +63,7 @@ final class SecurityHeadersMiddlewareTest extends IntegrationTestCase
 
     public function testHstsIsAbsentWhenServerHttpsIsExplicitlyOff(): void
     {
-        // IIS-style: set to the literal string 'off' rather than unset.
+        // Some servers set it to the literal string 'off' rather than leaving it unset.
         $this->bootApp();
 
         $_SERVER['HTTPS'] = 'off';

@@ -161,7 +161,7 @@ $app->configure(function (ProxyOptions $proxies) {
 An entry that is no IP address or CIDR range (`'10.0.0.0/'`, `'localhost'`) throws an `InvalidArgumentException`
 right there. Assign the whole list; appending with `[]` is not possible.
 
-Under Tenma (PHP with a Node-style event loop) the app itself is the request handler, as in Express:
+Under Tenma (PHP with an event loop) the app itself is the request handler:
 one process serves every request, each in a Fiber of its own, interleaved while they wait on I/O. The
 request id and the CSRF token follow a request into the tasks it starts (`Tenma::async()`); files under the
 `static` prefixes are served by Tenma itself, without PHP:
@@ -209,9 +209,9 @@ public function chat(Request $req, Response $res): void
 WebSockets don't carry the CSRF header, so a WebSocket route that acts for a logged-in user checks the
 `Origin` header itself.
 
-For any server that speaks PSR-7, `Waypoint\Psr\Handler` makes the app a PSR-15 request handler: RoadRunner,
-FrankenPHP (with `nyholm/psr7-server`), Tenma through `tenma/psr`, or behind PSR-15 middlewares
-of other packages. It takes any PSR-17 factory:
+For any server that speaks PSR-7, `Waypoint\Psr\Handler` makes the app a PSR-15 request handler: Tenma
+through `tenma/psr`, any other PSR-7 server, or behind PSR-15 middlewares of other packages. It takes any
+PSR-17 factory:
 
 ```php
 $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
@@ -536,7 +536,7 @@ in the container yourself (one with constructor arguments) is cloned per request
 constructor set up. Under FPM nothing changes: there a controller never outlived its request anyway.
 
 Services are the opposite: one instance per process, shared by every request. On a long-lived worker
-(FrankenPHP worker mode, RoadRunner, Tenma), and on one that runs requests interleaved while they wait
+(one process that serves request after request, such as Tenma), and on one that runs requests interleaved while they wait
 on I/O, anything a service keeps in a property is visible to every other request. So **a service must
 not keep per-request state in its properties**:
 
@@ -1416,7 +1416,7 @@ $app->configure(function (FileSystemOptions $fs) {
 
     // "Trust mode": skips validation entirely and just reads the compiled
     // cache. You are responsible for clearing/rebuilding this directory on
-    // deploy -- the same tradeoff Symfony's/Laravel's own prod caching makes.
+    // deploy: a stale cache keeps serving the old routes until it's rebuilt.
     // $fs->cacheValidate = false;
 });
 ```
@@ -1435,9 +1435,8 @@ changes, or a controller or plugin is added or removed; in trust mode
 you clear the directory on deploy.
 
 **Also enable OPcache** (`opcache.enable=1`, and `opcache.enable_cli=1` if you're benchmarking or
-running under `php -S`) in any environment where you care about request latency — across every PHP
-framework we benchmarked Waypoint against (Symfony, Laravel, Slim), OPcache being off was consistently
-the single dominant cost, well beyond anything framework-specific. Trust-mode caching and OPcache are
+running under `php -S`) in any environment where you care about request latency — in our benchmarks,
+OPcache being off was consistently the single dominant cost, well beyond anything Waypoint itself does. Trust-mode caching and OPcache are
 complementary: OPcache skips re-parsing/re-compiling PHP source on every request; trust mode skips
 Waypoint's own Reflection-based discovery on top of that.
 
