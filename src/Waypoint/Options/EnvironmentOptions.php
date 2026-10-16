@@ -27,16 +27,14 @@ class EnvironmentOptions
     public function load(?string $dir = null): self
     {
         $this->loaded = true;
-        $this->data = getenv();
-        foreach ($_ENV as $key => $val) {
-            if (is_string($key)) {
-                $this->data[$key] = $val;
-            }
-        }
-        // Without the request's headers: HTTP_* comes from the client (HTTP_PROXY, httpoxy)
-        foreach (Arr::stringMap($_SERVER) as $key => $val) {
-            if (!str_starts_with($key, 'HTTP_')) {
-                $this->data[$key] = $val;
+        $this->data = [];
+        // Without the request's headers: HTTP_* comes from the client (HTTP_PROXY, httpoxy). FPM puts them into
+        // $_ENV as well as $_SERVER, and a CGI server into the process environment.
+        foreach ([getenv(), $_ENV, $_SERVER] as $source) {
+            foreach (Arr::stringMap($source) as $key => $val) {
+                if (!str_starts_with($key, 'HTTP_')) {
+                    $this->data[$key] = $val;
+                }
             }
         }
 

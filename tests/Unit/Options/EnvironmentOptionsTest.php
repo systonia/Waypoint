@@ -243,11 +243,15 @@ final class EnvironmentOptionsTest extends TestCase
     {
         $_SERVER['HTTP_PROXY'] = 'http://evil.test';
         $_SERVER['SERVER_NAME'] = 'localhost';
+        // FPM copies the request's FastCGI params, headers included, into $_ENV
+        $_ENV['HTTP_X_FORWARDED_HOST'] = 'evil.test';
         try {
             $opts = (new EnvironmentOptions())->load(self::FIXTURES_DIR . '/Malformed');
             $this->assertNull($opts->get('HTTP_PROXY'));
+            $this->assertNull($opts->get('HTTP_X_FORWARDED_HOST'));
+            $this->assertSame('localhost', $opts->get('SERVER_NAME'));
         } finally {
-            unset($_SERVER['HTTP_PROXY'], $_SERVER['SERVER_NAME']);
+            unset($_SERVER['HTTP_PROXY'], $_SERVER['SERVER_NAME'], $_ENV['HTTP_X_FORWARDED_HOST']);
         }
     }
 }
