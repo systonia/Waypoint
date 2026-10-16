@@ -331,6 +331,10 @@ class Router
             // HEAD is GET without the body (Response::send() leaves it out)
             [$route, $params] = $this->matchRoute('GET', $path);
         }
+        if ($req->pathEncoded) {
+            // Decoded only now, so an encoded slash stays inside its own segment
+            $params = array_map(rawurldecode(...), $params);
+        }
         if ($route === null) {
             $allowed = $this->allowedMethods($path);
             if ($allowed !== []) {
@@ -450,8 +454,7 @@ class Router
                 $params = [];
                 foreach ($matches as $key => $value) {
                     if (is_string($key)) {
-                        // The path arrives URL-encoded; '%2F' decodes inside its own segment, never splitting it
-                        $params[$key] = rawurldecode($value);
+                        $params[$key] = $value;
                     }
                 }
                 return [$plan, $params];

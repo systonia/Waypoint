@@ -20,6 +20,9 @@ class Request
      */
     public string $path;
 
+    /** Whether $path stayed percent-encoded (an encoded slash or NUL in it): the router decodes its placeholders then. */
+    public bool $pathEncoded = false;
+
     /** @var array<string, string> Header names normalized to "X-Some-Header" casing. */
     public array $headers = [];
 
@@ -93,7 +96,10 @@ class Request
         if (preg_match('#^[a-z][a-z0-9+.-]*://[^/]*(/.*)?$#i', $path, $absolute) === 1) {
             $path = $absolute[1] ?? '/';
         }
-        $req->path = self::decodedPath('/' . trim($path, '/'));
+        $path = '/' . trim($path, '/');
+        $decoded = self::decodedPath($path);
+        $req->path = $decoded ?? $path;
+        $req->pathEncoded = $decoded === null;
         foreach ($headers as $name => $value) {
             $req->headers[self::normalizeHeaderName($name)] = $value;
         }
@@ -222,13 +228,13 @@ class Request
         );
     }
 
-    /** See $path. */
-    private static function decodedPath(string $path): string
+    /** See $path; null where it stays encoded. */
+    private static function decodedPath(string $path): ?string
     {
         $segments = array_map('rawurldecode', explode('/', $path));
         foreach ($segments as $segment) {
             if (str_contains($segment, '/') || str_contains($segment, "\0")) {
-                return $path;
+                return null;
             }
         }
         return implode('/', $segments);

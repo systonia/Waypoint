@@ -265,8 +265,8 @@ meaning: `bool` accepts `true/false`, `1/0`, `yes/no` and `on/off` (so `?active=
 parameter in `errors` instead of silently becoming `0`. `Request`/`Response`
 type-hinted parameters (or properties) are injected directly, no attribute needed.
 
-Placeholder values arrive URL-decoded: `/user/J%C3%BCrgen` binds `Jürgen`, and an encoded `%2F`
-stays inside its own segment. Everything around the placeholders matches literally, so
+Placeholder values arrive URL-decoded, once: `/user/J%C3%BCrgen` binds `Jürgen`, `/user/%2541` binds `%41`,
+and an encoded `%2F` stays inside its own segment. Everything around the placeholders matches literally, so
 `/file/{name}.json` matches `/file/report.json` but not `/file/reportxjson`.
 
 ```php

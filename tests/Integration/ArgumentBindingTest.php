@@ -83,6 +83,12 @@ final class ArgumentBindingTest extends IntegrationTestCase
         // An encoded slash stays inside its segment
         $output = $this->dispatch('GET', '/argbinding/name/a%2Fb');
         $this->assertSame(['name' => 'a/b'], json_decode($output, true));
+
+        // Decoded once, never twice
+        foreach (['%2541' => '%41', '100%2525' => '100%25', '%252e%252e' => '%2e%2e', 'a%252Fb' => 'a%2Fb'] as $sent => $bound) {
+            $output = $this->dispatch('GET', "/argbinding/name/$sent");
+            $this->assertSame(['name' => $bound], json_decode($output, true), $sent);
+        }
     }
 
     public function testTheLiteralPartsOfARoutePathMatchLiterally(): void
