@@ -3,7 +3,7 @@
 namespace Waypoint\Routing;
 
 use Waypoint\Enums\Message;
-use Waypoint\Exceptions\ValidationException;
+use Waypoint\Exceptions\{HttpException, ValidationException};
 use Waypoint\Http\{Request, Response};
 use Waypoint\Plugin\ArgumentBinder;
 use Waypoint\FromArray;
@@ -33,8 +33,8 @@ final class ArgumentResolver
                 'Response' => $res,
                 'Route' => self::typed($arg, $name, $params[$name] ?? null),
                 'Query' => self::typed($arg, $name, $req->query($name)),
-                'Body' => self::body($arg, $req),
-                'BodyCollection' => self::bodyCollection($arg, $req),
+                'Body' => self::body($arg, self::parsed($req)),
+                'BodyCollection' => self::bodyCollection($arg, self::parsed($req)),
                 'Scalar' => self::scalar($arg, $name, $req, $params),
                 'plugin' => $this->plugin($arg, $req, $res, $params),
                 default => null,
@@ -53,6 +53,15 @@ final class ArgumentResolver
         $binder = is_string($plugin) ? ($this->binders[$plugin] ?? null) : null;
         // A cache compiled with a plugin that is no longer registered binds null, like any unknown parameter.
         return $binder?->resolve($arg, $req, $res, $params);
+    }
+
+    /** $req, unless its JSON body did not parse: a 400, not a DTO built from nothing. */
+    private static function parsed(Request $req): Request
+    {
+        if ($req->bodyError !== null) {
+            throw new HttpException(400, 'Bad Request', "Malformed JSON body: {$req->bodyError}.");
+        }
+        return $req;
     }
 
     /** @param array<string, mixed> $arg */

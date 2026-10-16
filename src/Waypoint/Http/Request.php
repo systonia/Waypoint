@@ -32,6 +32,9 @@ class Request
     /** @var array<array-key, mixed> A JSON object/form body (string keys) or a JSON list body (int keys, see #[Body(of: ...)]). */
     public array $body = [];
 
+    /** Why a JSON body could not be decoded (json_last_error_msg()), null when it could or there was none: #[Body] answers 400 then. */
+    public ?string $bodyError = null;
+
     /** @var array<string, string> The request cookies, name => value. */
     public array $cookies = [];
 
@@ -116,8 +119,13 @@ class Request
         // without a preflight, and that must not be read as a JSON request.
         $contentType = $req->headers['Content-Type'] ?? '';
         if (self::isJson($contentType)) {
-            if ($body !== '' && is_array($data = json_decode($body, true))) {
-                $req->body = $data;
+            if ($body !== '') {
+                $data = json_decode($body, true);
+                if (is_array($data)) {
+                    $req->body = $data;
+                } elseif (json_last_error() !== JSON_ERROR_NONE) {
+                    $req->bodyError = json_last_error_msg();
+                }
             }
         } elseif ($form !== null) {
             $req->body = $form;

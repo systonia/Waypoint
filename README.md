@@ -421,7 +421,10 @@ class CreateProductDTO
 ```
 
 Unknown keys in the input array are silently ignored, and so are keys naming a private, protected,
-`protected(set)`/`private(set)` or static property: those are the DTO's own state, never request input. A property that must never be settable this way
+`protected(set)`/`private(set)` or static property: those are the DTO's own state, never request input. A writable
+property without a default (`public string $name;`) is required: left unset, it fails `This value is required.`
+(a `422`, not an uninitialized-property `500`). A JSON body that doesn't parse answers `400 Bad Request` before
+any DTO is built. A property that must never be settable this way
 (e.g. a server-computed or nested value: `#[Body]` hydration is flat, so assigning a raw array straight
 to a typed object property would `TypeError` instead of recursively hydrating it) can be excluded by
 overriding `fromArrayExcludes()`:

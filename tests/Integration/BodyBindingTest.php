@@ -1,0 +1,34 @@
+<?php
+
+namespace Waypoint\Tests\Integration;
+
+use Waypoint\Waypoint;
+use Waypoint\Http\Request;
+use Waypoint\Tests\Fixtures\Controllers\BodyBindingController;
+
+final class BodyBindingTest extends IntegrationTestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Waypoint::create()->attach([BodyBindingController::class]);
+    }
+
+    public function testAPropertyWithoutADefaultIsRequired(): void
+    {
+        $res = $this->request('POST', '/body/required')->withJson(['qty' => 2])->send();
+
+        $this->assertSame(422, $res->status());
+        $this->assertSame(['name' => 'This value is required.'], $res->json()['errors'] ?? null);
+
+        $this->request('POST', '/body/required')->withJson(['name' => 'Ada'])->send()->assertOk();
+    }
+
+    public function testAMalformedJsonBodyIsABadRequest(): void
+    {
+        $res = Waypoint::create()->handle(Request::fromParts('POST', '/body/required', ['Content-Type' => 'application/json'], '{"name":"a",'));
+
+        $this->assertSame(400, $res->getStatus());
+        $this->assertSame('Bad Request', json_decode($res->getBody(), true)['title'] ?? null);
+    }
+}

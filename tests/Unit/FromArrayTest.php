@@ -114,6 +114,14 @@ final class FromArrayTest extends TestCase
         $this->assertSame(['qty', 'name'], array_keys($dto->errors));
     }
 
+    public function testAWritablePropertyWithoutADefaultLeftUnsetIsRequired(): void
+    {
+        $dto = new \Waypoint\Tests\Fixtures\DTO\RequiredNameDTO(['qty' => 2]);
+        $this->assertSame(['name' => 'This value is required.'], $dto->errors);
+
+        $this->assertTrue((new \Waypoint\Tests\Fixtures\DTO\RequiredNameDTO(['name' => 'Ada']))->isValid);
+    }
+
     public function testAFormsTextForNumbersAndBooleansIsConvertedStrictly(): void
     {
         $dto = new \Waypoint\Tests\Fixtures\Support\TypedFormDTO(['admin' => 'on', 'qty' => '5', 'price' => '2.5']);

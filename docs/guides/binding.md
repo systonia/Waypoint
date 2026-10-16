@@ -114,6 +114,8 @@ $ curl -X POST localhost:8080/customers -H 'Content-Type: application/json' -d '
 {"type":"about:blank","title":"Validation failed","status":422,"detail":"Validation failed","errors":{"name":"This value should not be blank.","email":"This value is not a valid email address.","language":"This value should be one of: de, en."}}
 ```
 
+A JSON body that doesn't parse answers `400 Bad Request` before any DTO is built; `$req->bodyError` holds the reason.
+
 The DTO the route built is also in `$req->bodyDto`, even when validation failed, so a middleware or exception handler can see it.
 
 ### FromArray
@@ -122,6 +124,7 @@ A `#[Body]` DTO is created as `new NewCustomer($req->body())`. The [`FromArray`]
 
 - Each key that names a public property is assigned. Unknown keys are ignored, and so are private, protected, `protected(set)`, `private(set)` and static properties: those are the object's own state, never input.
 - A value has to fit the property's type. Form text for a number or a boolean is converted (`"5"` for an `int`, `"on"` for a `bool`); nothing else is. A value that doesn't fit (`"abc"` for an `int`, `"yes"` for a `string[]`, an object for a `string`) leaves the property at its default and is reported under that key, so the request answers `422`, never `500`.
+- A writable property without a default (`public string $name;`) is required: when the data leaves it unset, it is reported as `This value is required.`.
 - The keys `errors`, `isValid` and `failures` are never assigned.
 
 Hydration is flat: a property typed with another DTO class doesn't get one built from a nested array. Exclude such properties, and others that must never come from input, with `fromArrayExcludes()`:

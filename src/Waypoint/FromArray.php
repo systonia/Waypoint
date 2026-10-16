@@ -14,16 +14,17 @@ namespace Waypoint;
  *
  * Validation is read straight off the DTO: `$dto->isValid` and `$dto->errors`
  * apply the rule attributes on every read, and `fail()` adds a failure a
- * controller found itself (a taken email, say) to the same list.
+ * controller found itself (a taken email, say) to the same list. A writable
+ * property without a default that the data left unset is "This value is required.".
  */
 trait FromArray
 {
     /** @var array<string, string> Failures added through fail(). */
     private array $failures = [];
 
-    /** @var array<string, string> field => message; attribute rules first, then fail() entries. */
+    /** @var array<string, string> field => message; attribute rules first, then fail() entries, then required fields left unset. */
     public array $errors {
-        get => (new Validator())->validate($this) + $this->failures;
+        get => (new Validator())->validate($this) + $this->failures + $this->missingRequired();
     }
 
     public bool $isValid {
@@ -117,6 +118,23 @@ trait FromArray
             }
         }
         return [false, null];
+    }
+
+    /**
+     * A publicly writable property without a default that nothing set: required, and reading it would throw.
+     * @return array<string, string>
+     */
+    private function missingRequired(): array
+    {
+        $missing = [];
+        $excludes = $this->fromArrayExcludes();
+        foreach ((new \ReflectionObject($this))->getProperties(\ReflectionProperty::IS_PUBLIC) as $property) {
+            $name = $property->getName();
+            if (!$property->isVirtual() && self::isWritableFromInput($this, $name) && !in_array($name, $excludes, true) && !$property->isInitialized($this)) {
+                $missing[$name] = 'This value is required.';
+            }
+        }
+        return $missing;
     }
 
     /** True for a public, non-static property whose set visibility is public too (no protected(set)/private(set)). */

@@ -209,6 +209,16 @@ final class RequestTest extends TestCase
         $this->assertSame([], $req->body);
     }
 
+    public function testFromPartsRemembersAJsonBodyThatDoesNotParse(): void
+    {
+        $req = Request::fromParts('POST', '/', ['Content-Type' => 'application/json'], '{"name":"a",');
+        $this->assertSame([], $req->body);
+        $this->assertSame('Syntax error', $req->bodyError);
+
+        $this->assertNull(Request::fromParts('POST', '/', ['Content-Type' => 'application/json'], '{"name":"a"}')->bodyError);
+        $this->assertNull(Request::fromParts('POST', '/', ['Content-Type' => 'application/json'])->bodyError);
+    }
+
     public function testCaptureCarriesCookiesHttpsAndTheBareAuthorizationVariable(): void
     {
         $cookieBackup = $_COOKIE;
