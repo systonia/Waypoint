@@ -17,19 +17,19 @@ A lightweight PHP framework for building APIs and server-rendered UIs, with attr
 
 ## Overview
 
-Waypoint is for a team that wants **one small framework covering both sides of a typical app** — a JSON
-API and a server-rendered UI (plain pages and forms, no separate frontend build) — without reaching for a full-stack framework's config files, service definitions, or implicit
+Waypoint is for a team that wants **one small framework covering both sides of a typical app**: a JSON
+API and a server-rendered UI (plain pages and forms, no separate frontend build), with no config files, service definitions or implicit
 magic. Routing, dependency injection, validation, and the OpenAPI spec are all driven directly off PHP
 attributes on your own classes; there's nothing else to wire up or keep in sync.
 
-It also ships production-grade defaults for the things a real API needs — RFC 9457 structured error
-responses, CSRF protection, security headers, request correlation IDs, JWT auth — on by default or a
+It also ships production-grade defaults for the things a real API needs (RFC 9457 structured error
+responses, CSRF protection, security headers, request correlation IDs, JWT auth), on by default or a
 few lines of `configure()` away, rather than left to every app to reimplement. And it's built to be fast
 under real load: attribute discovery compiles to a cache with an opt-in "trust mode" for production,
 benchmarked well over an order of magnitude faster than uncached reflection-based discovery.
 
 The core stays small on purpose. Everything beyond routing, DI, views, security and the OpenAPI
-generator — translations, LDAP, sessions, rate limiting, exports — is a separate package that plugs
+generator (translations, LDAP, sessions, rate limiting, exports) is a separate package that plugs
 into fixed hooks (see [Plugins](#plugins)), and a shipped [testing kit](#testing) drives real requests
 through your app or plugin from PHPUnit.
 
@@ -131,14 +131,14 @@ use App\Controllers\HelloController;
 $app = Waypoint::create();
 $app->attach([HelloController::class]);
 
-$app->run();
+$app->serve();
 ```
 
 `attach()` discovers every class reachable from your controllers via `#[Inject]` (see
-[Dependency Injection](#dependency-injection) below) and wires up the router and container. `run()`
-branches on `php_sapi_name()`: under a real
+[Dependency Injection](#dependency-injection) below) and wires up the router and container. Outside
+Tenma, `serve()` branches on `php_sapi_name()`: under a real
 HTTP SAPI it dispatches the current request (`handleHttp()`); under `cli` it runs the CLI task runner
-against the process's own `$argv` (`runCli()`) — see [CLI Tasks](#cli-tasks).
+against the process's own `$argv` (`runCli()`, see [CLI Tasks](#cli-tasks)).
 
 A runtime that hands requests over itself, instead of filling the superglobals, builds the request with
 `Request::fromParts()` and calls `handle()`. It returns the finished `Response` (gzip, `HEAD` and
@@ -250,7 +250,7 @@ class HelloController
 
 ## Routing & Parameter Binding
 
-A route method declares its path with `#[Get]`/`#[Post]`/`#[Put]`/`#[Patch]`/`#[Delete]` — that
+A route method declares its path with `#[Get]`/`#[Post]`/`#[Put]`/`#[Patch]`/`#[Delete]`; that
 attribute *is* the route (there is no separate `#[Route]` attribute). `#[Controller('/prefix')]`
 optionally prefixes every route in the class. A `HEAD` request runs the `GET` route and sends its
 headers without the body. A path that exists under other methods answers `405` with an `Allow`
@@ -309,8 +309,8 @@ middlewares run outside the subclass's own. `#[Controller]` itself is never inhe
 ### Array/collection request bodies
 
 `#[Body]` normally requires the parameter to be typed as a DTO class. For an endpoint whose body is a
-JSON array of objects, type the parameter `array` and give `#[Body]` an `of:` element class instead —
-each element is hydrated into (and validated against) that DTO individually:
+JSON array of objects, type the parameter `array` and give `#[Body]` an `of:` element class instead.
+Each element is hydrated into (and validated against) that DTO individually:
 
 ```php
 use Waypoint\Attributes\{Post, Body};
@@ -392,8 +392,8 @@ against the named property of the same DTO.
 
 A failing DTO throws `ValidationException`, which the default exception handler turns into a `422`
 RFC 9457 Problem Details response, with per-field errors under `errors`:
-`{"type": "about:blank", "title": "Validation failed", "status": 422, "detail": "Validation failed", "errors": {"sku": "..."}}`
-— see [Exception Handling](#exception-handling). The messages are English by default; a plugin can bind
+`{"type": "about:blank", "title": "Validation failed", "status": 422, "detail": "Validation failed", "errors": {"sku": "..."}}`.
+See [Exception Handling](#exception-handling). The messages are English by default; a plugin can bind
 `Waypoint\Validation\Messages` to translate them (the `waypoint-i18n` plugin does, see [Plugins](#plugins)).
 
 ### Hydrating DTOs (`FromArray`)
@@ -422,7 +422,7 @@ class CreateProductDTO
 
 Unknown keys in the input array are silently ignored, and so are keys naming a private, protected,
 `protected(set)`/`private(set)` or static property: those are the DTO's own state, never request input. A property that must never be settable this way
-(e.g. a server-computed or nested value — `#[Body]` hydration is flat, so assigning a raw array straight
+(e.g. a server-computed or nested value: `#[Body]` hydration is flat, so assigning a raw array straight
 to a typed object property would `TypeError` instead of recursively hydrating it) can be excluded by
 overriding `fromArrayExcludes()`:
 
@@ -444,12 +444,12 @@ class ProductDTO
 ```
 
 A DTO that needs extra logic around hydration (not just the plain loop) can declare its own
-`__construct()` — which overrides the trait's, same as any other method — and call
+`__construct()` (which overrides the trait's, same as any other method) and call
 `$this->hydrateFromArray($data)` from it directly.
 
 #### Validating by hand (`$dto->isValid`, `$dto->errors`, `fail()`)
 
-Outside `#[Body]` — an HTML form handler that re-renders the page with the errors instead of a 422 — the
+Outside `#[Body]` (an HTML form handler that re-renders the page with the errors instead of a 422), the
 DTO validates itself. `isValid` and `errors` are computed properties: every read applies the attribute
 rules, so there is no validator to construct and no moment where the result is stale. `fail()` adds a
 failure only your code can know about (a taken email, a wrong current password) to the same list:
@@ -474,9 +474,9 @@ hydrated, and the two computed properties never appear in OpenAPI schemas or red
 
 Waypoint uses a simple, reachability-based dependency injection system: use `#[Inject]` on a property (or
 constructor parameter) to declare a dependency. The container discovers what to instantiate by walking
-`#[Inject]`-typed properties/parameters starting from your registered controllers — any class reachable
+`#[Inject]`-typed properties/parameters starting from your registered controllers. Any class reachable
 that way is auto-instantiated and shared as a singleton. **There is no separate "mark this class as a
-service" attribute** — reachability via `#[Inject]` is what registers a class.
+service" attribute**: reachability via `#[Inject]` is what registers a class.
 
 ```php
 <?php
@@ -526,7 +526,7 @@ Notes:
 - `Request`, `Response` and `Router` can be injected into controllers and `#[Middleware]` classes; they are
   set per request, never taken from the container.
 - Container-managed classes are constructed with no arguments and populated purely through
-  `#[Inject]`-marked properties — there is currently no constructor-argument resolution; a
+  `#[Inject]`-marked properties. There is currently no constructor-argument resolution; a
   constructor parameter marked `#[Inject]` is *discovered* (so its type is pulled into the container
   graph) but not itself resolved/passed as a constructor argument. Prefer property injection.
 
@@ -574,16 +574,37 @@ fresh process.
 
 ## Middleware
 
-Global middleware runs on every request, registered via `use()` with a plain callable:
+Global middleware runs on every request, registered via `use()` with an instance of a class that extends
+`Waypoint\Http\MiddlewareBase` (see below for `before()`/`after()`):
 
 ```php
-$app->use(function ($req, $res, $next) {
-    // ... before
-    $result = $next($req, $res);
-    // ... after
-    return $result;
-});
+use Waypoint\Attributes\Inject;
+use Waypoint\Environment;
+use Waypoint\Http\{MiddlewareBase, Request, Response};
+
+final class MaintenanceMode extends MiddlewareBase
+{
+    #[Inject]
+    private Environment $env;
+
+    protected function before(Request $req, Response $res): bool
+    {
+        if ($this->env->get('MAINTENANCE') !== 'on') {
+            return true;
+        }
+        $res->status(503)
+            ->withHeader('Retry-After', '600')
+            ->withHeader('Content-Type', 'text/plain')
+            ->write("Back in a few minutes.\n");
+        return false;
+    }
+}
+
+$app->use(new MaintenanceMode());
 ```
+
+The instance is shared by all requests, so a middleware passed to `use()` keeps nothing per request in its
+properties.
 
 `useCors()` and `useJwt()` (see below) are both just built-in middleware registered this way.
 
@@ -594,7 +615,7 @@ with an encoded slash (`%2F`) or NUL in a segment stays encoded as a whole.
 Per-route middleware is declared with `#[Middleware(Class::class)]` directly on a controller method
 (repeatable). **The class must extend `Waypoint\Http\MiddlewareBase`**: its `handle()` is what runs, and a
 `#[Middleware(...)]` naming a class that doesn't exist or doesn't extend it fails the route compile with an
-`InvalidArgumentException` -- a skipped middleware would leave the route running without its check. `MiddlewareBase::handle()` is `final` and always runs `before()` → `$next()` →
+`InvalidArgumentException`, since a skipped middleware would leave the route running without its check. `MiddlewareBase::handle()` is `final` and always runs `before()` → `$next()` →
 `after()`, in that fixed order; override `before()`/`after()` instead of reimplementing that plumbing
 yourself:
 
@@ -629,13 +650,13 @@ class AdminController
 ```
 
 `before()` returning `false` is the veto point: `$next()` (and `after()`) are skipped entirely and the
-chain short-circuits there — typically because `before()` already threw, or built its own response.
+chain short-circuits there, typically because `before()` already threw, or built its own response.
 `before()`/`after()` are both no-ops by default, so a subclass only overrides whichever one it needs. The
-class is resolved through the container at dispatch time — so it can itself use `#[Inject]` — rather than
+class is resolved through the container at dispatch time (so it can itself use `#[Inject]`) rather than
 being instantiated directly.
 
-Because `MiddlewareBase` also implements `__invoke()` (delegating to `handle()`), any subclass is
-directly usable on the `$app->use()` pipe too, without wrapping it in a closure:
+Because `MiddlewareBase` also implements `__invoke()` (delegating to `handle()`), the same subclass works
+on routes and on the `$app->use()` pipe alike:
 
 ```php
 $app->use(new SecurityHeadersMiddleware()); // see below
@@ -643,8 +664,8 @@ $app->use(new SecurityHeadersMiddleware()); // see below
 
 ### Security Headers
 
-`SecurityHeadersMiddleware` fills in the standard hardening response headers — `X-Content-Type-Options`,
-`X-Frame-Options`, `Referrer-Policy`, and (HTTPS requests only) `Strict-Transport-Security` — enabled by
+`SecurityHeadersMiddleware` fills in the standard hardening response headers (`X-Content-Type-Options`,
+`X-Frame-Options`, `Referrer-Policy`, and on HTTPS requests only `Strict-Transport-Security`), enabled by
 default with sensible values; `Content-Security-Policy` is opt-in, since a wrong one-size-fits-all CSP
 would break real pages rather than just fail open. Register it once, via `use()`:
 
@@ -667,26 +688,27 @@ that a middleware before this one already set is kept.
 
 ### CSRF Protection
 
-Stateless, double-submit-cookie CSRF protection for state-changing requests — no server-side session
+Stateless, double-submit-cookie CSRF protection for state-changing requests, with no server-side session
 store: a token is a self-contained, HMAC-signed `{exp, nonce}` pair, verified against
-`CsrfOptions::$secret`. Configuring a secret is what opts an app into it at all — unconfigured (the
+`CsrfOptions::$secret`. Configuring a secret is what opts an app into it at all. Unconfigured (the
 default), every request passes through unchecked, so this never breaks an app that doesn't use it:
 
 ```php
+use Waypoint\Environment;
 use Waypoint\Options\CsrfOptions;
 
-$app->configure(function (CsrfOptions $opts) {
+$app->configure(function (CsrfOptions $opts, Environment $env) {
     $opts->secret = $env->get('CSRF_SECRET'); // required to actually enable checking, at least 32 bytes
-    $opts->cookieSecure = true;               // default -- HTTPS only; set false for local HTTP dev
+    $opts->cookieSecure = true;               // default: HTTPS only; set false for local HTTP dev
 });
 ```
 
 Once a secret is set, every `POST`/`PUT`/`PATCH`/`DELETE` request is checked automatically (`GET`/`HEAD`
-never carry a body/side effect worth protecting) — no middleware to register. A token is issued as a
+never carry a body/side effect worth protecting). There is no middleware to register. A token is issued as a
 cookie (`CsrfOptions::$cookieName`, default `csrf_token`) on every rendered `View` (see
 [Views](#views)), and must be repeated back by the client either as a request header
-(`CsrfOptions::$headerName`, default `X-CSRF-Token` — the AJAX/`fetch()` path) or a body field
-(`CsrfOptions::$fieldName`, default `_csrf` — a classic no-JS `<form>`). A mismatch, missing token, or
+(`CsrfOptions::$headerName`, default `X-CSRF-Token`, the AJAX/`fetch()` path) or a body field
+(`CsrfOptions::$fieldName`, default `_csrf`, for a classic no-JS `<form>`). A mismatch, missing token, or
 expired token throws `ForbiddenException` (403).
 
 With `JWTOptions::$cookieName` set, each token is signed for the session cookie it was issued with. A
@@ -711,11 +733,11 @@ the token straight from the cookie. A plain `fetch()` call needs to know nothing
 fetch('/orders', { method: 'POST', body: JSON.stringify(data) }); // X-CSRF-Token attached automatically
 ```
 
-Not using `waypoint.js`? Read the cookie and attach the header yourself the same way it does —
+Not using `waypoint.js`? Read the cookie and attach the header yourself the same way it does.
 `Waypoint.csrf.token()` is also there directly, for a non-`fetch()` use (a WebSocket handshake, a
 manually-built `XMLHttpRequest`). If `CsrfOptions` itself was reconfigured away from its default cookie/
 header names, `$this->waypointJsTag()` passes the new names to `waypoint.js` automatically as
-`data-csrf-cookie`/`data-csrf-header` on the `<script>` tag — nothing to do in the template.
+`data-csrf-cookie`/`data-csrf-header` on the `<script>` tag, with nothing to do in the template.
 
 Opt a token-auth-only JSON API (or any route with no double-submit cookie to check) out entirely with
 `#[SkipCsrf]`, on the controller class or a single method:
@@ -732,7 +754,7 @@ class ApiController
 
 ### CORS
 
-Configure `CorsOptions`, then just enable the feature — `useCors()` takes no parameters:
+Configure `CorsOptions`, then enable the feature; `useCors()` takes no parameters:
 
 ```php
 use Waypoint\Options\CorsOptions;
@@ -749,7 +771,7 @@ $app->configure(function (CorsOptions $opts) {
 $app->useCors();
 ```
 
-Leaving a property unset omits its header entirely — CORS is off by default. `allowCredentials` is a
+Leaving a property unset omits its header entirely, so CORS is off by default. `allowCredentials` is a
 plain `bool`: there's no meaningful `false` value for `Access-Control-Allow-Credentials` per the Fetch
 spec (it's either present and exactly `"true"`, or simply absent), so unlike the others it can't end up
 sending a blank/malformed header value.
@@ -787,27 +809,27 @@ Waypoint's default handler (installed automatically, no setup) catches every `Ht
 ```
 
 A subclass with extra structured data overrides `toProblemDetails()` to add its own members alongside the
-five standard ones — `ValidationException` does exactly this, adding `errors` (the per-field/per-index
+five standard ones. `ValidationException` does exactly this, adding `errors` (the per-field/per-index
 messages):
 
 | Exception                | Status | Extra body member |
 |---------------------------|--------|--------------------|
 | `ValidationException`     | 422    | `errors` (per-field/per-index messages) |
-| `ForbiddenException`      | 403    | — |
-| `UnauthorizedException`   | 401    | — |
-| `NotFoundException`       | 404    | — |
-| Any other `Throwable`     | 500    | — (message never exposed, not even in development — see below) |
+| `ForbiddenException`      | 403    | none |
+| `UnauthorizedException`   | 401    | none |
+| `NotFoundException`       | 404    | none |
+| Any other `Throwable`     | 500    | none (message never exposed, not even in development; see below) |
 
 A non-`HttpException` `Throwable` (anything unexpected/unhandled) maps to a generic 500 Problem Details
-body with a fixed `"Internal Server Error"` title — **never** `$e->getMessage()` or a stack trace, in any
+body with a fixed `"Internal Server Error"` title, **never** `$e->getMessage()` or a stack trace, in any
 environment: an unexpected exception's message can easily contain internal details (a file path, a query,
 a raw driver error) never meant to reach whoever triggered the crash, so `Environment::isDev()` alone
 isn't treated as a safe enough gate for that. It's still logged in full via the container's `Logger`. A
 project that wants more than the generic message needs its own explicit
-`useExceptionHandler(Throwable::class, ...)` override — an actual opt-in, not an implicit one.
+`useExceptionHandler(Throwable::class, ...)` override: an actual opt-in, not an implicit one.
 
-Register your own handler — for an exact exception class, or anything further up its class/interface
-hierarchy — with `useExceptionHandler()`. The most specific registered handler wins: exact class match
+Register your own handler with `useExceptionHandler()`, for an exact exception class or anything further
+up its class/interface hierarchy. The most specific registered handler wins: exact class match
 first, then parent classes, then implemented interfaces, then the `Throwable` catch-all. The handlers
 cover app-level middleware (`$app->use()`) as well as routes, so an auth check there can simply throw.
 
@@ -818,17 +840,17 @@ $app->useExceptionHandler(MyDomainException::class, function (MyDomainException 
     $res->status(409)
         ->withHeader('Content-Type', 'application/json')
         ->write(json_encode(['error' => $e->getMessage()]));
-    // no need to call ->send() -- see below
+    // no need to call ->send(), see below
 });
 ```
 
-Calling `useExceptionHandler()` again for the same class overrides the previous handler — including
+Calling `useExceptionHandler()` again for the same class overrides the previous handler, including
 the built-in `HttpException`/`Throwable` defaults above.
 
-A handler only needs to build `$res` (status/headers/body) and return — `App::handleHttp()` sends the
+A handler only needs to build `$res` (status/headers/body) and return: `App::handleHttp()` sends the
 response exactly once, itself, after the whole middleware pipe has unwound. `Response::send()` stays
-harmless for compatibility — inside `App::handle()` it does nothing, the caller sends the finished
-response — but it's no longer the recommended shape for a new handler.
+harmless for compatibility (inside `App::handle()` it does nothing, the caller sends the finished
+response), but it's no longer the recommended shape for a new handler.
 
 ---
 
@@ -859,18 +881,18 @@ $app->configure(function (RendererOptions $opts) {
 });
 ```
 
-`$opts->layout` defaults to `'_Layout'` with **no extension**, which never matches a real file — pass an
+`$opts->layout` defaults to `'_Layout'` with **no extension**, which never matches a real file. Pass an
 explicit `.php` name, or no layout is applied and every render falls back to the bare view content.
 
 Inside a view/layout `.php` file, `$model` is whatever was passed to `View`'s constructor (commonly an
 array, e.g. `$model['product']`), and `$this` is the `View` instance itself:
 
-- `$this->startSection('name')` / `$this->endSection()` / `$this->section('name', required: false)` —
+- `$this->startSection('name')` / `$this->endSection()` / `$this->section('name', required: false)`:
   named content blocks a layout pulls in, e.g. for per-page `<head>` scripts.
-- `$this->assetTags()` / `$this->layoutAssetTags()` — `<link>`/`<script>` tags for the current view's own
+- `$this->assetTags()` / `$this->layoutAssetTags()`: `<link>`/`<script>` tags for the current view's own
   sibling `.css`/`.js` (`ProductDetail.css` next to `ProductDetail.php`), and for the layout's own, if
   either has one.
-- `$this->scopeAttribute()` / `$this->layoutScopeAttribute()` — a `data-view="..."` attribute for the
+- `$this->scopeAttribute()` / `$this->layoutScopeAttribute()`: a `data-view="..."` attribute for the
   element that content should be scoped to; the matching CSS is automatically wrapped in a
   `[data-view="..."]` nesting selector, so plain rules in `ProductDetail.css` only ever apply where that
   attribute is present.
@@ -883,7 +905,7 @@ defaults the tag also carries `data-csrf-cookie`/`data-csrf-header` for the clie
 duplicated in the template.
 
 A view or layout's sibling `.css`/`.js` is discovered automatically (same basename, same directory,
-either role) — nothing to register. Views can live in subdirectories: `views/Admin/Users.php` is
+either role), with nothing to register. Views can live in subdirectories: `views/Admin/Users.php` is
 `new View('Admin/Users')`, always `/`-separated, and its `Admin/Users.css` is found, scoped
 (`[data-view="Admin/Users"]`) under that same name. A name that starts with `/` or
 contains a `..` segment is rejected at construction, so a view name built from request input can never
@@ -899,7 +921,7 @@ transitions between them, CSS covers it without JavaScript: `@view-transition { 
 
 ### Redirects
 
-Return `Waypoint\Http\Redirect` to send a redirect instead of a body — typically from a form `POST`
+Return `Waypoint\Http\Redirect` to send a redirect instead of a body, typically from a form `POST`
 that succeeded (POST/redirect/GET), next to the `View` the same handler renders when it didn't:
 
 ```php
@@ -918,18 +940,18 @@ public function loginSubmit(Request $req, Response $res): View|Redirect
 
 `new Redirect($location, $status = 302)` accepts any `3xx` (e.g. `303` for an explicit See Other, `301`/`308`
 for a permanent move, `307` to preserve the original method). The response is just the status and a
-`Location` header — no body, and the route's formatter is ignored — while anything the handler already
+`Location` header (no body, and the route's formatter is ignored), while anything the handler already
 queued on the `Response` (cookies, headers) is kept. A `$location` that is empty or contains a line break
 is rejected at construction. A redirect is an ordinary result, not an exception: the cases that *should*
 redirect on failure (no/expired JWT on an `#[Authenticated]` route) already go through
-`JWTOptions::$loginRedirectUrl` — see [JWTOptions](#jwtoptions).
+`JWTOptions::$loginRedirectUrl` (see [JWTOptions](#jwtoptions)).
 
 ---
 
 ## Static Files
 
 Serve a plain public directory (images, fonts, a pre-built frontend bundle, etc.) by configuring
-`FileSystemOptions::$publicDirectory` — checked before routing on `GET` and `HEAD`, so a matching file
+`FileSystemOptions::$publicDirectory`. It is checked before routing on `GET` and `HEAD`, so a matching file
 always wins over a route at the same path; any other method goes to routing:
 
 ```php
@@ -943,7 +965,7 @@ $app->configure(function (FileSystemOptions $fs) {
 Left unset (the default), no static directory is served at all. Only files inside that directory are
 served: a path with a `..` or `.` segment, a dotfile or dot-directory (`.env`, `.git/`) and PHP source
 (`.php`, `.phtml`, `.phar`, …) always 404, and the resolved file (symlinks followed) must lie inside the
-directory itself -- a sibling such as `public-backup` doesn't count. So the front controller can sit in
+directory itself (a sibling such as `public-backup` doesn't count). So the front controller can sit in
 the same directory without its source ever being handed out. `.css`/`.js`/`.mjs`/`.json`/`.svg`/`.html` get a fixed
 `Content-Type`; anything else falls back to `mime_content_type()`, then `application/octet-stream`.
 
@@ -952,7 +974,7 @@ the same directory without its source ever being handed out. `.css`/`.js`/`.mjs`
 ## Gzip Compression
 
 Every response funnels through `Response::send()`, which gzips the body when the client's
-`Accept-Encoding` header allows `gzip` (named or by `*`, with a quality above 0, so `gzip;q=0` refuses it) and the body meets a configurable size threshold — compressing
+`Accept-Encoding` header allows `gzip` (named or by `*`, with a quality above 0, so `gzip;q=0` refuses it) and the body meets a configurable size threshold. Compressing
 a tiny response is a net loss once gzip's own framing overhead is counted, so anything shorter than
 `CompressionOptions::$minBytes` (default `1024` bytes) is always sent uncompressed. On by default, no
 setup required:
@@ -962,7 +984,7 @@ use Waypoint\Options\CompressionOptions;
 
 $app->configure(function (CompressionOptions $opts) {
     $opts->minBytes = 2048; // default: 1024
-    $opts->enabled = false; // default: true — turns compression off everywhere
+    $opts->enabled = false; // default: true; false turns compression off everywhere
 });
 ```
 
@@ -1016,7 +1038,7 @@ public function invoice(): \SplFileInfo
 
 ## JWT Authentication
 
-Configure `JWTOptions` before calling `useJwt()`. **The signing secret has no default** — it's an
+Configure `JWTOptions` before calling `useJwt()`. **The signing secret has no default**: it's an
 uninitialized typed property, so using it unconfigured throws immediately rather than silently signing
 tokens with a guessable value. Tokens are always HS256, and a token is only valid with a numeric `exp`
 in the future (`JWT::encode()` always sets one):
@@ -1029,7 +1051,7 @@ $app->configure(function (JWTOptions $opts, Environment $env) {
     $opts->ttl = 3600;                   // default, seconds
     $opts->tokenType = 'Bearer';         // default
     $opts->header = 'Authorization';     // default
-    $opts->cookieName = null;            // default (disabled) -- see below
+    $opts->cookieName = null;            // default (disabled), see below
 });
 
 $app->useJwt();
@@ -1038,17 +1060,17 @@ $app->useJwt();
 Once enabled, a valid token's decoded payload is available as `$req->jwt` in any controller/middleware
 that receives the `Request`.
 
-A plain browser page navigation never sends a bearer `Authorization` header — only an explicit
+A plain browser page navigation never sends a bearer `Authorization` header; only an explicit
 `fetch()`/XHR call that sets one itself does. Set `JWTOptions::$cookieName` to also read the token back
 out of a same-named cookie whenever the header didn't already produce one, so a signed-in session
 (e.g. one your login endpoint issued via `Set-Cookie: <name>=<token>; HttpOnly`) survives a full page
 load too:
 
 ```php
-$app->configure(function (JWTOptions $opts, CsrfOptions $csrf) {
-    $opts->secret = $_ENV['JWT_SECRET'];
+$app->configure(function (JWTOptions $opts, CsrfOptions $csrf, Environment $env) {
+    $opts->secret = $env->get('JWT_SECRET');
     $opts->cookieName = 'auth_token';
-    $csrf->secret = $_ENV['CSRF_SECRET'];
+    $csrf->secret = $env->get('CSRF_SECRET');
 });
 ```
 
@@ -1089,9 +1111,9 @@ $app->configure(function (OpenAPIOptions $opts) {
 });
 ```
 
-- `GET /openapi/spec.json` — the generated OpenAPI 3.1.0 document
-- `GET /openapi/spec.{version}.json` — one `#[Version]`'s document (404 for an unknown version)
-- `GET /openapi/swagger.html` — bundled Swagger UI
+- `GET /openapi/spec.json`: the generated OpenAPI 3.1.0 document
+- `GET /openapi/spec.{version}.json`: one `#[Version]`'s document (404 for an unknown version)
+- `GET /openapi/swagger.html`: bundled Swagger UI
 
 The generator is driven entirely by a compiled attribute cache (see
 [Route/DI Compilation Caching](#routedi-compilation-caching--production-performance)) rather than live
@@ -1121,13 +1143,13 @@ $app->configure(function (OpenAPIOptions $opts) {
 
 Every request gets a correlation id, available as `$req->id` in any controller/middleware that receives
 the `Request`: the incoming `X-Request-Id` header if the client/upstream sent one (`X-Correlation-Id` as a
-fallback header name — an upstream proxy's own, possibly non-UUID, id is exactly as valid a correlation id
+fallback header name; an upstream proxy's own, possibly non-UUID, id is exactly as valid a correlation id
 as one Waypoint would generate itself), otherwise a fresh UUID v4. An incoming id is only taken when it
 has at most 128 characters from `A-Z a-z 0-9 . _ : -`; anything else gets a fresh UUID, so a client can't
 write into the logs. No configuration or middleware required.
 
 The resolved id is mirrored back to the client as an `X-Request-ID` response header, and automatically
-stamped onto every `Logger` call made during that request, under the `request_id` context key — no need
+stamped onto every `Logger` call made during that request, under the `request_id` context key, so there is no need
 to pass it around by hand:
 
 ```php
@@ -1147,7 +1169,7 @@ public function show(#[Param] string $id, Request $req): array
 Waypoint's `Logger` is PSR-3 based: register any `Psr\Log\LoggerInterface` implementation, optionally
 filtered to specific levels. Registration happens on `LoggerOptions`, configured like any other Options
 class via `configure()`; `Logger` itself is a stateless, container-resolvable service that dispatches to
-whatever `LoggerOptions` currently holds -- inject it with `#[Inject]` into a controller/service.
+whatever `LoggerOptions` currently holds. Inject it with `#[Inject]` into a controller/service.
 As long as no logger is registered, errors and worse go to PHP's `error_log` (stderr under Tenma and
 `php -S`, the server's error log under FPM), so a failure never vanishes unseen; `add(new NullLogger())` silences it:
 
@@ -1191,9 +1213,9 @@ class OrdersController
 ## CLI Tasks
 
 The same front controller can serve HTTP *and* run background/maintenance jobs: under the `cli` SAPI,
-`$app->run()` (or `$app->runCli()`, which returns an exit code instead of calling `exit()`) reads the
+`$app->serve()` (or `$app->runCli()`, which returns an exit code instead of calling `exit()`) reads the
 process's own `$argv` and dispatches to a `#[Task]`-attributed method instead of routing an HTTP
-request.
+request. Under Tenma `serve()` starts the server instead, so tasks run with `php`.
 
 ```php
 use Waypoint\Attributes\{Manager, Task};
@@ -1212,7 +1234,7 @@ class UserTasks
 
 ```php
 $app->attach([UserTasks::class]);
-$app->run();
+$app->serve();
 ```
 
 ```bash
@@ -1227,8 +1249,8 @@ Anything beyond the core (translations, LDAP, sessions, rate limiting, ...) is a
 package registered with one line before `attach()`:
 
 ```php
-$app->plugin(new Waypoint\I18n\I18nPlugin());
-$app->configure(function (Waypoint\I18n\I18nOptions $opts) { ... });
+$app->plugin(new \Waypoint\I18n\I18nPlugin());
+$app->configure(fn (\Waypoint\I18n\I18nOptions $i18n) => $i18n->default = 'de');
 $app->attach([...]);
 ```
 
@@ -1296,7 +1318,7 @@ final class LoginTest extends TestCase
     {
         parent::setUp();
         $app = $this->app();          // Waypoint::create()
-        $app->configure(...);
+        $app->configure(fn (CsrfOptions $csrf) => $csrf->secret = str_repeat('x', 32));
         $app->attach([PagesController::class]);
     }
 
@@ -1329,30 +1351,29 @@ The framework's own suite and every plugin run on this kit.
 ## Environment Variables
 
 `Waypoint\Environment` reads env vars/`.env`/JSON config files through whatever `EnvironmentOptions` the
-container holds -- resolved through the container like any other service, so it's `#[Inject]`-able into
+container holds. It is resolved through the container like any other service, so it's `#[Inject]`-able into
 a controller/service. `get($key)`/`isDev()` lazily call `load()` on first use if nothing has been loaded
-yet. `load(?string $dir = null)` reads, from `$dir`, each of these in order -- later ones overlay (add
+yet. `load(?string $dir = null)` reads, from `$dir`, each of these in order; later ones overlay (add
 to/override) earlier ones:
 
 1. System env vars, then `$_ENV`, then `$_SERVER`
 2. `.env`, then `.env.$APP_ENV`
 3. `config.json`, then `config.$APP_ENV.json`
-4. `$opts->localConfigFile` (default `config.local.json`) — see below
+4. `$opts->localConfigFile` (default `config.local.json`), see below
 
 A value given with `set($key, $value)` wins over all of them, also when it was set before the first or a
 later `load()`.
 
-`$dir` **defaults to the current working directory** — the project root, for how PHP is normally invoked
-(`php -S ... -t public`, `composer`/CLI tasks, most process managers) — not this file's own location.
+`$dir` **defaults to the current working directory** (the project root, for how PHP is normally invoked:
+`php -S ... -t public`, `composer`/CLI tasks, most process managers), not this file's own location.
 Call it explicitly with an absolute path if your entry point's cwd isn't reliable in your deployment,
 either directly or via `configure()`:
 
 ```php
 use Waypoint\Options\EnvironmentOptions;
 
-$app->configure(function (EnvironmentOptions $opts) {
-    $opts->load(__DIR__ . '/..'); // e.g. from public/index.php, project root is one level up
-});
+// e.g. from public/index.php, where the project root is one level up
+$app->configure(fn (EnvironmentOptions $env) => $env->load(dirname(__DIR__)));
 ```
 
 ```php
@@ -1381,9 +1402,9 @@ environment: no source's `HTTP_*` keys are.
 The default 500 response never shows an unhandled exception's message, in development neither: it goes to
 the log.
 
-The JSON files are flat `{"KEY": value, ...}` objects (a value keeps its JSON type — bool/int/array/etc,
+The JSON files are flat `{"KEY": value, ...}` objects (a value keeps its JSON type, such as bool, int or array,
 unlike `.env`'s always-string values). `config.json`/`config.$APP_ENV.json` are meant to be committed
-(safe defaults, or demo/dev-only values); `$opts->localConfigFile` is meant to be **gitignored** — a
+(safe defaults, or demo/dev-only values); `$opts->localConfigFile` is meant to be **gitignored**: a
 per-developer override for real secrets or local-only values, read last so it wins over everything else,
 without having to write real system/shell env vars just to keep them out of version control:
 
@@ -1394,14 +1415,14 @@ $app->configure(function (EnvironmentOptions $opts) {
 });
 ```
 
-Missing files at any layer are silently skipped — nothing is required to exist.
+Missing files at any layer are silently skipped; nothing is required to exist.
 
 ---
 
 ## Route/DI Compilation Caching & Production Performance
 
 `attach()` normally discovers routes/DI/attributes via Reflection on every boot and keeps the result
-in memory -- without a `cacheDirectory` nothing is written to or `require`d from disk (there is
+in memory. Without a `cacheDirectory` nothing is written to or `require`d from disk (there is
 deliberately no fallback to the system temp directory, where anyone on the machine could plant a file
 that would then run as code). `FileSystemOptions`, configured like any other Options class via
 `configure()`, compiles that once to disk instead; set it in production:
@@ -1413,7 +1434,7 @@ $app->configure(function (FileSystemOptions $fs) {
     $fs->cacheDirectory = __DIR__ . '/var/cache';
 
     // Re-validates the cache (reflects every controller, compares file mtimes)
-    // on every request -- safe default, but costs a Reflection pass per boot.
+    // on every request: safe default, but costs a Reflection pass per boot.
     $fs->cacheValidate = true;
 
     // "Trust mode": skips validation entirely and just reads the compiled
@@ -1425,7 +1446,7 @@ $app->configure(function (FileSystemOptions $fs) {
 
 Trust mode reads the compiled route/service/attribute data once per request (shared between the
 router and the DI container setup) instead of re-deriving it via Reflection, and skips the file-mtime
-freshness check — this is the single largest throughput lever available: benchmarked well over an
+freshness check. This is the single largest throughput lever available: benchmarked well over an
 order of magnitude faster than uncached Reflection-based discovery under repeated requests.
 
 The cache directory holds `routes.php` (route and task plans, the service list, plugin route data),
@@ -1437,7 +1458,7 @@ changes, or a controller or plugin is added or removed; in trust mode
 you clear the directory on deploy.
 
 **Also enable OPcache** (`opcache.enable=1`, and `opcache.enable_cli=1` if you're benchmarking or
-running under `php -S`) in any environment where you care about request latency — in our benchmarks,
+running under `php -S`) in any environment where you care about request latency. In our benchmarks,
 OPcache being off was consistently the single dominant cost, well beyond anything Waypoint itself does. Trust-mode caching and OPcache are
 complementary: OPcache skips re-parsing/re-compiling PHP source on every request; trust mode skips
 Waypoint's own Reflection-based discovery on top of that.
@@ -1455,7 +1476,7 @@ $app->configure(function (SomeOptions $opts) {
 });
 ```
 
-An unconfigured Options class still resolves — every setting below already shows its default.
+An unconfigured Options class still resolves; every setting below already shows its default.
 
 ### [CompressionOptions](#gzip-compression)
 
@@ -1468,10 +1489,10 @@ An unconfigured Options class still resolves — every setting below already sho
 
 | Setting | Default | Description |
 |---|---|---|
-| `allowOrigin` | `null` | `Access-Control-Allow-Origin` value. Unset omits the header entirely — CORS is off by default. |
+| `allowOrigin` | `null` | `Access-Control-Allow-Origin` value. Unset omits the header entirely, so CORS is off by default. |
 | `allowMethods` | `null` | `Access-Control-Allow-Methods` value, e.g. `'GET, POST, OPTIONS'`. |
 | `allowHeaders` | `null` | `Access-Control-Allow-Headers` value, e.g. `'Content-Type, Authorization'`. |
-| `exposeHeaders` | `null` | `Access-Control-Expose-Headers` — response headers a cross-origin caller may read. |
+| `exposeHeaders` | `null` | `Access-Control-Expose-Headers`: response headers a cross-origin caller may read. |
 | `maxAge` | `null` | How long (seconds) a browser may cache a preflight `OPTIONS` response. |
 | `allowCredentials` | `false` | Sends `Access-Control-Allow-Credentials: true` when `true`; otherwise the header is omitted. |
 
@@ -1479,9 +1500,9 @@ An unconfigured Options class still resolves — every setting below already sho
 
 | Setting | Default | Description |
 |---|---|---|
-| `secret` | *(required — uninitialized)* | HMAC signing key for issued tokens. Unconfigured (the default), CSRF checking is off entirely — every request passes through unchecked. |
+| `secret` | *(required, uninitialized)* | HMAC signing key for issued tokens. Unconfigured (the default), CSRF checking is off entirely; every request passes through unchecked. |
 | `ttl` | `3600` | How long an issued token stays valid, in seconds; also the CSRF cookie's own Max-Age. |
-| `cookieName` | `'csrf_token'` | Name of the double-submit cookie the token is issued under. Deliberately not HttpOnly — client-side JS must be able to read it. |
+| `cookieName` | `'csrf_token'` | Name of the double-submit cookie the token is issued under. Deliberately not HttpOnly: client-side JS must be able to read it. |
 | `headerName` | `'X-CSRF-Token'` | Request header checked first for the submitted token (the AJAX/fetch path). |
 | `fieldName` | `'_csrf'` | Request body field checked when the header isn't present (the classic no-JS `<form>` path). |
 | `cookieSecure` | `true` | The CSRF cookie's own `Secure` attribute. Set `false` explicitly for a local HTTP-only dev environment. |
@@ -1493,7 +1514,7 @@ An unconfigured Options class still resolves — every setting below already sho
 |---|---|---|
 | `localConfigFile` | `'config.local.json'` | Gitignored, per-developer override file, read last so it wins over everything else. `null` disables this layer. |
 
-Configuration mainly happens through `load(?string $dir = null)`, not a plain property — see
+Configuration mainly happens through `load(?string $dir = null)`, not a plain property; see
 [Environment Variables](#environment-variables) for the full `.env`/`config.json` layering it drives.
 
 ### [FileSystemOptions](#routedi-compilation-caching--production-performance)
@@ -1509,11 +1530,11 @@ Configuration mainly happens through `load(?string $dir = null)`, not a plain pr
 
 | Setting | Default | Description |
 |---|---|---|
-| `secret` | *(required — uninitialized)* | Signing secret. Accessing it unconfigured throws immediately rather than signing with a guessable default. |
+| `secret` | *(required, uninitialized)* | Signing secret. Accessing it unconfigured throws immediately rather than signing with a guessable default. |
 | `ttl` | `3600` | Token lifetime, in seconds. |
 | `tokenType` | `'Bearer'` | Expected prefix on the `Authorization` header value. |
 | `header` | `'Authorization'` | Request header the token is read from. |
-| `cookieName` | `null` (disabled) | Cookie name to additionally read the token from when the header didn't produce one — lets a signed-in session survive a plain page load, not just fetch()/XHR calls. |
+| `cookieName` | `null` (disabled) | Cookie name to additionally read the token from when the header didn't produce one, so a signed-in session survives a plain page load, not just fetch()/XHR calls. |
 | `loginRedirectUrl` | `null` (disabled) | Where an `UnauthorizedException` (e.g. `#[Authenticated]` with no/expired JWT) sends a browser page navigation (`Sec-Fetch-Mode: navigate`) as a `302` instead of `401` JSON. Any other `fetch()`/XHR call still gets the `401`. |
 
 ### [LoggerOptions](#logging)
@@ -1524,7 +1545,7 @@ Configuration mainly happens through `load(?string $dir = null)`, not a plain pr
 | `name` | `null` | Optional channel/name for this logger. |
 
 Loggers are registered through `add($logger, $options)` / `addMono($channel, $handler, $levels)`, not
-plain properties — see [Logging](#logging).
+plain properties; see [Logging](#logging).
 
 ### [OpenAPIOptions](#openapi)
 
@@ -1537,7 +1558,7 @@ plain properties — see [Logging](#logging).
 | `description` | `'Generated API documentation'` | OpenAPI `info.description`. |
 | `servers` | `[]` | List of server URL entries. |
 | `tags` | `[]` | Top-level tag definitions. |
-| `securitySchemes` | `[]` | `components.securitySchemes` entries — pair with `#[Throws]`/route-level auth as needed. |
+| `securitySchemes` | `[]` | `components.securitySchemes` entries; pair with `#[Throws]`/route-level auth as needed. |
 | `security` | `[]` | Top-level `security` requirement entries. |
 | `externalDocs` | `null` | Optional `{description, url}` external documentation link. |
 
@@ -1546,7 +1567,7 @@ plain properties — see [Logging](#logging).
 | Setting | Default | Description |
 |---|---|---|
 | `directory` | `null` | Where view/layout `.php` templates (and their sibling `.css`/`.js`) live. |
-| `layout` | `'_Layout'` (no extension — matches nothing) | Default layout template; pass an explicit `.php` name, or every render falls back to bare view content. |
+| `layout` | `'_Layout'` (no extension, matches nothing) | Default layout template; pass an explicit `.php` name, or every render falls back to bare view content. |
 
 ### [SecurityHeaderOptions](#security-headers)
 
@@ -1555,8 +1576,8 @@ plain properties — see [Logging](#logging).
 | `contentTypeOptionsEnabled` / `contentTypeOptions` | `true` / `'nosniff'` | `X-Content-Type-Options`. |
 | `frameOptionsEnabled` / `frameOptions` | `true` / `'DENY'` | `X-Frame-Options`; set `'SAMEORIGIN'` to allow same-origin framing. |
 | `referrerPolicyEnabled` / `referrerPolicy` | `true` / `'strict-origin-when-cross-origin'` | `Referrer-Policy`. |
-| `hstsEnabled` / `hsts` | `true` / `'max-age=31536000; includeSubDomains'` | `Strict-Transport-Security` — only ever sent on a request that itself arrived over HTTPS, regardless of this flag. |
-| `cspEnabled` / `csp` | `false` / `null` | `Content-Security-Policy` — opt-in only; a wrong one-size-fits-all default would break real pages instead of just failing open. |
+| `hstsEnabled` / `hsts` | `true` / `'max-age=31536000; includeSubDomains'` | `Strict-Transport-Security`, only ever sent on a request that itself arrived over HTTPS, regardless of this flag. |
+| `cspEnabled` / `csp` | `false` / `null` | `Content-Security-Policy`, opt-in only; a wrong one-size-fits-all default would break real pages instead of just failing open. |
 
 ---
 
@@ -1573,7 +1594,7 @@ composer coverage:text   # 100% line coverage is the bar
 ```
 
 The client (`waypoint.js`) lives in `ui/` (TypeScript, Vitest); `composer build:ui` writes the bundle
-into `src/Waypoint/UI/waypoint.js` — commit that file with the change, CI fails when it is stale.
+into `src/Waypoint/UI/waypoint.js`. Commit that file with the change, CI fails when it is stale.
 New features that go beyond the core belong in a plugin package (see [Plugins](#plugins)).
 
 ---
