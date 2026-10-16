@@ -70,7 +70,7 @@ class Request
      * A request from plain values. The query comes from $uri; the body is decoded as JSON when Content-Type
      * says so, else as a urlencoded form, unless $form already holds the parsed form fields (multipart).
      *
-     * @param array<string, string> $headers any casing
+     * @param array<string, string> $headers as sent, any casing (an underscore is not a dash)
      * @param array<string, string> $cookies
      * @param array<array-key, mixed>|null $form
      * @param array<array-key, mixed> $files UploadedFile, nested as the field names say
@@ -134,7 +134,8 @@ class Request
         $headers = [];
         foreach ($_SERVER as $key => $value) {
             if (is_string($key) && is_string($value) && str_starts_with($key, 'HTTP_')) {
-                $headers[substr($key, 5)] = $value;
+                // CGI spells X-Forwarded-For as HTTP_X_FORWARDED_FOR
+                $headers[str_replace('_', '-', substr($key, 5))] = $value;
             }
         }
         // The two request headers PHP puts into $_SERVER without the HTTP_ prefix
@@ -240,10 +241,13 @@ class Request
         return implode('/', $segments);
     }
 
-    /** "CONTENT_TYPE" or "content-type" -> "Content-Type". */
+    /**
+     * "content-type" -> "Content-Type". An underscore stays: X_Forwarded_For is another header than X-Forwarded-For,
+     * and a client must not reach the one a proxy sets through it.
+     */
     private static function normalizeHeaderName(string $name): string
     {
-        return str_replace(' ', '-', ucwords(strtolower(str_replace(['_', '-'], ' ', $name))));
+        return str_replace(' ', '-', ucwords(strtolower(str_replace('-', ' ', $name))));
     }
 
     /** application/json or any application/*+json, parameters (charset) allowed. */

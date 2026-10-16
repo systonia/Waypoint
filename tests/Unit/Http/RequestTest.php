@@ -51,11 +51,22 @@ final class RequestTest extends TestCase
     {
         $_SERVER['HTTP_X_CUSTOM_HEADER'] = 'abc';
         $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer token';
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.5';
 
         $req = Request::capture();
 
+        $this->assertSame('203.0.113.5', $req->headers['X-Forwarded-For']);
         $this->assertSame('abc', $req->headers['X-Custom-Header']);
         $this->assertSame('Bearer token', $req->headers['Authorization']);
+    }
+
+    public function testAnUnderscoreHeaderDoesNotTakeThePlaceOfTheDashedOne(): void
+    {
+        $req = Request::fromParts('GET', '/', ['x-forwarded-for' => '203.0.113.5', 'x_forwarded_for' => '6.6.6.6'], ip: '10.0.0.1');
+        \Waypoint\Http\TrustedProxies::apply($req, ['10.0.0.1']);
+
+        $this->assertSame('203.0.113.5', $req->ip);
+        $this->assertSame('6.6.6.6', $req->headers['X_forwarded_for']);
     }
 
     public function testCaptureReadsGetIntoQuery(): void
@@ -169,7 +180,7 @@ final class RequestTest extends TestCase
         $_SERVER = ['REQUEST_METHOD' => 'DELETE', 'REQUEST_URI' => '/elsewhere', 'HTTP_X_GLOBAL' => 'nein'];
         $_GET = ['global' => '1'];
 
-        $req = Request::fromParts('post', '/orders/7?page=2&tags[]=a', ['content-type' => 'application/json', 'X_REQUEST_ID' => 'abc-123'], '{"qty":3}', ['sid' => 's1'], https: true);
+        $req = Request::fromParts('post', '/orders/7?page=2&tags[]=a', ['content-type' => 'application/json', 'X-REQUEST-ID' => 'abc-123'], '{"qty":3}', ['sid' => 's1'], https: true);
 
         $this->assertSame('POST', $req->method);
         $this->assertSame('/orders/7', $req->path);
