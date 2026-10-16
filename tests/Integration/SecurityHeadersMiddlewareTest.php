@@ -85,6 +85,17 @@ final class SecurityHeadersMiddlewareTest extends IntegrationTestCase
         $this->assertSame('SAMEORIGIN', $this->sentHeaders()['x-frame-options'] ?? null);
     }
 
+    public function testHeadersAreOnAnErrorALaterMiddlewareThrows(): void
+    {
+        $this->bootApp();
+        Waypoint::getInstance()->use(fn () => throw new \Waypoint\Exceptions\UnauthorizedException());
+
+        $this->dispatch('GET', '/security/plain');
+
+        $this->assertSame(401, $this->lastResponse?->status());
+        $this->assertSame('nosniff', $this->sentHeaders()['x-content-type-options'] ?? null);
+    }
+
     public function testIndividualHeadersCanBeDisabled(): void
     {
         $app = Waypoint::create();

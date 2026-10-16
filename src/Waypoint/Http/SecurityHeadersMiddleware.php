@@ -6,15 +6,15 @@ use Waypoint\Waypoint;
 use Waypoint\Options\SecurityHeaderOptions;
 
 /**
- * Fills in the standard security headers (SecurityHeaderOptions) in after(),
- * never overwriting one the controller set itself. Register with
- * `$app->use(new SecurityHeadersMiddleware())`. after() hooks run in reverse
- * registration order, so among middlewares filling the same header the one
- * registered first has the final say.
+ * Fills in the standard security headers (SecurityHeaderOptions) in before(),
+ * so they are there on an error a later middleware throws too (after() would
+ * be skipped then); a controller or middleware setting one of them afterwards
+ * replaces it, and one set before is kept. Register with
+ * `$app->use(new SecurityHeadersMiddleware())`.
  */
 class SecurityHeadersMiddleware extends MiddlewareBase
 {
-    protected function after(Request $req, Response $res): void
+    protected function before(Request $req, Response $res): bool
     {
         $opts = Waypoint::getConfig(SecurityHeaderOptions::class);
 
@@ -31,5 +31,6 @@ class SecurityHeadersMiddleware extends MiddlewareBase
                 $res->withHeader($name, $value);
             }
         }
+        return true;
     }
 }

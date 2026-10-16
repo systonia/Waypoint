@@ -656,8 +656,9 @@ $app->configure(function (SecurityHeaderOptions $opts) {
 $app->use(new SecurityHeadersMiddleware());
 ```
 
-Every header is only *filled in* (via `Response::hasHeader()`) — a controller (or another middleware)
-that already set one of these headers itself always wins, regardless of where this sits in the pipe.
+The headers are set on the way in, so an error response from a later middleware or the controller carries
+them too. A controller, or a middleware after this one, that sets one of these headers replaces it; one
+that a middleware before this one already set is kept.
 
 ### CSRF Protection
 
