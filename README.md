@@ -158,6 +158,9 @@ $app->configure(function (ProxyOptions $proxies) {
 });
 ```
 
+An entry that is no IP address or CIDR range (`'10.0.0.0/'`, `'localhost'`) throws an `InvalidArgumentException`
+right there. Assign the whole list; appending with `[]` is not possible.
+
 Under Tenma (PHP with a Node-style event loop) the app itself is the request handler, as in Express:
 one process serves every request, each in a Fiber of its own, interleaved while they wait on I/O. The
 request id and the CSRF token follow a request into the tasks it starts (`Tenma::async()`); files under the
