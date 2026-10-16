@@ -4,7 +4,8 @@ namespace Waypoint\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Waypoint\Container;
-use Waypoint\Exceptions\{ContainerException, NotFoundException};
+use Psr\Container\NotFoundExceptionInterface;
+use Waypoint\Exceptions\{ContainerException, HttpException, ServiceNotFoundException};
 use Waypoint\Tests\Fixtures\Services\{AnotherService, CrashingService, ExampleService, ServiceWithInjectedDependency};
 
 final class ContainerTest extends TestCase
@@ -83,12 +84,24 @@ final class ContainerTest extends TestCase
         $this->assertSame($first, $second, 'Auto-instantiated services should be cached as singletons');
     }
 
-    public function testGetThrowsNotFoundExceptionForMissingClass(): void
+    public function testGetThrowsServiceNotFoundExceptionForMissingClass(): void
     {
         $container = new Container();
 
-        $this->expectException(NotFoundException::class);
+        $this->expectException(ServiceNotFoundException::class);
         $container->get('ThisClassDoesNotExist');
+    }
+
+    public function testAMissingServiceIsAContainerErrorNotAnHttpOne(): void
+    {
+        try {
+            (new Container())->get('ThisClassDoesNotExist');
+            $this->fail('No exception');
+        } catch (ServiceNotFoundException $e) {
+            $this->assertInstanceOf(ContainerException::class, $e);
+            $this->assertInstanceOf(NotFoundExceptionInterface::class, $e);
+            $this->assertNotInstanceOf(HttpException::class, $e);
+        }
     }
 
     public function testGetThrowsContainerExceptionIfInstantiationCrashes(): void

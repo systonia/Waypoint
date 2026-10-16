@@ -10,7 +10,7 @@ use Waypoint\Waypoint;
 use Waypoint\Http\{Request, Response};
 use Waypoint\Exceptions\ForbiddenException;
 use Waypoint\Options\{LoggerOptions, EnvironmentOptions};
-use Waypoint\Tests\Fixtures\Controllers\GuardedController;
+use Waypoint\Tests\Fixtures\Controllers\{ConstructorArgumentController, GuardedController};
 use Waypoint\Tests\Fixtures\Support\DummyLogger;
 
 final class ExceptionHandlingTest extends IntegrationTestCase
@@ -20,6 +20,21 @@ final class ExceptionHandlingTest extends IntegrationTestCase
         parent::setUp();
 
         Waypoint::create()->attach([GuardedController::class]);
+    }
+
+    public function testAControllerTheContainerCannotBuildIsALogged500ThatNamesNoClass(): void
+    {
+        Waypoint::reset();
+        $logger = new DummyLogger();
+        $app = Waypoint::create();
+        $app->configure(fn (LoggerOptions $options) => $options->add($logger));
+        $app->attach([ConstructorArgumentController::class]);
+
+        $output = $this->dispatch('GET', '/needs-argument');
+
+        $this->assertSame(500, $this->lastResponse?->status());
+        $this->assertStringNotContainsString('ConstructorArgumentController', $output);
+        $this->assertStringContainsString('ConstructorArgumentController', json_encode(array_column($logger->logs, 1)) ?: '');
     }
 
     public function testForbiddenExceptionMapsTo403(): void

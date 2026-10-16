@@ -531,7 +531,7 @@ class Router
             return new $class();
         }
         if ($this->container->isRegistered($class) || !$this->container->has($class)) {
-            // Not registered and not constructible: get() throws the container's NotFoundException
+            // Not registered and not constructible: get() throws the container's ServiceNotFoundException
             return clone $this->container->get($class);
         }
         return new $class();

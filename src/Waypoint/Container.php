@@ -5,7 +5,7 @@ namespace Waypoint;
 use ReflectionClass;
 use Throwable;
 use Psr\Container\ContainerInterface;
-use Waypoint\Exceptions\{ContainerException, NotFoundException};
+use Waypoint\Exceptions\{ContainerException, ServiceNotFoundException};
 
 /** A class-name-keyed singleton registry; a class with no required constructor arguments is constructed on first get(). */
 class Container implements ContainerInterface
@@ -54,7 +54,7 @@ class Container implements ContainerInterface
             (new Routing\PropertyInjector($this))->injectReflected($instance);
             return $instance;
         }
-        throw new NotFoundException("Service '$id' not found");
+        throw new ServiceNotFoundException("Service '$id' not found");
     }
 
     /** @param class-string $class */
