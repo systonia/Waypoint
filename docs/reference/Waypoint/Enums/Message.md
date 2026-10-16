@@ -69,13 +69,13 @@ case GeneratorPropertyDoesNotExist2 = 'OpenAPIGenerator: Parameter type "{type}"
 ### RouteUnversioned
 
 ```php
-case RouteUnversioned = 'RouteCompiler: {method} {path} has no #[Version] attribute -- served without a version prefix.';
+case RouteUnversioned = 'RouteCompiler: {method} {path} has no #[Version] attribute; served without a version prefix.';
 ```
 
 ### RouteInvalidSunsetDate
 
 ```php
-case RouteInvalidSunsetDate = 'RouteCompiler: {method} {path} has an invalid #[Sunset] date "{date}" (expected YYYY-MM-DD) -- no Sunset header will be sent for it.';
+case RouteInvalidSunsetDate = 'RouteCompiler: {method} {path} has an invalid #[Sunset] date "{date}" (expected YYYY-MM-DD); no Sunset header will be sent for it.';
 ```
 
 ## Methods

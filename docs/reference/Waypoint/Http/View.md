@@ -272,7 +272,7 @@ public function __call(string $name, array $arguments): mixed
 public function pluginAssetTags(): string
 ```
 
-`<link>`/`<script>` tags for every plugin-shipped asset -- place after waypointJsTag().
+`<link>`/`<script>` tags for every plugin-shipped asset; place after waypointJsTag().
 
 **Returns** `string`
 
@@ -282,7 +282,7 @@ public function pluginAssetTags(): string
 public function assetTags(): string
 ```
 
-`<link>`/`<script>` tags for this view's own CSS/JS -- for the layout's `<head>`.
+`<link>`/`<script>` tags for this view's own CSS/JS, for the layout's `<head>`.
 
 **Returns** `string`
 
@@ -314,7 +314,7 @@ client's defaults, so the layout never repeats what the options already say.
 public function scopeAttribute(): string
 ```
 
-`data-view="..."` for the element wrapping `$content` -- what the view's scoped CSS matches on; '' when it has no assets.
+`data-view="..."` for the element wrapping `$content` (what the view's scoped CSS matches on); '' when it has no assets.
 
 **Returns** `string`
 

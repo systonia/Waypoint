@@ -1,6 +1,6 @@
 ---
 title: "Sensitive"
-description: "Marks a DTO property as sensitive -- a credential, secret, or token whose real value must never end up in a log line, error report, or any other place `Waypoint::redact()` is used to build a safe-to-display copy of an object."
+description: "Marks a DTO property as sensitive: a credential, secret, or token whose real value must never end up in a log line, error report, or any other place `Waypoint::redact()` is used to build a safe-to-display copy of an object."
 order: 100
 generated: true
 ---
@@ -11,7 +11,7 @@ generated: true
 class Sensitive
 ```
 
-Marks a DTO property as sensitive -- a credential, secret, or token
+Marks a DTO property as sensitive: a credential, secret, or token
 whose real value must never end up in a log line, error report, or any
 other place `Waypoint::redact()` is used to build a safe-to-display
 copy of an object. See Waypoint::redact() for how this is actually

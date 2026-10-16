@@ -100,7 +100,7 @@ public function isAvailable(array $controllers, array $extraMeta = []): bool
 ```
 
 True if the cache exists and was built from exactly the current sources: every controller
-file (by mtime) plus $extraMeta (view .css/.js mtimes), no more and no fewer -- a cache built
+file (by mtime) plus $extraMeta (view .css/.js mtimes), no more and no fewer. A cache built
 for a larger controller set must not keep serving a removed controller's routes.
 
 **Parameters**
@@ -165,7 +165,7 @@ public function storeViewAssetFiles(array $files): array
 ```
 
 Writes each compiled asset to assets/{filename} and returns {filename => mime} for routes.php.
-Filenames are content hashes, so an existing file is never rewritten -- and a stale one is
+Filenames are content hashes, so an existing file is never rewritten, and a stale one is
 never cleaned up here (clearing the cache directory is the deployment's job).
 
 **Parameters**

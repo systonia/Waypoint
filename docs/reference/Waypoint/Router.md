@@ -18,7 +18,7 @@ Also serves compiled view assets and runs CLI tasks.
 
 Plans are plain string-keyed arrays: they are loaded from a `require`d
 cache file, so consumers read keys defensively (`?? default`) rather than
-trusting a shape -- which also keeps a routes.php written by an older
+trusting a shape, which also keeps a routes.php written by an older
 Waypoint working until it is rebuilt.
 
 ## Properties
@@ -179,7 +179,7 @@ public function getRoutes(): array
 ```
 
 A flat summary of every route. 'version'/'unversionedPath' fall back to null/path for a
-plan predating #[Version] -- what an unversioned route looks like anyway.
+plan predating #[Version], which is what an unversioned route looks like anyway.
 
 **Returns** `array<int, RouteSummary>`
 

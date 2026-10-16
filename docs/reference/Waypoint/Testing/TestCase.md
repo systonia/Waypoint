@@ -111,6 +111,6 @@ A JSON request: $data is sent as the raw body with Content-Type: application/jso
 protected function tempDir(): string
 ```
 
-A fresh empty directory, removed after the test -- e.g. for FileSystemOptions::$cacheDirectory.
+A fresh empty directory, removed after the test, e.g. for FileSystemOptions::$cacheDirectory.
 
 **Returns** `string`

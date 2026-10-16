@@ -12,7 +12,7 @@ class CorsOptions
 ```
 
 The Access-Control-* headers useCors() attaches to every response. Every
-unset property omits its header entirely -- CORS is off until configured.
+unset property omits its header entirely, so CORS is off until configured.
 
 ## Properties
 

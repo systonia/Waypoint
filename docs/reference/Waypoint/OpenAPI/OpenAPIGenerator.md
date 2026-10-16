@@ -1,6 +1,6 @@
 ---
 title: "OpenAPIGenerator"
-description: "Builds an OpenAPI 3.1 document from the Router's route list and the attribute cache RouteCompiler::exportAllAttributes() wrote -- no controller reflection at request time; only DTO classes are reflected, by SchemaBuilder."
+description: "Builds an OpenAPI 3.1 document from the Router's route list and the attribute cache RouteCompiler::exportAllAttributes() wrote, with no controller reflection at request time; only DTO classes are reflected, by SchemaBuilder."
 order: 100
 generated: true
 ---
@@ -12,7 +12,7 @@ class OpenAPIGenerator
 ```
 
 Builds an OpenAPI 3.1 document from the Router's route list and the
-attribute cache RouteCompiler::exportAllAttributes() wrote -- no
+attribute cache RouteCompiler::exportAllAttributes() wrote, with no
 controller reflection at request time; only DTO classes are reflected,
 by SchemaBuilder.
 
@@ -46,7 +46,7 @@ public function generate(?string $version = null): array
 public function hasVersion(string $version): bool
 ```
 
-True if any compiled route carries #[Version($version)] -- so a spec.vX.json for an unknown version can 404.
+True if any compiled route carries #[Version($version)], so a spec.vX.json for an unknown version can 404.
 
 **Parameters**
 
@@ -112,7 +112,7 @@ protected function versionSortKey(string $version): array
 protected function getHandlerSpec(mixed $route): ?array
 ```
 
-[controllerClass, methodName] from a route's handlerSpec -- a plain pair, or one nested under
+[controllerClass, methodName] from a route's handlerSpec: a plain pair, or one nested under
 'spec'. The class isn't verified to exist: a missing attribute-cache entry just means "no attributes".
 
 **Parameters**

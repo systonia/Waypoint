@@ -65,7 +65,7 @@ public string $referrerPolicy = 'strict-origin-when-cross-origin';
 public bool $hstsEnabled = true;
 ```
 
-Strict-Transport-Security -- only ever sent on a request that itself arrived over HTTPS.
+Strict-Transport-Security, only ever sent on a request that itself arrived over HTTPS.
 
 ### $hsts
 
@@ -79,7 +79,7 @@ public string $hsts = 'max-age=31536000; includeSubDomains';
 public bool $cspEnabled = false;
 ```
 
-Content-Security-Policy -- sent only when enabled and $csp is set.
+Content-Security-Policy, sent only when enabled and $csp is set.
 
 ### $csp
 

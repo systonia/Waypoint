@@ -74,7 +74,7 @@ Adds a request header to `Vary`, keeping the ones already listed: caches then ke
 public function hasHeader(string $name): bool
 ```
 
-Case-insensitive -- lets an after() middleware fill in a header only if the controller didn't set it.
+Case-insensitive. Lets an after() middleware fill in a header only if the controller didn't set it.
 
 **Parameters**
 
@@ -88,7 +88,7 @@ Case-insensitive -- lets an after() middleware fill in a header only if the cont
 public function getHeader(string $name): ?string
 ```
 
-The value queued for $name (case-insensitive), or null -- for an after() middleware or Plugin\ResponseHook that must inspect what the controller produced.
+The value queued for $name (case-insensitive), or null. For an after() middleware or Plugin\ResponseHook that must inspect what the controller produced.
 
 **Parameters**
 
@@ -135,7 +135,7 @@ public function withCookie(
 ): \Waypoint\Http\Response
 ```
 
-Queues a Set-Cookie. HttpOnly and SameSite=Lax by default -- the right defaults for a session cookie.
+Queues a Set-Cookie. HttpOnly and SameSite=Lax by default, the right defaults for a session cookie.
 
 **Parameters**
 

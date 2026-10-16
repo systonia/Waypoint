@@ -53,7 +53,7 @@ Request header the token is read from.
 public ?string $cookieName = null;
 ```
 
-Cookie to also read the token from when the header has none -- what lets a signed-in session survive a full page load. Null disables it.
+Cookie to also read the token from when the header has none. This lets a signed-in session survive a full page load. Null disables it.
 
 ### $loginRedirectUrl
 

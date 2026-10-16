@@ -10,7 +10,7 @@ generated: true
 - [`CompressionOptions`](CompressionOptions.md) · class: gzip response compression (Response::send()).
 - [`CorsOptions`](CorsOptions.md) · class: The Access-Control-* headers useCors() attaches to every response.
 - [`CsrfOptions`](CsrfOptions.md) · class: Stateless double-submit-cookie CSRF protection (see Waypoint\Csrf).
-- [`EnvironmentOptions`](EnvironmentOptions.md) · class: The env key/values Waypoint\Environment reads: system env, $_ENV, $_SERVER, .env, .env.$APP_ENV, config.json, config.$APP_ENV.json, then $localConfigFile -- each overlaid on the last.
+- [`EnvironmentOptions`](EnvironmentOptions.md) · class: The env key/values Waypoint\Environment reads: system env, $_ENV, $_SERVER, .env, .env.$APP_ENV, config.json, config.$APP_ENV.json, then $localConfigFile, each overlaid on the last.
 - [`FileSystemOptions`](FileSystemOptions.md) · class: Where the compiled route/DI cache lives and where public static files are served from.
 - [`JWTOptions`](JWTOptions.md) · class: HS256 JWT signing/verification (Waypoint\JWT, useJwt()).
 - [`LoggerOptions`](LoggerOptions.md) · class: The PSR-3 loggers Waypoint\Logger fans out to, each with the levels it accepts: `$opts->add($logger, [LogLevel::ERROR])`.

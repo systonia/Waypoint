@@ -13,7 +13,7 @@ interface RouteAttributeCompiler
 
 Turns a plugin's own route attributes into plain data at compile time. The
 result is stored in the route plan under the plugin's name and handed back
-to that plugin's Guard/ResponseHook per request -- never re-reflected.
+to that plugin's Guard/ResponseHook per request, never re-reflected.
 
 ## Methods
 

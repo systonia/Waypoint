@@ -28,7 +28,7 @@ issueFor() (Router::renderView) and read by token()/field() from inside
 a template via `$this->csrf`; App::handle() reset()s it afterwards. It is
 kept per Fiber, so requests running interleaved in Fibers keep their own.
 
-Every check is a no-op when CsrfOptions::$secret was never configured --
+Every check is a no-op when CsrfOptions::$secret was never configured:
 an app that never opted in must keep rendering views and accepting POSTs.
 
 ## Methods

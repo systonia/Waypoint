@@ -45,7 +45,7 @@ public static function decode(string $encoded): string
 public static function sign(string $data, string $secret): string
 ```
 
-base64url(HMAC-SHA256($data, $secret)) -- compare with hash_equals().
+base64url(HMAC-SHA256($data, $secret)); compare with hash_equals().
 
 **Parameters**
 

@@ -19,8 +19,8 @@ are present, the same precedence #[Version] and #[Sunset] use. Implies
 Waypoint\Exceptions\ForbiddenException (403).
 
 Assumes the app's own JWT payload carries a 'role' claim (nothing in
-Waypoint enforces that shape when issuing tokens -- JWT::encode()
-accepts any payload) -- for anything more structured than "one role
+Waypoint enforces that shape when issuing tokens; JWT::encode()
+accepts any payload). For anything more structured than "one role
 string", see #[Permissions] instead.
 
 ## Properties

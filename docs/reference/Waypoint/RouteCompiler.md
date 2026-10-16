@@ -13,8 +13,8 @@ final class RouteCompiler
 
 Reflects #[Controller]/#[Manager] classes once into the plain-array route/
 task plans Router dispatches against (and FileSystem caches). Everything a
-request needs -- argument binding, injections, middleware, auth/CSRF flags,
-headers -- is resolved here so dispatch never reflects.
+request needs (argument binding, injections, middleware, auth/CSRF flags,
+headers) is resolved here so dispatch never reflects.
 
 ## Methods
 
@@ -48,7 +48,7 @@ public static function exportAllAttributes(array $controllers): array
 ```
 
 Every attribute on every controller, property, method and parameter, as
-plain {name, args} entries plus each parameter's type -- what
+plain {name, args} entries plus each parameter's type. This is what
 OpenAPIGenerator reads instead of reflecting at request time.
 
 **Parameters**

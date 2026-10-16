@@ -1,6 +1,6 @@
 ---
 title: "OpenAPIEndpoint"
-description: "Serves the OpenAPI document and Swagger UI under OpenAPIOptions::$path once OpenAPIOptions::$enabled is set -- no controller to attach:"
+description: "Serves the OpenAPI document and Swagger UI under OpenAPIOptions::$path once OpenAPIOptions::$enabled is set."
 order: 100
 generated: true
 ---
@@ -14,7 +14,7 @@ final class OpenAPIEndpoint implements \Waypoint\Plugin\Endpoint
 Implements [`Endpoint`](../Plugin/Endpoint.md)
 
 Serves the OpenAPI document and Swagger UI under OpenAPIOptions::$path
-once OpenAPIOptions::$enabled is set -- no controller to attach:
+once OpenAPIOptions::$enabled is set. No controller to attach:
 
   GET {path}/spec.json           the combined document
   GET {path}/spec.{version}.json one #[Version]'s document (404 for an unknown version)

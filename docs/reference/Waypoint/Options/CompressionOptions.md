@@ -29,4 +29,4 @@ Master switch.
 public int $minBytes = 1024;
 ```
 
-A body shorter than this (bytes) is sent uncompressed -- gzip's framing overhead makes it a net loss.
+A body shorter than this (bytes) is sent uncompressed; gzip's framing overhead makes it a net loss.

@@ -62,7 +62,7 @@ Body field checked second (the plain `<form>` path, see Csrf::field()).
 public bool $cookieSecure = true;
 ```
 
-Cookie Secure attribute. True by default -- set false only for HTTP-only local dev.
+Cookie Secure attribute. True by default; set false only for HTTP-only local dev.
 
 ### $cookieSameSite
 

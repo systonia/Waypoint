@@ -1,6 +1,6 @@
 ---
 title: "Body"
-description: "Binds the request body to a method parameter: a DTO class (hydrated via its array constructor, see FromArray, then validated), or -- for an `array` parameter with `of: SomeDto::class` -- a list of them, one per element."
+description: "Binds the request body to a method parameter: a DTO class (hydrated via its array constructor, see FromArray, then validated), or, for an `array` parameter with `of: SomeDto::class`, a list of them, one per element."
 order: 100
 generated: true
 ---
@@ -12,8 +12,8 @@ class Body
 ```
 
 Binds the request body to a method parameter: a DTO class (hydrated via its
-array constructor, see FromArray, then validated), or -- for an `array`
-parameter with `of: SomeDto::class` -- a list of them, one per element.
+array constructor, see FromArray, then validated), or, for an `array`
+parameter with `of: SomeDto::class`, a list of them, one per element.
 
 ## Properties
 
