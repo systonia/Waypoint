@@ -35,6 +35,7 @@ final class ArgumentResolver
                 'Query' => self::typed($arg, $name, $req->query($name)),
                 'Body' => self::body($arg, self::parsed($req)),
                 'BodyCollection' => self::bodyCollection($arg, self::parsed($req)),
+                'BodyArray' => self::parsed($req)->body,
                 'Scalar' => self::scalar($arg, $name, $req, $params),
                 'plugin' => $this->plugin($arg, $req, $res, $params),
                 default => null,
@@ -165,14 +166,39 @@ final class ArgumentResolver
             if ($arg['nullable'] ?? false) {
                 return null;
             }
+            if (isset($arg['enum'])) {
+                throw new ValidationException(Message::ValidationFailed, [$name => 'This value is required.']);
+            }
             settype($value, $type);
             return $value;
+        }
+        $backing = $arg['enum'] ?? null;
+        if (is_string($backing)) {
+            return self::enumCase($type, $backing, $name, $value);
         }
         $converted = is_string($value) ? self::convertScalar($value, $type) : null;
         if ($converted === null) {
             throw new ValidationException(Message::ValidationFailed, [$name => "Expected a value of type {$type}."]);
         }
         return $converted;
+    }
+
+    /** The case of backed enum $type whose value $value names; a 422 listing the values otherwise. */
+    private static function enumCase(string $type, string $backing, string $name, mixed $value): \BackedEnum
+    {
+        if (!is_subclass_of($type, \BackedEnum::class)) {
+            // @codeCoverageIgnoreStart
+            // RouteCompiler only sets 'enum' for a backed enum.
+            throw new ValidationException(Message::ValidationFailed, [$name => "Expected a value of type {$type}."]);
+            // @codeCoverageIgnoreEnd
+        }
+        $raw = is_string($value) ? self::convertScalar($value, $backing) : null;
+        $case = is_int($raw) || is_string($raw) ? $type::tryFrom($raw) : null;
+        if ($case === null) {
+            $values = implode(', ', array_map(static fn (\BackedEnum $c): string => (string) $c->value, $type::cases()));
+            throw new ValidationException(Message::ValidationFailed, [$name => "This value should be one of: {$values}."]);
+        }
+        return $case;
     }
 
     /** A text from the URL as int, float, bool or string; null when it isn't one ("false" is false, "abc" is no int). */

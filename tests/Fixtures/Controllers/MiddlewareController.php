@@ -36,9 +36,10 @@ class MiddlewareController
     }
 
     // A union-typed parameter: Router::buildArgPlan() can't map it to a
-    // single builtin type, so it falls back to 'Unknown' (always null).
+    // single builtin type, so it falls back to 'Unknown' (always null),
+    // which only a nullable parameter accepts.
     #[Get('/union-param')]
-    public function unionParam(string|int $value): array
+    public function unionParam(string|int|null $value): array
     {
         return ['value' => $value];
     }

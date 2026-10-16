@@ -267,8 +267,11 @@ An unattributed scalar-typed parameter (`string`/`int`/`float`/`bool`) is bound 
 tries the route placeholder first, then falls back to the query string. The text converts by its
 meaning: `bool` accepts `true/false`, `1/0`, `yes/no` and `on/off` (so `?active=false` is `false`),
 `int` accepts only whole numbers, `float` only numbers. Anything else, like `?page=abc`, answers `422` with the
-parameter in `errors` instead of silently becoming `0`. `Request`/`Response`
-type-hinted parameters (or properties) are injected directly, no attribute needed.
+parameter in `errors` instead of silently becoming `0`. A backed enum parameter (`#[Query] OrderStatus
+$status`, or unattributed) gets the case its value names via `tryFrom()`, and `422` listing the allowed values
+otherwise. `#[Body] array $data` gets the decoded body as it came. `Request`/`Response`
+type-hinted parameters (or properties) are injected directly, no attribute needed. A non-nullable parameter
+none of this binds stops the app at boot with an `InvalidArgumentException` instead of failing each request.
 
 Placeholder values arrive URL-decoded, once: `/user/J%C3%BCrgen` binds `Jürgen`, `/user/%2541` binds `%41`,
 and an encoded `%2F` stays inside its own segment. Everything around the placeholders matches literally, so

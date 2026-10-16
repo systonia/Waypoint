@@ -3,7 +3,8 @@
 namespace Waypoint\Tests\Fixtures\Controllers;
 
 use stdClass;
-use Waypoint\Attributes\{Controller, Get, Inject};
+use Waypoint\Attributes\{Controller, Get, Inject, Query};
+use Waypoint\Tests\Fixtures\Enums\{OrderStatus, Priority};
 use Waypoint\Http\{Request, Response};
 use Waypoint\Router;
 
@@ -78,6 +79,18 @@ class ArgBindingController
     public function typedQuery(bool $active, int $page, float $ratio): array
     {
         return ['active' => $active, 'page' => $page, 'ratio' => $ratio];
+    }
+
+    #[Get('/enum')]
+    public function enumQuery(#[Query] OrderStatus $status, Priority $priority = Priority::Low): array
+    {
+        return ['status' => $status->value, 'priority' => $priority->value];
+    }
+
+    #[Get('/enum/{status}')]
+    public function enumPath(OrderStatus $status): array
+    {
+        return ['status' => $status->value];
     }
 
     #[Get('/unknown')]

@@ -131,11 +131,9 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
 
     public function testUnionTypedParameterCompilesWithoutCrashing(): void
     {
-        // Not dispatched: Router's 'Unknown' binding always passes null,
-        // which would TypeError against this method's non-nullable union
-        // parameter. The point here is only that *compiling* the route
-        // (buildArgPlan() can't map string|int to one builtin type) doesn't
-        // crash App::attach() itself.
+        // buildArgPlan() can't map string|int|null to one builtin type: the
+        // route binds null, which the nullable parameter takes. A non-nullable
+        // one fails the compile (see ArgumentBindingTest).
         $routes = Waypoint::create()->getRouter()->getRoutes();
 
         $this->assertNotNull(

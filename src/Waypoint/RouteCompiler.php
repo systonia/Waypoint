@@ -107,7 +107,7 @@ final class RouteCompiler
                 'regex' => $dynamic ? self::pathRegex($path) : null,
                 'controller' => $controller,
                 'method' => $method->getName(),
-                'argPlan' => $this->buildArgPlan($method),
+                'argPlan' => self::checkedArgPlan($method, $this->buildArgPlan($method)),
                 'propInject' => $propInject,
                 'formatter' => self::normalizeFormatter(self::findFormatter($method)),
                 // A void action builds the response itself: its null is no JSON body
@@ -379,6 +379,22 @@ final class RouteCompiler
     }
 
     /**
+     * $argPlan, unless a parameter nothing binds would get null without taking it: a route that could only ever
+     * fail with a TypeError stops the boot instead.
+     * @param array<int, array<string, mixed>> $argPlan
+     * @return array<int, array<string, mixed>>
+     */
+    private static function checkedArgPlan(ReflectionMethod $method, array $argPlan): array
+    {
+        foreach ($method->getParameters() as $index => $param) {
+            if (($argPlan[$index]['inject'] ?? null) === 'Unknown' && !$param->allowsNull()) {
+                throw new InvalidArgumentException("Cannot bind \${$param->getName()} of {$method->class}::{$method->getName()}(): type {$param->getType()} is no Request, Response, scalar or backed enum, and has no #[Body], #[Query], #[Param] or plugin attribute.");
+            }
+        }
+        return $argPlan;
+    }
+
+    /**
      * How each method parameter is bound at dispatch (see Routing\ArgumentResolver).
      * @return array<int, array<string, mixed>>
      */
@@ -396,10 +412,11 @@ final class RouteCompiler
                 $type === Response::class => ['inject' => 'Response'],
                 $body !== null && $type !== null && class_exists($type) => ['inject' => 'Body', 'class' => $type, 'validate' => true],
                 $body !== null && in_array($type, ['array', 'iterable'], true) && $of !== null && class_exists($of) => ['inject' => 'BodyCollection', 'class' => $of, 'validate' => true],
+                $body !== null && in_array($type, ['array', 'iterable'], true) => ['inject' => 'BodyArray'],
                 ($query = self::attribute($param, Query::class)) !== null => ['inject' => 'Query', 'name' => $query->name ?? $param->getName()] + self::scalarPlan($param, $type),
                 ($route = self::attribute($param, Param::class)) !== null => ['inject' => 'Route', 'name' => $route->name ?? $param->getName()] + self::scalarPlan($param, $type),
                 $plugin !== null => $plugin,
-                in_array($type, ['string', 'int', 'float', 'bool'], true) => ['inject' => 'Scalar', 'name' => $param->getName()] + self::scalarPlan($param, $type),
+                in_array($type, ['string', 'int', 'float', 'bool'], true) || self::backing($type) !== null => ['inject' => 'Scalar', 'name' => $param->getName()] + self::scalarPlan($param, $type),
                 default => ['inject' => 'Unknown'],
             };
         }
@@ -412,14 +429,27 @@ final class RouteCompiler
      */
     private static function scalarPlan(ReflectionParameter $param, ?string $type): array
     {
-        if (!in_array($type, ['string', 'int', 'float', 'bool'], true)) {
+        $backing = self::backing($type);
+        if (!in_array($type, ['string', 'int', 'float', 'bool'], true) && $backing === null) {
             return [];
         }
         $plan = ['type' => $type, 'nullable' => $param->allowsNull()];
+        if ($backing !== null) {
+            // A backed enum: the URL's text converted to the backing type, then tryFrom()
+            $plan['enum'] = $backing;
+        }
         if ($param->isDefaultValueAvailable()) {
             $plan['default'] = $param->getDefaultValue();
         }
         return $plan;
+    }
+
+    /** 'int' or 'string' for a backed enum's class name, else null. */
+    private static function backing(?string $type): ?string
+    {
+        return $type !== null && enum_exists($type) && is_subclass_of($type, \BackedEnum::class)
+            ? (string) (new \ReflectionEnum($type))->getBackingType()
+            : null;
     }
 
     /**

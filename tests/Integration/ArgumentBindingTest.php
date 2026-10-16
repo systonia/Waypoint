@@ -75,6 +75,34 @@ final class ArgumentBindingTest extends IntegrationTestCase
         $this->assertArrayHasKey($field, $decoded['errors']);
     }
 
+    public function testABackedEnumBindsFromTheQueryAndThePath(): void
+    {
+        $this->assertSame(['status' => 'done', 'priority' => 2], json_decode($this->dispatch('GET', '/argbinding/enum?status=done&priority=2'), true));
+        $this->assertSame(['status' => 'open', 'priority' => 1], json_decode($this->dispatch('GET', '/argbinding/enum?status=open'), true));
+        $this->assertSame(['status' => 'open'], json_decode($this->dispatch('GET', '/argbinding/enum/open'), true));
+    }
+
+    public function testAValueNoEnumCaseHasIsAValidationErrorNamingTheValues(): void
+    {
+        $output = json_decode($this->dispatch('GET', '/argbinding/enum?status=gone'), true);
+        $this->assertSame(422, $this->lastResponse?->status());
+        $this->assertSame(['status' => 'This value should be one of: open, done.'], $output['errors']);
+
+        $output = json_decode($this->dispatch('GET', '/argbinding/enum?status=open&priority=7'), true);
+        $this->assertSame(['priority' => 'This value should be one of: 1, 2.'], $output['errors']);
+
+        $output = json_decode($this->dispatch('GET', '/argbinding/enum'), true);
+        $this->assertSame(['status' => 'This value is required.'], $output['errors']);
+    }
+
+    public function testANonNullableParameterNothingBindsFailsTheBoot(): void
+    {
+        Waypoint::reset();
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cannot bind $when of ' . ArgumentBindingTest_Unbindable::class . '::show()');
+        Waypoint::create()->attach([ArgumentBindingTest_Unbindable::class]);
+    }
+
     public function testRouteParametersArriveUrlDecoded(): void
     {
         $output = $this->dispatch('GET', '/argbinding/name/J%C3%BCrgen%20M%C3%BCller');
@@ -156,5 +184,15 @@ final class ArgumentBindingTest extends IntegrationTestCase
         $decoded = json_decode($output, true);
         $this->assertSame('Validation failed', $decoded['title']);
         $this->assertArrayHasKey($errorKey, $decoded['errors']);
+    }
+}
+
+#[\Waypoint\Attributes\Controller('/unbindable')]
+final class ArgumentBindingTest_Unbindable
+{
+    #[\Waypoint\Attributes\Get('')]
+    public function show(\DateTimeImmutable $when): array
+    {
+        return [];
     }
 }

@@ -14,4 +14,11 @@ class BodyBindingController
     {
         return ['name' => $dto->name, 'qty' => $dto->qty];
     }
+
+    /** @param array<array-key, mixed> $data */
+    #[Post('/raw')]
+    public function raw(#[Body] array $data): array
+    {
+        return $data;
+    }
 }

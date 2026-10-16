@@ -13,10 +13,11 @@ Waypoint fills a route method's parameters from the request before it calls the 
 | `#[Query] string $q` | the query string value `?q=` |
 | `#[Body] NewCustomer $customer` | the body as a DTO, validated |
 | `#[Body]` with `of:` on an `array` parameter | the body as a list of DTOs, each validated |
-| `int $id` without attribute | the placeholder `{id}` if the route has one, else `?id=` |
+| `#[Body] array $data` | the decoded body as it came |
+| `int $id` or `OrderStatus $status` without attribute | the placeholder `{id}` if the route has one, else `?id=` |
 | a parameter a plugin binds | what the plugin provides (see [Plugins](plugins.md)) |
 
-Any other parameter receives `null`. Services are not parameters: a controller gets them through `#[Inject]` properties (see [Dependency injection](dependency-injection.md)).
+Any other parameter receives `null`, so it has to be nullable: a non-nullable one stops the app at boot with an `InvalidArgumentException` naming it. Services are not parameters: a controller gets them through `#[Inject]` properties (see [Dependency injection](dependency-injection.md)).
 
 ## Path and query values
 
@@ -45,7 +46,8 @@ final class CustomerSearchController
 `GET /customers/42/orders?status=open&archived=yes&page=2` calls `orders(42, 'open', true, 2)`.
 
 - `#[Param]` and `#[Query]` bind by the parameter's name; `#[Param('customerId')]` and `#[Query('status')]` bind a differently named placeholder or key.
-- A parameter without an attribute and with a scalar type (`string`, `int`, `float`, `bool`) looks for a placeholder of its name first, then for the query key.
+- A parameter without an attribute and with a scalar type (`string`, `int`, `float`, `bool`) or a backed enum looks for a placeholder of its name first, then for the query key.
+- A backed enum (`#[Query] OrderStatus $status`) gets the case whose value the text names (`tryFrom()`); any other text answers `422` with `This value should be one of: open, done.`. Missing and without a default or `null`, it answers `422` with `This value is required.`.
 - The text is converted to the parameter's type: `int` takes whole numbers only, `float` numbers, and `bool` takes `true`/`false`, `1`/`0`, `yes`/`no` and `on`/`off`. A value that doesn't convert, such as `?page=abc`, answers `422` with the parameter in `errors`; the method is not called.
 - A missing value gives the parameter's default, `null` if the type allows it, else the type's empty value (`''`, `0`, `0.0`, `false`). Give a default whenever a value is optional.
 
