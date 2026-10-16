@@ -2,7 +2,7 @@
 
 namespace Waypoint\Http;
 
-use Waypoint\Support\Arr;
+use Waypoint\Support\{Arr, Uuid};
 
 /**
  * The incoming HTTP request. capture() reads it from the superglobals (FPM, php -S); fromParts() builds it
@@ -273,16 +273,7 @@ class Request
                 return $headers[$name];
             }
         }
-        return self::generateUuidV4();
-    }
-
-    private static function generateUuidV4(): string
-    {
-        $bytes = random_bytes(16);
-        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
-        $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
-        $hex = bin2hex($bytes);
-        return sprintf('%s-%s-%s-%s-%s', substr($hex, 0, 8), substr($hex, 8, 4), substr($hex, 12, 4), substr($hex, 16, 4), substr($hex, 20, 12));
+        return Uuid::v4();
     }
 
     /** A query string value, or $default when the key is missing. */

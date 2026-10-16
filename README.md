@@ -1173,7 +1173,8 @@ $app->configure(function (OpenAPIOptions $opts) {
 Every request gets a correlation id, available as `$req->id` in any controller/middleware that receives
 the `Request`: the incoming `X-Request-Id` header if the client/upstream sent one (`X-Correlation-Id` as a
 fallback header name; an upstream proxy's own, possibly non-UUID, id is exactly as valid a correlation id
-as one Waypoint would generate itself), otherwise a fresh UUID v4. An incoming id is only taken when it
+as one Waypoint would generate itself), otherwise a fresh UUID v4 (`Waypoint\Support\Uuid::v4()`, public for
+the app's own ids too). An incoming id is only taken when it
 has at most 128 characters from `A-Z a-z 0-9 . _ : -`; anything else gets a fresh UUID, so a client can't
 write into the logs. No configuration or middleware required.
 

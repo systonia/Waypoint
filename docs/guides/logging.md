@@ -61,7 +61,7 @@ The level list is explicit on purpose: Waypoint logs a `warning` for every route
 Every request has a correlation id, `$req->id`:
 
 - the incoming `X-Request-Id` header, or `X-Correlation-Id`, when it has at most 128 characters of `A-Z a-z 0-9 . _ : -`; a proxy or client in front can so pass its id along,
-- otherwise a fresh UUID v4.
+- otherwise a fresh UUID v4 from [`Uuid::v4()`](../reference/Waypoint/Support/Uuid.md), which apps can call for their own ids as well.
 
 The id goes back to the client as `X-Request-ID`, and every line logged while the request runs gets it as `request_id` in its context, without passing it around:
 
