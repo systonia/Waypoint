@@ -33,6 +33,31 @@ final class EnvironmentOptionsTest extends TestCase
         $this->assertNull($opts->get('# this line is a comment and must be skipped'));
     }
 
+    public function testEnvFileLinesMayStartWithExportAndEndWithAComment(): void
+    {
+        $dir = sys_get_temp_dir() . '/waypoint-env-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        file_put_contents("$dir/.env", implode("\n", [
+            'export API_KEY=abc',
+            'DB_URL=postgres://localhost # local default',
+            'QUOTED="a # b" # comment',
+            "SINGLE='x y'",
+            'HASH=abc#def',
+        ]) . "\n");
+        try {
+            $opts = (new EnvironmentOptions())->load($dir);
+            $this->assertSame('abc', $opts->get('API_KEY'));
+            $this->assertNull($opts->get('export API_KEY'));
+            $this->assertSame('postgres://localhost', $opts->get('DB_URL'));
+            $this->assertSame('a # b', $opts->get('QUOTED'));
+            $this->assertSame('x y', $opts->get('SINGLE'));
+            $this->assertSame('abc#def', $opts->get('HASH'));
+        } finally {
+            unlink("$dir/.env");
+            rmdir($dir);
+        }
+    }
+
     public function testLoadOverlaysDollarEnvSuperglobal(): void
     {
         $_ENV['TEST_FROM_DOLLAR_ENV'] = 'from-dollar-env';

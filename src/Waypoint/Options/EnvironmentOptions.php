@@ -78,7 +78,10 @@ class EnvironmentOptions
         return ($this->data['APP_ENV'] ?? 'production') === 'development';
     }
 
-    /** KEY=value lines; '#' comments and blank lines skipped; surrounding quotes stripped. Missing file is fine. */
+    /**
+     * KEY=value lines; '#' comments and blank lines skipped, a leading `export ` dropped. A quoted value is what stands
+     * between its quotes; an unquoted one ends at a ' #' comment. Missing file is fine.
+     */
     private function extendWithEnvFile(string $file): void
     {
         if (!is_file($file)) {
@@ -97,7 +100,12 @@ class EnvironmentOptions
             if ($line === '' || $line[0] === '#' || $equals === false) {
                 continue;
             }
-            $this->data[trim(substr($line, 0, $equals))] = trim(substr($line, $equals + 1), " \t\n\r\0\x0B\"'");
+            $key = trim(substr($line, 0, $equals));
+            $key = str_starts_with($key, 'export ') ? trim(substr($key, 7)) : $key;
+            $value = trim(substr($line, $equals + 1));
+            $quote = $value[0] ?? '';
+            $end = $quote === '"' || $quote === "'" ? strpos($value, $quote, 1) : false;
+            $this->data[$key] = $end !== false ? substr($value, 1, $end - 1) : (string) preg_replace('/\s+#.*$/', '', $value);
         }
         fclose($handle);
     }

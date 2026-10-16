@@ -95,7 +95,7 @@ $app->configure(fn (EnvironmentOptions $env) => $env->load(dirname(__DIR__)));
 
 Without that call the files are loaded from the working directory on the first `get()`.
 
-`.env` holds `KEY=value` lines. Blank lines and lines starting with `#` are skipped, surrounding quotes are removed, and every value is a string:
+`.env` holds `KEY=value` lines. Blank lines and lines starting with `#` are skipped, a leading `export ` is dropped, a quoted value is what stands between its quotes, an unquoted one ends at ` #` (a trailing comment), and every value is a string:
 
 ```bash
 # .env, not committed
