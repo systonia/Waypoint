@@ -59,7 +59,7 @@ final class NestedViewsTest extends IntegrationTestCase
         $view = new View('Admin/Users');
         $view->setAssets(['css' => 'abc.css', 'js' => null]);
 
-        $this->assertSame('data-view="Admin/Users"', $view->scopeAttribute());
+        $this->assertSame('data-view="Admin/Users"', (string) $view->scopeAttribute());
     }
 
     public function testAViewNameEscapingTheViewsDirectoryIsRejected(): void

@@ -898,7 +898,14 @@ $app->configure(function (RendererOptions $opts) {
 explicit `.php` name, or no layout is applied and every render falls back to the bare view content.
 
 Inside a view/layout `.php` file, `$model` is whatever was passed to `View`'s constructor (commonly an
-array, e.g. `$model['product']`), and `$this` is the `View` instance itself:
+array, e.g. `$model['product']`), and `$this` is the `View` instance itself.
+
+`<?= $value ?>` is HTML-escaped. Markup goes out as it is only as a `Waypoint\Html` value
+(`<?= new Html($trusted) ?>`) or through `<?php echo $markup ?>`; the layout's `$content`, `section()`,
+`assetTags()`, `scopeAttribute()`, `waypointJsTag()`, `pluginAssetTags()` and `$this->csrf->field()` return
+`Html` already. Printing an array throws a `TypeError`. With a cache directory the compiled templates are
+files under `{cacheDirectory}/views/`, so OPcache keeps them.
+
 
 - `$this->request` (read-only), `$this->env` and `$this->csrf`: the request being answered, the
   `Environment` and the CSRF helper.
@@ -1305,7 +1312,7 @@ declares what it adds and does nothing else:
 | `ArgumentBinder` | Own parameter attributes/types for controller methods, asked after the core attributes and before the implicit scalar binding. | `#[File]`, a table request. |
 | `Renderer` | Own return types, asked after `View`/`Redirect`. | Exports, PDFs. |
 | `OpenApiExtension` | Describes the plugin's bound parameters and rendered return types for the spec; without it they show as `string`/`object`. | `text/csv` for an export. |
-| `ViewHelper` | Methods templates can call as `$this->name()`. | `$this->t('key')`. |
+| `ViewHelper` | Methods templates can call as `$this->name()`; markup comes back as `Waypoint\Html`, or `<?= ?>` escapes it. | `$this->t('key')`. |
 | `ClientAsset` | CSS/JS files shipped by the plugin, served content-hashed; render with `$this->pluginAssetTags()`. | A table component. |
 
 State that belongs to one request (a locale, a user, queued messages) lives in a `Waypoint\Support\FiberLocal`,

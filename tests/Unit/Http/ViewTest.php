@@ -4,9 +4,9 @@ namespace Waypoint\Tests\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Waypoint\{Waypoint};
+use Waypoint\{Html, Waypoint};
 use Waypoint\Http\View;
-use Waypoint\Options\RendererOptions;
+use Waypoint\Options\{FileSystemOptions, RendererOptions};
 
 final class ViewTest extends TestCase
 {
@@ -34,14 +34,14 @@ final class ViewTest extends TestCase
     public function testSectionReturnsEmptyStringWhenUndefinedAndNotRequired(): void
     {
         $view = new View('HomePage');
-        $this->assertSame('', $view->section('missing'));
+        $this->assertSame('', (string) $view->section('missing'));
     }
 
     public function testSectionThrowsWhenRequiredAndUndefined(): void
     {
         $view = new View('HomePage');
         $this->expectException(RuntimeException::class);
-        $view->section('missing', required: true);
+        (string) $view->section('missing', required: true);
     }
 
     public function testEndSectionWithoutStartThrows(): void
@@ -92,6 +92,42 @@ final class ViewTest extends TestCase
         $this->assertStringNotContainsString('<html', $output);
     }
 
+    public function testEchoEscapesAndOnlyHtmlOrPhpEchoPrintsMarkup(): void
+    {
+        $this->configureRenderer();
+        $view = new View('Escaping', ['text' => '<b>"Ada" & co</b>', 'html' => new Html('<em>safe</em>'), 'raw' => '<hr>'], partial: true);
+
+        $this->assertSame(
+            "<p>&lt;b&gt;&quot;Ada&quot; &amp; co&lt;/b&gt;</p>\n<div><em>safe</em></div>\n<hr><i>Escaping.php Views</i>\n",
+            $view->render()
+        );
+    }
+
+    public function testEchoingAnArrayIsATypeError(): void
+    {
+        $this->configureRenderer();
+
+        $this->expectException(\TypeError::class);
+        (new View('Escaping', ['text' => ['no'], 'html' => '', 'raw' => ''], partial: true))->render();
+    }
+
+    public function testWithACacheDirectoryTheCompiledViewIsAFileThere(): void
+    {
+        $cache = sys_get_temp_dir() . '/waypoint-views-' . bin2hex(random_bytes(4));
+        $this->configureRenderer();
+        Waypoint::create()->configure(fn (FileSystemOptions $fs) => $fs->cacheDirectory = $cache);
+        $view = new View('Escaping', ['text' => '<b>', 'html' => '', 'raw' => ''], partial: true);
+
+        $this->assertStringStartsWith('<p>&lt;b&gt;</p>', $view->render());
+        $compiled = glob("$cache/views/*.php") ?: [];
+        $this->assertCount(1, $compiled);
+        $this->assertStringContainsString('View::escape(', (string) file_get_contents($compiled[0]));
+
+        array_map('unlink', $compiled);
+        rmdir("$cache/views");
+        rmdir($cache);
+    }
+
     public function testFullRenderWrapsContentInLayoutAndFillsSections(): void
     {
         $this->configureRenderer('_Layout.php');
@@ -135,7 +171,7 @@ final class ViewTest extends TestCase
     public function testAssetTagsIsEmptyByDefault(): void
     {
         $view = new View('HomePage');
-        $this->assertSame('', $view->assetTags());
+        $this->assertSame('', (string) $view->assetTags());
     }
 
     public function testAssetTagsRendersLinkAndScriptWhenBothAreSet(): void
@@ -143,7 +179,7 @@ final class ViewTest extends TestCase
         $view = new View('HomePage');
         $view->setAssets(['css' => 'abc123.css', 'js' => 'def456.js']);
 
-        $tags = $view->assetTags();
+        $tags = (string) $view->assetTags();
 
         // data-wp-asset must be present and match waypoint.js's own
         // client-side dedup marker (see assets.ts's injectOnce()). A
@@ -165,7 +201,7 @@ final class ViewTest extends TestCase
         $view = new View('HomePage');
         $view->setAssets(['css' => 'abc123.css', 'js' => null]);
 
-        $tags = $view->assetTags();
+        $tags = (string) $view->assetTags();
 
         $this->assertStringContainsString(
             '<link rel="stylesheet" href="/assets/abc123.css">',
@@ -177,7 +213,7 @@ final class ViewTest extends TestCase
     public function testScopeAttributeIsEmptyByDefault(): void
     {
         $view = new View('HomePage');
-        $this->assertSame('', $view->scopeAttribute());
+        $this->assertSame('', (string) $view->scopeAttribute());
     }
 
     public function testScopeAttributeReturnsDataViewWhenAnyAssetIsSet(): void
@@ -185,7 +221,7 @@ final class ViewTest extends TestCase
         $view = new View('HomePage');
         $view->setAssets(['css' => null, 'js' => 'def456.js']);
 
-        $this->assertSame('data-view="HomePage"', $view->scopeAttribute());
+        $this->assertSame('data-view="HomePage"', (string) $view->scopeAttribute());
     }
 
     public function testScopeAttributeEscapesTheViewName(): void
@@ -193,19 +229,19 @@ final class ViewTest extends TestCase
         $view = new View('Weird"Name');
         $view->setAssets(['css' => 'abc123.css', 'js' => null]);
 
-        $this->assertSame('data-view="Weird&quot;Name"', $view->scopeAttribute());
+        $this->assertSame('data-view="Weird&quot;Name"', (string) $view->scopeAttribute());
     }
 
     public function testLayoutAssetTagsIsEmptyBeforeRender(): void
     {
         $view = new View('HomePage');
-        $this->assertSame('', $view->layoutAssetTags());
+        $this->assertSame('', (string) $view->layoutAssetTags());
     }
 
     public function testLayoutScopeAttributeIsEmptyBeforeRender(): void
     {
         $view = new View('HomePage');
-        $this->assertSame('', $view->layoutScopeAttribute());
+        $this->assertSame('', (string) $view->layoutScopeAttribute());
     }
 
     public function testRenderWithoutAnAppRouterLeavesLayoutAssetsEmpty(): void
@@ -219,8 +255,8 @@ final class ViewTest extends TestCase
 
         $view->render();
 
-        $this->assertSame('', $view->layoutAssetTags());
-        $this->assertSame('', $view->layoutScopeAttribute());
+        $this->assertSame('', (string) $view->layoutAssetTags());
+        $this->assertSame('', (string) $view->layoutScopeAttribute());
     }
 
     public function testSetAssetsPathChangesTheHrefSrcPrefixOnAssetTags(): void
@@ -229,7 +265,7 @@ final class ViewTest extends TestCase
         $view->setAssets(['css' => 'abc123.css', 'js' => 'def456.js']);
         $view->setAssetsPath('/static');
 
-        $tags = $view->assetTags();
+        $tags = (string) $view->assetTags();
 
         $this->assertStringContainsString(
             '<link rel="stylesheet" href="/static/abc123.css">',
@@ -248,7 +284,7 @@ final class ViewTest extends TestCase
         // pointing at a route that may not even exist.
         $view = new View('HomePage');
 
-        $this->assertSame('', $view->waypointJsTag());
+        $this->assertSame('', (string) $view->waypointJsTag());
     }
 
     public function testWaypointJsTagUsesTheConfiguredPath(): void
@@ -256,7 +292,7 @@ final class ViewTest extends TestCase
         $view = new View('HomePage');
         $view->setWaypointJsPath('/waypoint.js');
 
-        $this->assertSame('<script src="/waypoint.js"></script>' . "\n", $view->waypointJsTag());
+        $this->assertSame('<script src="/waypoint.js"></script>' . "\n", (string) $view->waypointJsTag());
     }
 
     public function testWaypointJsTagRendersEscapedDataAttributes(): void
@@ -266,7 +302,7 @@ final class ViewTest extends TestCase
 
         $this->assertSame(
             '<script src="/waypoint.js" data-csrf-header="X-My-Token" data-csrf-cookie="a&quot;b"></script>' . "\n",
-            $view->waypointJsTag()
+            (string) $view->waypointJsTag()
         );
     }
 
@@ -276,7 +312,7 @@ final class ViewTest extends TestCase
         $view->setWaypointJsPath('/waypoint.js');
         $view->setWaypointJsPath(null);
 
-        $this->assertSame('', $view->waypointJsTag());
+        $this->assertSame('', (string) $view->waypointJsTag());
     }
 
     public function testLayoutAssetTagsAndScopeAttributeStayEmptyForAPartialRenderEvenWhenTheLayoutHasAssets(): void
@@ -288,7 +324,7 @@ final class ViewTest extends TestCase
 
         $view->render();
 
-        $this->assertSame('', $view->layoutAssetTags());
-        $this->assertSame('', $view->layoutScopeAttribute());
+        $this->assertSame('', (string) $view->layoutAssetTags());
+        $this->assertSame('', (string) $view->layoutScopeAttribute());
     }
 }

@@ -88,11 +88,11 @@ class Csrf
         $this->currentToken->set(null);
     }
 
-    /** `<input type="hidden" name="{fieldName}" value="{token}">` for a plain `<form>`. */
-    public function field(): string
+    /** `<input type="hidden" name="{fieldName}" value="{token}">` for a plain `<form>`, as Html a view prints unescaped. */
+    public function field(): Html
     {
         $opts = Waypoint::getConfig(CsrfOptions::class);
-        return sprintf('<input type="hidden" name="%s" value="%s">', htmlspecialchars($opts->fieldName, ENT_QUOTES), htmlspecialchars($this->token(), ENT_QUOTES));
+        return new Html(sprintf('<input type="hidden" name="%s" value="%s">', htmlspecialchars($opts->fieldName, ENT_QUOTES), htmlspecialchars($this->token(), ENT_QUOTES)));
     }
 
     /** True if the cookie token is valid and the client repeated exactly it back via header or body field. */

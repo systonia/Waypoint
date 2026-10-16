@@ -132,7 +132,7 @@ The template carries the CSRF field (see [below](#csrf-protection)):
 <form method="post" action="/login">
     <?= $this->csrf->field() ?>
     <?php if ($model['error'] !== null): ?>
-        <p class="error"><?= htmlspecialchars($model['error']) ?></p>
+        <p class="error"><?= $model['error'] ?></p>
     <?php endif ?>
     <label>Email <input type="email" name="email" required></label>
     <label>Password <input type="password" name="password" required></label>

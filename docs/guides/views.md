@@ -64,11 +64,11 @@ A template is a PHP file. `$model` is the second argument of the `View`, and `$t
 <?php $this->endSection() ?>
 
 <section <?= $this->scopeAttribute() ?>>
-    <h1><?= htmlspecialchars($model['title']) ?></h1>
+    <h1><?= $model['title'] ?></h1>
     <ul>
         <?php foreach ($model['products'] as $product): ?>
             <li>
-                <span class="name"><?= htmlspecialchars($product['name']) ?></span>
+                <span class="name"><?= $product['name'] ?></span>
                 <span class="price"><?= number_format($product['price'], 2) ?> €</span>
             </li>
         <?php endforeach ?>
@@ -76,11 +76,18 @@ A template is a PHP file. `$model` is the second argument of the `View`, and `$t
 </section>
 ```
 
-Templates don't escape on their own: pass every value from the model or the request through `htmlspecialchars()`. Views can live in subdirectories: `views/Products/Index.php` is `new View('Products/Index')`. A name that starts with `/`, contains a backslash or a `..` segment is refused, so a view name built from request input can't leave the views directory.
+`<?= ?>` escapes what it prints with `htmlspecialchars()`, so a product name with a `<` in it stays text. Markup goes out as it is in two ways:
+
+- a [`Waypoint\Html`](../reference/Waypoint/Html.md) value: `<?= new Html($trustedMarkup) ?>`. `section()`, `assetTags()`, `scopeAttribute()`, `$this->csrf->field()`, the layout's `$content` and the other helpers in the table below return one already, and a plugin's view helper that builds markup returns one too;
+- `<?php echo $markup ?>`, for markup the template trusts as it is.
+
+Only `Html` should carry markup: everything from a user, the request or the database is escaped. Printing an array or an object without `__toString()` throws a `TypeError` instead of writing `Array`. `__FILE__` and `__DIR__` name the template itself. With a cache directory (see [Caching](caching.md)) the compiled templates are kept as files under `views/` in it, so OPcache holds them; without one each is compiled once per process.
+
+Views can live in subdirectories: `views/Products/Index.php` is `new View('Products/Index')`. A name that starts with `/`, contains a backslash or a `..` segment is refused, so a view name built from request input can't leave the views directory.
 
 ## The layout
 
-The layout receives the rendered view as `$content`, along with `$model`:
+The layout receives the rendered view as `$content` (an `Html`, so `<?= $content ?>` prints it as it is), along with `$model`:
 
 ```php
 <?php /** views/_Layout.php */ ?>
@@ -88,7 +95,7 @@ The layout receives the rendered view as `$content`, along with `$model`:
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title><?= htmlspecialchars($model['title'] ?? 'Shop') ?></title>
+    <title><?= $model['title'] ?? 'Shop' ?></title>
     <?= $this->layoutAssetTags() ?>
     <?= $this->assetTags() ?>
     <?= $this->section('head') ?>
@@ -105,7 +112,7 @@ The layout receives the rendered view as `$content`, along with `$model`:
 | In a template | Gives |
 |---|---|
 | `$this->startSection('head')` … `$this->endSection()` | captures output under a name, to be placed by the layout |
-| `$this->section('head')` | a captured section, `''` if the view defined none; `section('head', required: true)` throws instead |
+| `$this->section('head')` | a captured section as `Html`, empty if the view defined none; `section('head', required: true)` throws instead, `hasSection('head')` tells whether there is one |
 | `$this->assetTags()`, `$this->layoutAssetTags()` | `<link>` and `<script>` tags for the view's and the layout's own CSS and JS |
 | `$this->scopeAttribute()`, `$this->layoutScopeAttribute()` | the `data-view="…"` attribute their CSS is scoped to |
 | `$this->waypointJsTag()` | the `<script>` tag for `waypoint.js` |
@@ -203,13 +210,13 @@ final class ContactMessage
     <?= $this->csrf->field() ?>
     <label>
         Email
-        <input type="email" name="email" value="<?= htmlspecialchars($model['form']->email) ?>">
-        <?php if (isset($model['errors']['email'])): ?><small><?= htmlspecialchars($model['errors']['email']) ?></small><?php endif ?>
+        <input type="email" name="email" value="<?= $model['form']->email ?>">
+        <?php if (isset($model['errors']['email'])): ?><small><?= $model['errors']['email'] ?></small><?php endif ?>
     </label>
     <label>
         Message
-        <textarea name="message"><?= htmlspecialchars($model['form']->message) ?></textarea>
-        <?php if (isset($model['errors']['message'])): ?><small><?= htmlspecialchars($model['errors']['message']) ?></small><?php endif ?>
+        <textarea name="message"><?= $model['form']->message ?></textarea>
+        <?php if (isset($model['errors']['message'])): ?><small><?= $model['errors']['message'] ?></small><?php endif ?>
     </label>
     <button>Send</button>
 </form>

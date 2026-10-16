@@ -5,15 +5,19 @@ namespace Waypoint\Http;
 use BadMethodCallException;
 use InvalidArgumentException;
 use RuntimeException;
-use Waypoint\{Csrf, Environment, Waypoint};
+use Stringable;
+use TypeError;
+use Waypoint\{Csrf, Environment, Html, Waypoint};
 use Waypoint\Attributes\Inject;
-use Waypoint\Options\RendererOptions;
+use Waypoint\Options\{FileSystemOptions, RendererOptions};
 
 /**
  * A server-rendered template result: `return new View('Admin/Users', $model)`
  * renders views/Admin/Users.php inside RendererOptions::$layout (unless
  * $partial). Inside a template `$this` is this View and `$model` the model;
  * `$this->env`/`$this->csrf`/`$this->request` are set by Router before render().
+ * `<?= $value ?>` is HTML-escaped; Waypoint\Html (what section(), assetTags() and
+ * the like return) and `<?php echo ?>` print as they are.
  */
 class View
 {
@@ -66,6 +70,9 @@ class View
 
     /** @var list<string> URLs of plugin CSS/JS (Plugin\ClientAsset), set by Router::renderView(). */
     protected array $pluginAssetUrls = [];
+
+    /** @var array<string, array{int, string}> template path => its mtime and compiled code, without a cache directory */
+    private static array $compiled = [];
 
     /**
      * @param string $view Path under RendererOptions::$directory without .php, '/'-separated ("Admin/Users").
@@ -145,7 +152,7 @@ class View
     }
 
     /** `<link>`/`<script>` tags for every plugin-shipped asset; place after waypointJsTag(). */
-    public function pluginAssetTags(): string
+    public function pluginAssetTags(): Html
     {
         $tags = '';
         foreach ($this->pluginAssetUrls as $url) {
@@ -154,19 +161,19 @@ class View
                 ? "<link rel=\"stylesheet\" href=\"$escaped\">\n"
                 : "<script src=\"$escaped\"></script>\n";
         }
-        return $tags;
+        return new Html($tags);
     }
 
     /** `<link>`/`<script>` tags for this view's own CSS/JS, for the layout's `<head>`. */
-    public function assetTags(): string
+    public function assetTags(): Html
     {
-        return $this->renderAssetTags($this->assets);
+        return new Html($this->renderAssetTags($this->assets));
     }
 
     /** Same for the layout's own CSS/JS; empty in a partial render. */
-    public function layoutAssetTags(): string
+    public function layoutAssetTags(): Html
     {
-        return $this->renderAssetTags($this->layoutAssets);
+        return new Html($this->renderAssetTags($this->layoutAssets));
     }
 
     /**
@@ -174,16 +181,16 @@ class View
      * Carries the CSRF cookie/header names as data attributes when CsrfOptions differs from the
      * client's defaults, so the layout never repeats what the options already say.
      */
-    public function waypointJsTag(): string
+    public function waypointJsTag(): Html
     {
         if ($this->waypointJsPath === null) {
-            return '';
+            return new Html('');
         }
         $tag = '<script src="' . htmlspecialchars($this->waypointJsPath, ENT_QUOTES) . '"';
         foreach ($this->waypointJsAttributes as $name => $value) {
             $tag .= ' ' . htmlspecialchars($name, ENT_QUOTES) . '="' . htmlspecialchars($value, ENT_QUOTES) . '"';
         }
-        return $tag . "></script>\n";
+        return new Html($tag . "></script>\n");
     }
 
     /** @param array{css: ?string, js: ?string} $assets */
@@ -200,24 +207,24 @@ class View
     }
 
     /** `data-view="..."` for the element wrapping `$content` (what the view's scoped CSS matches on); '' when it has no assets. */
-    public function scopeAttribute(): string
+    public function scopeAttribute(): Html
     {
         return $this->scopeAttributeFor($this->assets, $this->view);
     }
 
     /** Same for the layout's own scoped CSS, e.g. on `<body>`. */
-    public function layoutScopeAttribute(): string
+    public function layoutScopeAttribute(): Html
     {
         return $this->scopeAttributeFor($this->layoutAssets, $this->layoutName ?? '');
     }
 
     /** @param array{css: ?string, js: ?string} $assets */
-    private function scopeAttributeFor(array $assets, string $name): string
+    private function scopeAttributeFor(array $assets, string $name): Html
     {
         if ($assets['css'] === null && $assets['js'] === null) {
-            return '';
+            return new Html('');
         }
-        return 'data-view="' . htmlspecialchars($name, ENT_QUOTES) . '"';
+        return new Html('data-view="' . htmlspecialchars($name, ENT_QUOTES) . '"');
     }
 
     public function startSection(string $name): void
@@ -242,15 +249,22 @@ class View
         $this->currentSection = null;
     }
 
-    public function section(string $name, bool $required = false): bool|string
+    /** The section's markup, empty when it was never started (or an exception for a $required one). */
+    public function section(string $name, bool $required = false): Html
     {
         if (isset($this->sections[$name])) {
-            return $this->sections[$name];
+            return new Html($this->sections[$name]);
         }
         if ($required) {
             throw new RuntimeException("Section '{$name}' is required but not defined.");
         }
-        return '';
+        return new Html('');
+    }
+
+    /** Whether the view started the section, e.g. to leave out its wrapper. */
+    public function hasSection(string $name): bool
+    {
+        return isset($this->sections[$name]);
     }
 
     /**
@@ -274,7 +288,6 @@ class View
 
     private function renderUnguarded(): string
     {
-        $model = $this->model;
         $options = Waypoint::getConfig(RendererOptions::class);
         $directory = $this->directory ?? $options->directory;
         $viewFile = "{$directory}/{$this->view}.php";
@@ -282,11 +295,7 @@ class View
             throw new RuntimeException("View '{$viewFile}' not found.");
         }
 
-        ob_start();
-        include $viewFile;
-        // @codeCoverageIgnoreStart
-        $content = ob_get_clean() ?: '';
-        // @codeCoverageIgnoreEnd
+        $content = $this->renderFile($viewFile, $this->model);
 
         $layoutFile = "{$directory}/" . ($this->layout ?? $options->layout);
         if ($this->partial || !file_exists($layoutFile)) {
@@ -300,10 +309,106 @@ class View
             $this->layoutAssets = $app->getRouter()->getViewAssets($this->layoutName);
         }
 
+        return $this->renderFile($layoutFile, $this->model, new Html($content));
+    }
+
+    /**
+     * Runs a template, compiled (see compile()), with `$this`, `$model` and, in a layout, `$content` in scope. With a
+     * cache directory the compiled template is a file there, which OPcache keeps; without one it is evaluated.
+     */
+    private function renderFile(string $file, mixed $model, ?Html $content = null): string
+    {
+        [$compiledFile, $code] = self::compiled($file);
         ob_start();
-        include $layoutFile;
+        if ($compiledFile !== null) {
+            include $compiledFile;
+        } else {
+            eval('?>' . $code);
+        }
         // @codeCoverageIgnoreStart
         return ob_get_clean() ?: '';
         // @codeCoverageIgnoreEnd
+    }
+
+    /**
+     * The compiled template: [its file in the cache directory, null], or [null, its code] without a cache directory.
+     * Rebuilt when the template changes, or Waypoint (this file) does.
+     * @return array{0: ?string, 1: string}
+     */
+    private static function compiled(string $file): array
+    {
+        $modified = (int) filemtime($file);
+        $fileSystem = Waypoint::getInstance()?->getContainer()->get(FileSystemOptions::class);
+        if ($fileSystem === null || !$fileSystem->isCacheEnabled()) {
+            if ((self::$compiled[$file][0] ?? null) !== $modified) {
+                self::$compiled[$file] = [$modified, self::compile((string) file_get_contents($file), $file)];
+            }
+            return [null, self::$compiled[$file][1]];
+        }
+        $directory = $fileSystem->getCacheDirectory() . '/views';
+        $compiled = $directory . '/' . md5($file . '|' . filemtime(__FILE__)) . '.php';
+        if (!is_file($compiled) || filemtime($compiled) < $modified) {
+            if (!is_dir($directory)) {
+                @mkdir($directory, 0775, true);
+            }
+            $temporary = $compiled . '.' . bin2hex(random_bytes(6)) . '.tmp';
+            if (file_put_contents($temporary, self::compile((string) file_get_contents($file), $file)) === false || !rename($temporary, $compiled)) {
+                // @codeCoverageIgnoreStart
+                @unlink($temporary);
+                throw new RuntimeException("Cannot write the compiled view {$compiled}.");
+                // @codeCoverageIgnoreEnd
+            }
+        }
+        return [$compiled, ''];
+    }
+
+    /**
+     * @internal A template as the PHP that runs: every `<?= expr ?>` becomes `<?= View::escape(expr) ?>`, and
+     * `__FILE__`/`__DIR__` keep naming the template itself. Every line stays where it is.
+     */
+    public static function compile(string $source, string $file): string
+    {
+        $code = '';
+        $open = false;
+        foreach (token_get_all($source) as $token) {
+            $id = is_array($token) ? $token[0] : null;
+            $text = is_array($token) ? $token[1] : $token;
+            if ($id === T_OPEN_TAG_WITH_ECHO) {
+                $code .= $text . '\\' . self::class . '::escape(';
+                $open = true;
+            } elseif ($open && $id === T_CLOSE_TAG) {
+                $code = self::closeEscape($code) . $text;
+                $open = false;
+            } elseif ($id === T_FILE) {
+                $code .= var_export($file, true);
+            } elseif ($id === T_DIR) {
+                $code .= var_export(dirname($file), true);
+            } else {
+                $code .= $text;
+            }
+        }
+        return $open ? self::closeEscape($code) : $code;
+    }
+
+    /** Ends the escape( call before the whitespace that precedes `?>`, dropping a `;` the template ended the echo with. */
+    private static function closeEscape(string $code): string
+    {
+        return (string) preg_replace('/;?(\s*)\z/', ')$1', $code, 1);
+    }
+
+    /**
+     * What `<?= ?>` prints: scalars and Stringable HTML-escaped, Html as it is, null as nothing. Anything else (an
+     * array, an object without __toString()) is a TypeError rather than "Array".
+     */
+    public static function escape(mixed ...$values): string
+    {
+        $html = '';
+        foreach ($values as $value) {
+            if (!is_scalar($value) && $value !== null && !$value instanceof Stringable) {
+                throw new TypeError('A view can only print scalars and Stringable, not ' . get_debug_type($value));
+            }
+            $html .= $value instanceof Html ? (string) $value : htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE);
+        }
+        return $html;
     }
 }
