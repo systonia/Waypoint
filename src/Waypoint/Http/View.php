@@ -49,7 +49,7 @@ class View
     /** URL of the compiled waypoint.js asset, set by Router::renderView(); null only for a View rendered outside a Router. */
     protected ?string $waypointJsPath = null;
 
-    /** @var array<string, string> data-* attributes waypoint.js reads off its own <script> tag (see Router::renderView()). */
+    /** @var array<string, string> data-* attributes waypoint.js reads off its own `<script>` tag (see Router::renderView()). */
     protected array $waypointJsAttributes = [];
 
     /** The layout's basename without .php, set by render() (null for a partial render). */

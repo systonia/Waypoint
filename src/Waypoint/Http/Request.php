@@ -277,12 +277,16 @@ class Request
         return sprintf('%s-%s-%s-%s-%s', substr($hex, 0, 8), substr($hex, 8, 4), substr($hex, 12, 4), substr($hex, 16, 4), substr($hex, 20, 12));
     }
 
+    /** A query string value, or $default when the key is missing. */
     public function query(string $key, mixed $default = null): mixed
     {
         return $this->query[$key] ?? $default;
     }
 
-    /** @return ($key is null ? array<array-key, mixed> : mixed) */
+    /**
+     * The whole decoded body (JSON or form fields) without $key, else one field of it or $default.
+     * @return ($key is null ? array<array-key, mixed> : mixed)
+     */
     public function body(?string $key = null, mixed $default = null): mixed
     {
         return $key === null ? $this->body : ($this->body[$key] ?? $default);

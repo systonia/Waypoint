@@ -46,6 +46,7 @@ class Response
     {
     }
 
+    /** Sends this response uncompressed, whatever CompressionOptions say; what #[NoGzip] does. */
     public function disableGzip(): self
     {
         $this->gzipDisabled = true;
@@ -96,6 +97,7 @@ class Response
         return null;
     }
 
+    /** The HTTP status code set so far (200 by default). */
     public function getStatus(): int
     {
         return $this->status;
@@ -158,6 +160,7 @@ class Response
         return $this->withCookie($name, '', maxAge: 0, path: $path, domain: $domain);
     }
 
+    /** Sets the HTTP status code. */
     public function status(int $code): self
     {
         $this->status = $code;
@@ -182,7 +185,6 @@ class Response
         return $this->upgrade;
     }
 
-    /** Drops what upgrade() handed over: an error response must not be replaced by a WebSocket. */
     /**
      * @internal Before an exception handler builds the response anew: what the failed action wrote goes, its body,
      * cookies and the headers about the content (type, encoding, caching, download, redirect). Headers about the
@@ -202,6 +204,7 @@ class Response
         return $this;
     }
 
+    /** Drops what upgrade() handed over: an error response must not be replaced by a WebSocket. */
     public function withoutUpgrade(): self
     {
         $this->upgrade = null;
@@ -227,6 +230,7 @@ class Response
         return $this->context;
     }
 
+    /** Appends $data to the body. */
     public function write(string $data): self
     {
         $this->body .= $data;

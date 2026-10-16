@@ -20,7 +20,7 @@ class CsrfOptions
     /** Request header checked first (the fetch()/XHR path). */
     public string $headerName = 'X-CSRF-Token';
 
-    /** Body field checked second (the plain <form> path, see Csrf::field()). */
+    /** Body field checked second (the plain `<form>` path, see Csrf::field()). */
     public string $fieldName = '_csrf';
 
     /** Cookie Secure attribute. True by default -- set false only for HTTP-only local dev. */

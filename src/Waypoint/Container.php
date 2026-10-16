@@ -13,6 +13,7 @@ class Container implements ContainerInterface
     /** @var array<class-string, object> */
     private array $services = [];
 
+    /** Registers $service under its own class name, e.g. a service whose constructor takes arguments. */
     public function set(object $service): void
     {
         $this->services[get_class($service)] = $service;
@@ -81,7 +82,7 @@ class Container implements ContainerInterface
         return !$constructor || $constructor->getNumberOfRequiredParameters() === 0;
     }
 
-    /** @return array<class-string, object> */
+    /** @return array<class-string, object> Every registered instance, by the name it is registered under. */
     public function all(): array
     {
         return $this->services;

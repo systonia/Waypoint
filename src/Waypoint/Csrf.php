@@ -88,7 +88,7 @@ class Csrf
         $this->currentToken->set(null);
     }
 
-    /** `<input type="hidden" name="{fieldName}" value="{token}">` for a plain <form>. */
+    /** `<input type="hidden" name="{fieldName}" value="{token}">` for a plain `<form>`. */
     public function field(): string
     {
         $opts = Waypoint::getConfig(CsrfOptions::class);

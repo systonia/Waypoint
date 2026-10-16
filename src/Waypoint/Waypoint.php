@@ -14,6 +14,7 @@ class Waypoint
 
     private static ?App $instance = null;
 
+    /** The process's App, created on the first call; every later call returns the same one. */
     public static function create(): App {
         if (self::$instance === null) {
             self::$instance = new App();
@@ -22,10 +23,12 @@ class Waypoint
         return self::$instance;
     }
 
+    /** The App create() made, or null before the first create(). */
     public static function getInstance(): ?App {
         return self::$instance;
     }
 
+    /** Forgets the App, so the next create() starts a fresh one (the testing kit does this per test). */
     public static function reset(): void {
         self::$instance = null;
     }

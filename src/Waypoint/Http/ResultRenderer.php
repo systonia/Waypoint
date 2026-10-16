@@ -6,7 +6,7 @@ use SimpleXMLElement;
 use SplFileInfo;
 use Waypoint\Attributes\{FileFormatter, SimpleXmlFormatter};
 
-/** Writes a route's return value to the Response as JSON (default), a raw file/body (#[FileFormatter]) or flat XML (#[SimpleXmlFormatter]). Views and Redirects never come here. */
+/** Writes a route's return value to the Response as JSON (default), a raw file/body (#[FileFormatter]) or XML (#[SimpleXmlFormatter]). Views and Redirects never come here. */
 final class ResultRenderer
 {
     /** @param array{type?: string, options?: array<string, mixed>|null} $formatter */

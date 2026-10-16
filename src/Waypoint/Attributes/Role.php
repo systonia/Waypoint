@@ -5,13 +5,12 @@ namespace Waypoint\Attributes;
 use Attribute;
 
 /**
- * Requires $req->jwt['role'] to equal $role -- on the class (every route
- * on it) or a single method, method wins if both are present (same
- * "method overrides class, else null" precedence #[Version]/#[Sunset]
- * use -- see RouteCompiler::resolveOverridable()). Implies #[Authenticated]
- * (see its own doc): Router::dispatch() checks $req->jwt !== null first,
- * throwing UnauthorizedException, before ever comparing the role.
- * A role mismatch throws Waypoint\Exceptions\ForbiddenException.
+ * Requires `$req->jwt['role']` to equal $role. On the class (every route on
+ * it, also those of subclasses) or a single method; the method's wins if both
+ * are present, the same precedence #[Version] and #[Sunset] use. Implies
+ * #[Authenticated]: a request without a valid JWT gets UnauthorizedException
+ * (401) before the role is compared, and a role mismatch throws
+ * Waypoint\Exceptions\ForbiddenException (403).
  *
  * Assumes the app's own JWT payload carries a 'role' claim (nothing in
  * Waypoint enforces that shape when issuing tokens -- JWT::encode()

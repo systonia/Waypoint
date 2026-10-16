@@ -171,7 +171,7 @@ class App
      * PORT from the Environment (8080 without one), and Tenma serves FileSystemOptions::$publicDirectory itself,
      * without PHP; under FPM, php -S or the CLI it is run(), and Waypoint serves that directory.
      *
-     * @param string|array<string, string>|null $static Tenma's static mounts instead: ['/assets' => __DIR__ . '/public/assets']
+     * @param string|array<string, string>|null $static Tenma's static mounts instead, e.g. `['/assets' => __DIR__ . '/public/assets']`
      * @codeCoverageIgnore starts a server or answers the superglobals' request; Tenma's branch is covered by the live suite
      */
     public function serve(?int $port = null, string|array|null $static = null): void
@@ -372,6 +372,8 @@ class App
     }
 
     /**
+     * The container's instance of $class (a service, an Options class, Environment), or null when it can't be built.
+     *
      * @template T of object
      * @param class-string<T> $class
      * @return T|null
@@ -385,16 +387,19 @@ class App
         }
     }
 
+    /** The Router attach() built; only valid after attach(). */
     public function getRouter(): Router
     {
         return $this->router;
     }
 
+    /** Whether attach() has run. */
     public function hasRouter(): bool
     {
         return isset($this->router);
     }
 
+    /** The app's service container. */
     public function getContainer(): Container
     {
         return $this->container;

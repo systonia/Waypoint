@@ -6,7 +6,7 @@ use Attribute;
 
 /**
  * Binds a route placeholder to a controller method parameter, e.g.
- * #[Get('/{customerId}')] + function bla(#[Param] string $customerId).
+ * `#[Get('/{customerId}')]` with `function show(#[Param] string $customerId)`.
  * By default the parameter name is matched against the placeholder name;
  * pass $name to bind to a differently-named placeholder.
  */
