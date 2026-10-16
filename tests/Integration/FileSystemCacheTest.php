@@ -5,7 +5,7 @@ namespace Waypoint\Tests\Integration;
 use RuntimeException;
 use Waypoint\{Waypoint, FileSystem, Router};
 use Waypoint\Options\{FileSystemOptions, RendererOptions};
-use Waypoint\Tests\Fixtures\Controllers\{CacheBaseController, CacheChildController, CacheRoutes, CustomersController, OrdersController};
+use Waypoint\Tests\Fixtures\Controllers\{AuthorizationController, CacheBaseController, CacheChildController, CacheRoutes, ClassAuthenticatedController, ClassRoleController, CustomersController, OrdersController};
 
 final class FileSystemCacheTest extends IntegrationTestCase
 {
@@ -202,6 +202,16 @@ final class FileSystemCacheTest extends IntegrationTestCase
             touch($file, $original);
             clearstatcache();
         }
+    }
+
+    public function testIsAvailableInvalidatesWhenTheControllerSetChangesWithinOneFile(): void
+    {
+        // All three controllers are declared in AuthorizationController.php
+        [$options, $fileSystem] = $this->fileSystem();
+        $this->router([AuthorizationController::class, ClassAuthenticatedController::class], [], $options);
+
+        $this->assertFalse($fileSystem->isAvailable([AuthorizationController::class]));
+        $this->assertFalse($fileSystem->isAvailable([AuthorizationController::class, ClassRoleController::class]));
     }
 
     public function testIsAvailableInvalidatesWhenTheControllerSetGrows(): void

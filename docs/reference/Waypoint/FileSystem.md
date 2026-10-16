@@ -99,8 +99,8 @@ The class list compiled into routes.php, or null without a cache.
 public function isAvailable(array $controllers, array $extraMeta = []): bool
 ```
 
-True if the cache exists and was built from exactly the current sources: every controller
-file (by mtime) plus $extraMeta (view .css/.js mtimes), no more and no fewer. A cache built
+True if the cache exists and was built from exactly the current sources: every controller class
+(by its file's mtime) plus $extraMeta (view .css/.js mtimes), no more and no fewer. A cache built
 for a larger controller set must not keep serving a removed controller's routes.
 
 **Parameters**

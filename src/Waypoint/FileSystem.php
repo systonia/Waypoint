@@ -77,8 +77,8 @@ final class FileSystem
     }
 
     /**
-     * True if the cache exists and was built from exactly the current sources: every controller
-     * file (by mtime) plus $extraMeta (view .css/.js mtimes), no more and no fewer. A cache built
+     * True if the cache exists and was built from exactly the current sources: every controller class
+     * (by its file's mtime) plus $extraMeta (view .css/.js mtimes), no more and no fewer. A cache built
      * for a larger controller set must not keep serving a removed controller's routes.
      *
      * @param class-string[] $controllers
@@ -111,7 +111,7 @@ final class FileSystem
     /**
      * Everything the compiled cache depends on: $extraMeta, the framework's own client bundle and sources (an update
      * may change what the cache holds), and the source file mtime of each controller, its base classes and their
-     * traits (their attributes are inherited), or null if a controller's file is gone.
+     * traits (their attributes are inherited) by class name, or null if a controller's file is gone.
      * @param class-string[] $controllers
      * @param array<string, int> $extraMeta
      * @return array<string, int>|null
@@ -150,7 +150,8 @@ final class FileSystem
                         return null;
                         // @codeCoverageIgnoreEnd
                     }
-                    $meta[$file] = $mtime;
+                    // By class, not file: several controllers in one file are each part of the set
+                    $meta[$source->getName()] = $mtime;
                 }
             }
         }

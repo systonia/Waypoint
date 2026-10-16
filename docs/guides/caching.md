@@ -34,7 +34,7 @@ A relative path is resolved against the directory of the front controller. The d
 - view `.css` and `.js` files,
 - the registered plugins and their hook classes, their client assets and their `cacheInputs()`,
 - Waypoint itself and `waypoint.js`,
-- the set of attached controllers and plugins.
+- the set of attached controllers and plugins, also when several of them are declared in one file.
 
 This is the right mode during development and a safe one in production: edits are picked up at once. It costs one reflection pass over the controllers and a stat call per source file at every start.
 
