@@ -206,12 +206,22 @@ class Router
     }
 
     /**
-     * Plugin cache inputs plus the source mtime of every plugin asset -- editing either rebuilds the cache.
+     * Plugin cache inputs plus the source mtime of every plugin asset, plugin and hook class -- editing either rebuilds
+     * the cache.
      * @return array<string, int>
      */
     private function pluginMeta(): array
     {
         $meta = $this->plugins->cacheInputs();
+        // The plans hold what the registered plugins compiled: adding, removing or updating one changes them
+        foreach ($this->plugins->all() as $plugin) {
+            foreach ([$plugin, ...$plugin->hooks()] as $object) {
+                $file = (new \ReflectionClass($object))->getFileName();
+                if ($file !== false) {
+                    $meta[$file] = filemtime($file) ?: 0;
+                }
+            }
+        }
         foreach ($this->plugins->hooks(ClientAsset::class) as $hook) {
             foreach ($hook->assets() as $source) {
                 $meta[$source] = filemtime($source) ?: 0;

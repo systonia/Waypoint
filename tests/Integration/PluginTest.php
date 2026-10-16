@@ -181,6 +181,34 @@ final class PluginTest extends IntegrationTestCase
     }
 
 
+    public function testAddingAPluginInvalidatesTheRouteCache(): void
+    {
+        $tempDir = sys_get_temp_dir() . '/waypoint-plugin-' . bin2hex(random_bytes(6));
+        $attach = function (array $plugins) use ($tempDir): void {
+            Waypoint::reset();
+            $app = Waypoint::create();
+            foreach ($plugins as $plugin) {
+                $app->plugin($plugin);
+            }
+            $app->configure(function (FileSystemOptions $fs) use ($tempDir) {
+                $fs->cacheDirectory = $tempDir;
+            });
+            $app->attach([CustomersController::class]);
+        };
+        try {
+            $attach([]);
+            $attach([new \Waypoint\Tests\Fixtures\Plugins\FallbackPlugin()]);
+            $meta = require "$tempDir/meta.php";
+            $this->assertArrayHasKey(realpath(__DIR__ . '/../Fixtures/Plugins/FallbackPlugin.php'), $meta);
+        } finally {
+            foreach (glob("$tempDir/{,assets/}*", GLOB_BRACE) ?: [] as $f) {
+                is_file($f) && unlink($f);
+            }
+            @rmdir("$tempDir/assets");
+            @rmdir($tempDir);
+        }
+    }
+
     public function testBootGetsWhatItsParametersAskFor(): void
     {
         $app = Waypoint::create();

@@ -1234,7 +1234,7 @@ declares what it adds and does nothing else:
 | `classes()` | Controllers and `#[Manager]` classes attached alongside the app's own. |
 | `middlewares()` | App-level middlewares, added at `attach()`. |
 | `boot(...)` | Optional; runs once at `attach()`: read its Options class, bind services. Each parameter gets what its type names: `boot(Container $container, I18nOptions $options)`. |
-| `cacheInputs()` | `{path => mtime}` of files whose change must rebuild the route cache. |
+| `cacheInputs()` | `{path => mtime}` of further files whose change must rebuild the route cache; the plugin's own class and its hooks' are watched already. |
 | `hooks()` | Objects implementing any of the hook interfaces below. |
 
 | Hook (`Waypoint\Plugin\...`) | When | Typical use |
@@ -1422,8 +1422,8 @@ The cache directory holds `routes.php` (route and task plans, the service list, 
 `attributes.php` (every controller attribute, for the OpenAPI generator), `meta.php` (the mtimes the
 cache was built from) and `assets/` (content-hashed view CSS/JS, `waypoint.js`, plugin assets). With
 `cacheValidate = true` the cache is rebuilt as soon as any controller file, base controller file or
-trait they use, view asset, plugin `cacheInputs()` entry, the client bundle or the framework itself changes, or a
-controller is added or removed; in trust mode
+trait they use, view asset, plugin class, hook class or `cacheInputs()` entry, the client bundle or the framework itself
+changes, or a controller or plugin is added or removed; in trust mode
 you clear the directory on deploy.
 
 **Also enable OPcache** (`opcache.enable=1`, and `opcache.enable_cli=1` if you're benchmarking or
