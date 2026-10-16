@@ -222,21 +222,23 @@ final class EnvironmentOptionsTest extends TestCase
         $this->assertNull($opts->get('ANYTHING'));
     }
 
-    /** @return array<string, array{string, string}> */
+    /** @return array<string, array{string, bool, string}> */
     public static function detectedEnvironments(): array
     {
         return [
-            'cli' => ['cli', 'development'],
-            'built-in server' => ['cli-server', 'development'],
-            'fpm' => ['fpm-fcgi', 'production'],
-            'frankenphp' => ['frankenphp', 'production'],
+            'cli' => ['cli', false, 'development'],
+            'built-in server' => ['cli-server', false, 'development'],
+            'tenma --watch' => ['tenma', true, 'development'],
+            'tenma' => ['tenma', false, 'production'],
+            'fpm' => ['fpm-fcgi', false, 'production'],
+            'frankenphp' => ['frankenphp', false, 'production'],
         ];
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('detectedEnvironments')]
-    public function testDetectsDevelopmentOnlyForTheCliAndTheBuiltInServer(string $sapi, string $expected): void
+    public function testDetectsDevelopmentOnlyForTheCliTheBuiltInServerAndTenmaWatch(string $sapi, bool $watch, string $expected): void
     {
-        $this->assertSame($expected, EnvironmentOptions::environmentFor($sapi));
+        $this->assertSame($expected, EnvironmentOptions::environmentFor($sapi, $watch));
     }
 
     public function testRequestHeadersAreNoEnvironment(): void

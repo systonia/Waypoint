@@ -121,16 +121,17 @@ class EnvironmentOptions
 
     private function detectEnvironment(): string
     {
-        return self::environmentFor(php_sapi_name() ?: '');
+        return self::environmentFor(php_sapi_name() ?: '', get_cfg_var('tenma.watch') === '1');
     }
 
     /**
-     * 'development' for the CLI and PHP's built-in server; every other server is 'production' until APP_ENV says
-     * otherwise. Never from the request: Apache and Caddy take SERVER_NAME from the client's Host header.
+     * 'development' for the CLI, PHP's built-in server and `tenma --watch`; every other server, Tenma without
+     * --watch included, is 'production' until APP_ENV says otherwise. Never from the request: Apache and Caddy
+     * take SERVER_NAME from the client's Host header.
      * @internal
      */
-    public static function environmentFor(string $sapi): string
+    public static function environmentFor(string $sapi, bool $watch = false): string
     {
-        return $sapi === 'cli' || $sapi === 'cli-server' ? 'development' : 'production';
+        return $sapi === 'cli' || $sapi === 'cli-server' || ($sapi === 'tenma' && $watch) ? 'development' : 'production';
     }
 }
