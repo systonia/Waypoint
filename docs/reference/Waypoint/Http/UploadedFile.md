@@ -1,6 +1,6 @@
 ---
 title: "UploadedFile"
-description: "A file from a multipart/form-data request, the same under FPM, Tenma and any PSR-7 server: `$req->file('avatar')?->moveTo($dir ."
+description: "A file from a multipart/form-data request, the same under FPM, Tenma and any PSR-7 server: `$req->file('avatar')?->moveTo($dir . '/' . bin2hex(random_bytes(8)))`."
 order: 100
 generated: true
 ---

@@ -14,5 +14,5 @@ generated: true
 - [`Response`](Response.md) · class: The outgoing response, built up by middleware/controllers.
 - [`ResultRenderer`](ResultRenderer.md) · final class: Writes a route's return value to the Response as JSON (default), a raw file/body (#[FileFormatter]) or XML (#[SimpleXmlFormatter]).
 - [`SecurityHeadersMiddleware`](SecurityHeadersMiddleware.md) · class: Fills in the standard security headers (SecurityHeaderOptions) in before(), so they are there on an error a later middleware throws too (after() would be skipped then); a controller or middleware setting one of them afterwards replaces it, and one set before is kept.
-- [`UploadedFile`](UploadedFile.md) · final class: A file from a multipart/form-data request, the same under FPM, Tenma and any PSR-7 server: `$req->file('avatar')?->moveTo($dir .
+- [`UploadedFile`](UploadedFile.md) · final class: A file from a multipart/form-data request, the same under FPM, Tenma and any PSR-7 server: `$req->file('avatar')?->moveTo($dir . '/' . bin2hex(random_bytes(8)))`.
 - [`View`](View.md) · class: A server-rendered template result: `return new View('Admin/Users', $model)` renders views/Admin/Users.php inside RendererOptions::$layout (unless $partial).
