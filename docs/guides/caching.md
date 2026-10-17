@@ -24,7 +24,7 @@ A relative path is resolved against the directory of the front controller. The d
 | `attributes.php` | every attribute of every controller, for the [OpenAPI](openapi.md) generator |
 | `meta.php` | modification times of the sources the cache was built from |
 | `assets/` | compiled view CSS and JS, `waypoint.js` and plugin assets, named by content hash |
-| `views/` | compiled view templates (`<?= ?>` escaping added), rebuilt when a template changes |
+| `views/` | compiled view templates (directives as PHP, escaping added), rebuilt when a template changes |
 
 ## Validate mode
 

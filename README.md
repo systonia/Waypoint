@@ -738,9 +738,9 @@ token.
 
 Inside a view template, `$this->csrf` renders the classic no-JS `<form>` half of that pattern:
 
-```php
+```html
 <form method="post">
-    <?= $this->csrf->field() ?>  <!-- hidden input -->
+    {{ $this->csrf->field() }}  <!-- hidden input -->
 </form>
 ```
 
@@ -907,17 +907,45 @@ explicit `.php` name, or no layout is applied and every render falls back to the
 Inside a view/layout `.php` file, `$model` is whatever was passed to `View`'s constructor (commonly an
 array, e.g. `$model['product']`), and `$this` is the `View` instance itself.
 
-`<?= $value ?>` is HTML-escaped. Markup goes out as it is only as a `Waypoint\Html` value
-(`<?= new Html($trusted) ?>`) or through `<?php echo $markup ?>`; the layout's `$content`, `section()`,
+A view is PHP with a few directives on top:
+
+```html
+@use (App\Status)
+@model (App\Models\ProductPage)
+@section('title'){{ $model->product->name }}@endsection
+
+<h1>{{ $model->product->name }}</h1>
+@foreach ($model->product->tags as $tag)
+    <span @class.new="$tag->isNew()">{{ $tag->label }}</span>
+@endforeach
+@if ($model->status === Status::SoldOut)
+    <p>Sold out</p>
+@endif
+```
+
+and its layout places the sections and the page: `<title>@yield('title')</title>`, `<main>{{ $content }}</main>`.
+
+`{{ $value }}` and `<?= $value ?>` are HTML-escaped. Markup goes out as it is only as a `Waypoint\Html` value
+(`{{ new Html($trusted) }}`) or through `<?php echo $markup ?>`; the layout's `$content`, `@yield`, `section()`,
 `assetTags()`, `scopeAttribute()`, `waypointJsTag()`, `pluginAssetTags()` and `$this->csrf->field()` return
-`Html` already. Printing an array throws a `TypeError`. With a cache directory the compiled templates are
-files under `{cacheDirectory}/views/`, so OPcache keeps them.
+`Html` already. Printing an array throws a `TypeError`. `@if`/`@elseif`/`@else`/`@endif`, `@foreach`,
+`@code ... @endcode`, `@use (Class)`, `@class.name="$cond"`, `{{/* comments */}}` and `@@` work as in Live
+templates; plain PHP keeps working. `@model (Type)` names the type of `$model` for PHPStan and the editor, and
+in development a model of another type is a `TypeError`. A mistake in the syntax keeps the view from rendering,
+with its line, and an error while it renders keeps the view's file and line (`View::origin()`, the error log).
+With a cache directory the compiled templates are files under `{cacheDirectory}/views/`, so OPcache keeps them.
+
+`vendor/bin/waypoint-check` checks every view without running the app: the compiler's mistakes, and PHPStan's
+findings with `$this` as the `View` and `$model` of its `@model` type, at the view's lines. Under `tenma lsp`
+the editor knows the views too (completion of `$this->` and `$model->`, F12, the mistakes while typing). See
+[Views](docs/guides/views.md) for the full syntax.
 
 
 - `$this->request` (read-only), `$this->env` and `$this->csrf`: the request being answered, the
   `Environment` and the CSRF helper.
-- `$this->startSection('name')` / `$this->endSection()` / `$this->section('name', required: false)`:
-  named content blocks a layout pulls in, e.g. for per-page `<head>` scripts.
+- `@section('name')` ... `@endsection` / `@yield('name')`, the same as `$this->startSection('name')` /
+  `$this->endSection()` / `$this->section('name', required: false)`: named content blocks a layout pulls in,
+  e.g. for per-page `<head>` scripts.
 - `$this->assetTags()` / `$this->layoutAssetTags()`: `<link>`/`<script>` tags for the current view's own
   sibling `.css`/`.js` (`ProductDetail.css` next to `ProductDetail.php`), and for the layout's own, if
   either has one.
@@ -929,7 +957,7 @@ files under `{cacheDirectory}/views/`, so OPcache keeps them.
 The client half, `waypoint.js` (automatic CSRF headers, `wp-onclick`/`wp-onsubmit` handlers and
 directives for plugin scripts), ships inside the package and is compiled into the same asset pipeline as view CSS/JS: served at
 `{assetsPath}/waypoint.{hash}.js` with immutable caching, rebuilt when the framework is upgraded. The
-layout emits the tag with `<?= $this->waypointJsTag() ?>`; when `CsrfOptions` was changed from its
+layout emits the tag with `{{ $this->waypointJsTag() }}`; when `CsrfOptions` was changed from its
 defaults the tag also carries `data-csrf-cookie`/`data-csrf-header` for the client, so nothing is
 duplicated in the template.
 
@@ -1321,7 +1349,7 @@ declares what it adds and does nothing else:
 | `ArgumentBinder` | Own parameter attributes/types for controller methods, asked after the core attributes and before the implicit scalar binding. | `#[File]`, a table request. |
 | `Renderer` | Own return types, asked after `View`/`Redirect`. | Exports, PDFs. |
 | `OpenApiExtension` | Describes the plugin's bound parameters and rendered return types for the spec; without it they show as `string`/`object`. | `text/csv` for an export. |
-| `ViewHelper` | Methods templates can call as `$this->name()`; markup comes back as `Waypoint\Html`, or `<?= ?>` escapes it. | `$this->t('key')`. |
+| `ViewHelper` | Methods templates can call as `$this->name()`; markup comes back as `Waypoint\Html`, or `{{ }}` escapes it. | `$this->t('key')`. |
 | `ClientAsset` | CSS/JS files shipped by the plugin, served content-hashed; render with `$this->pluginAssetTags()`. | A table component. |
 
 State that belongs to one request (a locale, a user, queued messages) lives in a `Waypoint\Support\FiberLocal`,

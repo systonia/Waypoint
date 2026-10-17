@@ -17,7 +17,7 @@ Building apps:
 - [Middleware](middleware.md): `MiddlewareBase`, app-wide and route middleware, security headers, CORS
 - [Authentication](authentication.md): JWTs, cookie sign-in, CSRF, `#[Authenticated]`, `#[Role]`, `#[Permissions]`
 - [Proxies](proxies.md): trusted proxies, client address and HTTPS
-- [Views](views.md): templates, layouts, sections, scoped CSS and JS, forms, `waypoint.js`, static files
+- [Views](views.md): templates and their syntax, layouts, sections, `@model`, the check, scoped CSS and JS, forms, `waypoint.js`, static files
 - [Logging](logging.md): PSR-3 loggers, Monolog, request ids, redaction
 - [OpenAPI](openapi.md): the generated document and Swagger UI
 - [CLI tasks](cli-tasks.md): `#[Manager]` and `#[Task]`

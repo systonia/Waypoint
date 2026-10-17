@@ -15,8 +15,9 @@ A server-rendered template result: `return new View('Admin/Users', $model)`
 renders views/Admin/Users.php inside RendererOptions::$layout (unless
 $partial). Inside a template `$this` is this View and `$model` the model;
 `$this->env`/`$this->csrf`/`$this->request` are set by Router before render().
-`<?= $value ?>` is HTML-escaped; Waypoint\Html (what section(), assetTags() and
-the like return) and `<?php echo ?>` print as they are.
+`{{ $value }}` and `<?= $value ?>` are HTML-escaped; Waypoint\Html (what section(),
+assetTags() and the like return) and `<?php echo ?>` print as they are. The
+template syntax (`@if`, `@foreach`, `@section`, `@model`, ...) is Compiler's.
 
 ## Properties
 
@@ -404,6 +405,21 @@ opened (its own and any unfinished section) is discarded: the half-rendered page
 end up in the error response nor stay open in a persistent worker for the next request.
 
 **Returns** `string`
+
+### origin()
+
+```php
+public static function origin(\Throwable $e): ?array
+```
+
+The view file and line an error of a render came from: where it was thrown, or where the view called what
+threw it. The compiler keeps the lines, so they are the view's. For the developer: logs, the editor.
+
+**Parameters**
+
+- `$e` [`Throwable`](https://www.php.net/manual/en/class.throwable.php)
+
+**Returns** `array{string, int}|null`
 
 ### escape()
 

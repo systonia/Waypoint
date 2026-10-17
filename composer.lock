@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "fc21ad4f5c599d8293e9d05def173337",
+    "content-hash": "78a04e4ee69b13fc609962b6dbe5dbb5",
     "packages": [
         {
             "name": "psr/container",
@@ -2436,16 +2436,16 @@
         },
         {
             "name": "tenma/stubs",
-            "version": "0.1.1",
+            "version": "0.1.16",
             "source": {
                 "type": "git",
                 "url": "https://github.com/systonia/Tenma-Stubs.git",
-                "reference": "b7376695930d73e266c0d4681f3d783040600c38"
+                "reference": "5ceb97ffe9f190b2dbffa9807c97153c18c2bfda"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/systonia/Tenma-Stubs/zipball/b7376695930d73e266c0d4681f3d783040600c38",
-                "reference": "b7376695930d73e266c0d4681f3d783040600c38",
+                "url": "https://api.github.com/repos/systonia/Tenma-Stubs/zipball/5ceb97ffe9f190b2dbffa9807c97153c18c2bfda",
+                "reference": "5ceb97ffe9f190b2dbffa9807c97153c18c2bfda",
                 "shasum": ""
             },
             "require": {
@@ -2461,7 +2461,8 @@
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
-                "MIT"
+                "MIT",
+                "Apache-2.0"
             ],
             "authors": [
                 {
@@ -2483,7 +2484,7 @@
                 "issues": "https://github.com/systonia/Tenma-Stubs/issues",
                 "source": "https://github.com/systonia/Tenma-Stubs"
             },
-            "time": "2026-10-11T17:23:40+00:00"
+            "time": "2026-10-17T01:21:57+00:00"
         },
         {
             "name": "theseer/tokenizer",

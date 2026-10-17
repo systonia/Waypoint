@@ -9,7 +9,7 @@ use ReflectionFunction;
 use ReflectionNamedType;
 use Throwable;
 use Waypoint\Exceptions\{HttpException, UnauthorizedException};
-use Waypoint\Http\{Request, Response, TrustedProxies};
+use Waypoint\Http\{Request, Response, TrustedProxies, View};
 use Waypoint\Options\{CompressionOptions, CorsOptions, CsrfOptions, FileSystemOptions, JWTOptions, ProxyOptions};
 use Waypoint\Plugin\{Plugin, PluginRegistry};
 use Waypoint\Routing\{PropertyInjector, ServiceDiscovery};
@@ -331,7 +331,9 @@ class App
         // Anything else: logged, and a generic 500 that never leaks the message (a file path,
         // a query, a driver error), not even in development. Override via useExceptionHandler().
         $this->useExceptionHandler(Throwable::class, function (Throwable $e, Request $req, Response $res): void {
-            $this->container->get(Logger::class)->error($e->getMessage(), ['exception' => $e]);
+            // An error in a view names the view's own file and line, which its compiled code keeps
+            $view = View::origin($e);
+            $this->container->get(Logger::class)->error($e->getMessage(), ['exception' => $e] + ($view !== null ? ['view' => "{$view[0]}:{$view[1]}"] : []));
             $this->writeProblemDetails($res, 500, ['type' => 'about:blank', 'title' => 'Internal Server Error', 'status' => 500]);
         });
     }

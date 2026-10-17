@@ -1,6 +1,6 @@
 ---
 title: "Waypoint"
-description: "The classes, interfaces, traits and enums in Waypoint."
+description: "The classes, interfaces, traits, enums and functions in Waypoint."
 order: 200
 generated: true
 ---
@@ -20,6 +20,7 @@ generated: true
 - [`Waypoint\Tenma`](Tenma/index.md)
 - [`Waypoint\Testing`](Testing/index.md)
 - [`Waypoint\Validation`](Validation/index.md)
+- [`Waypoint\View`](View/index.md)
 
 ## Types
 
@@ -39,3 +40,24 @@ generated: true
 - [`Validator`](Validator.md) · class: Validates a DTO's public properties against #[NotBlank]/#[Email]/#[Length]/ #[Regex], #[OneOf], #[SameAs].
 - [`ViewAssets`](ViewAssets.md) · final class: Discovers each view's sibling .css/.js (Home.php -> Home.css/Home.js, any depth under the views directory), scopes the CSS to that view with a `[data-view="Name"]` nesting wrapper, and content-hashes the result into cache-busted filenames.
 - [`Waypoint`](Waypoint.md) · class: Process-wide access to the single App: create()/getInstance()/reset(), plus getConfig() for any Options class.
+
+## Functions
+
+### classes()
+
+```php
+function classes(array|string ...$parts): string
+```
+
+CSS classes from strings and conditions, for a `class` attribute: a string is always added, and so is a value
+under an integer key of an array; a string key is added when its value is truthy. A string or key may hold
+several classes. Each class comes once, in order, joined by one space. Every view and template can call it
+without an import:
+
+    <li class="{{ classes('row', ['late' => $order->late, 'bg-green-100 font-bold' => $order->isReady()]) }}">
+
+**Parameters**
+
+- `...$parts` `string|array<array-key, mixed>`
+
+**Returns** `string`

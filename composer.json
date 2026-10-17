@@ -33,7 +33,10 @@
   "autoload": {
     "psr-4": {
       "Waypoint\\": "src/Waypoint/"
-    }
+    },
+    "files": [
+      "src/Waypoint/classes.php"
+    ]
   },
   "autoload-dev": {
     "psr-4": {
@@ -54,14 +57,20 @@
     "phpstan/phpstan": "^2.2",
     "phpunit/phpunit": "^13.3",
     "tenma/psr": "^0.1.1",
-    "tenma/stubs": "^0.1.1"
+    "tenma/stubs": "^0.1.16"
   },
   "suggest": {
     "monolog/monolog": "Powerful logging with handlers, channels, and JSON output.",
     "phpunit/phpunit": "Required by the Waypoint\\Testing kit for app and plugin tests.",
     "tenma/psr": "Response::upgrade() through the PSR-15 handler under Tenma"
   },
+  "bin": [
+    "bin/waypoint-check"
+  ],
   "extra": {
+    "tenma": {
+      "lsp": "Waypoint\\View\\Editor"
+    },
     "phpstan": {
       "includes": [
         "extension.neon"

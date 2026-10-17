@@ -327,4 +327,50 @@ final class ViewTest extends TestCase
         $this->assertSame('', (string) $view->layoutAssetTags());
         $this->assertSame('', (string) $view->layoutScopeAttribute());
     }
+
+    public function testDirectivesRenderInAViewAndItsLayout(): void
+    {
+        $this->configureRenderer('_Directives.php');
+        $view = new View('Directives', ['title' => 'A & B', 'items' => ['a', '<b>'], 'html' => '<hr>']);
+
+        $this->assertSame(
+            "<title>A &amp; B</title>\n<main><ul>\n    <li class=\"first\">a</li>\n    <li class=\"\">&lt;b&gt;</li>\n</ul>\n<hr>\n</main>\n",
+            $view->render()
+        );
+    }
+
+    public function testAModelOfAnotherTypeThanModelSaysIsATypeErrorInDevelopment(): void
+    {
+        $this->configureRenderer();
+        $this->assertSame("<p><b></p>\n", (new View('Typed', new Html('<b>'), partial: true))->render());
+
+        $this->expectException(\TypeError::class);
+        $this->expectExceptionMessage('@model (Waypoint\Html): the model is string');
+        (new View('Typed', '<b>', partial: true))->render();
+    }
+
+    public function testAnErrorInAViewNamesTheViewAndItsLine(): void
+    {
+        $this->configureRenderer();
+        $file = realpath(__DIR__ . '/../../Fixtures/Views') . '/Failing.php';
+        try {
+            (new View('Failing', [], partial: true))->render();
+            $this->fail('No error');
+        } catch (\Error $e) {
+            [$origin, $line] = View::origin($e) ?? ['', 0];
+            $this->assertSame([$file, 2], [realpath($origin), $line]);
+        }
+    }
+
+    public function testAViewWithAnErrorInItsSyntaxDoesNotRender(): void
+    {
+        $this->configureRenderer();
+        try {
+            (new View('Unclosed', true, partial: true))->render();
+            $this->fail('No error');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringEndsWith("Unclosed.php', line 2: @if has no @endif", $e->getMessage());
+            $this->assertSame(2, View::origin($e)[1] ?? null);
+        }
+    }
 }

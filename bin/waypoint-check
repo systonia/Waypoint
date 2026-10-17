@@ -1,0 +1,10 @@
+#!/usr/bin/env php
+<?php
+
+// The project's views, and the templates of packages that add theirs, checked without running the app:
+// vendor/bin/waypoint-check [directory]
+
+$root = realpath($argv[1] ?? getcwd()) ?: getcwd();
+require "$root/vendor/autoload.php";
+
+exit(Waypoint\View\Check::main($argv));

@@ -40,7 +40,7 @@ Waypoint's defaults are chosen to fail closed: a missing secret stops the app in
 
 ## What the app does
 
-- **Keep markup in `Html`.** Views escape what `<?= ?>` prints; only a `Waypoint\Html` value or `<?php echo ?>` goes out unescaped. Never wrap a value from the model, the request or the database in `Html`.
+- **Keep markup in `Html`.** Views escape what `{{ }}` and `<?= ?>` print; only a `Waypoint\Html` value or `<?php echo ?>` goes out unescaped. Never wrap a value from the model, the request or the database in `Html`.
 - **Keep secrets out of the repository.** Read them from [`Environment`](application.md#environment-and-env-files): `.env` and `config.local.json` belong in `.gitignore`.
 - **Serve over HTTPS.** Cookies (`withCookie()`, the CSRF cookie) get `Secure` when the request came over HTTPS; behind a proxy that ends TLS, list it in `ProxyOptions` so `$req->https` is right, or set `secure: true` and `CsrfOptions::$cookieSecure = true` yourself.
 - **Check redirect targets.** Never redirect to a URL from the request without checking it against your own paths.

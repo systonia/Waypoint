@@ -127,13 +127,13 @@ final class SessionController
 
 The template carries the CSRF field (see [below](#csrf-protection)):
 
-```php
-<?php /** views/Login.php */ ?>
+```html
+{{/* views/Login.php */}}
 <form method="post" action="/login">
-    <?= $this->csrf->field() ?>
-    <?php if ($model['error'] !== null): ?>
-        <p class="error"><?= $model['error'] ?></p>
-    <?php endif ?>
+    {{ $this->csrf->field() }}
+    @if ($model['error'] !== null)
+        <p class="error">{{ $model['error'] }}</p>
+    @endif
     <label>Email <input type="email" name="email" required></label>
     <label>Password <input type="password" name="password" required></label>
     <button>Sign in</button>
@@ -263,7 +263,7 @@ A cross-site request forgery is a page on another site that makes the browser se
 It is on as soon as `CsrfOptions::$secret` is set. Then every `POST`, `PUT`, `PATCH` and `DELETE` request must carry the token, on every route without `#[SkipCsrf]`; there is no middleware to add. A missing, wrong or expired token answers `403`.
 
 - **Issued**: every response that renders a `View` sets the token cookie (`csrf_token`), or keeps a still-valid one.
-- **Forms**: `<?= $this->csrf->field() ?>` in the template writes a hidden `_csrf` field.
+- **Forms**: `{{ $this->csrf->field() }}` in the template writes a hidden `_csrf` field.
 - **`fetch()`**: a page that loads `waypoint.js` (`<?= $this->waypointJsTag() ?>` in the layout, see [Views](views.md#waypointjs)) adds the `X-CSRF-Token` header to every same-origin `POST`, `PUT`, `PATCH` and `DELETE` on its own. Without it, read the cookie and send the header yourself.
 - **Bound to the session**: with `JWTOptions::$cookieName` set, a token is signed for the session cookie it was issued with, so a token from one session doesn't work in another. A response that signs in or out gets a fresh token with it.
 

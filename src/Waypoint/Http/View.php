@@ -3,21 +3,26 @@
 namespace Waypoint\Http;
 
 use BadMethodCallException;
+use Closure;
 use InvalidArgumentException;
 use RuntimeException;
 use Stringable;
+use Throwable;
 use TypeError;
+use WeakMap;
 use Waypoint\{Csrf, Environment, Html, Waypoint};
 use Waypoint\Attributes\Inject;
-use Waypoint\Options\{FileSystemOptions, RendererOptions};
+use Waypoint\Options\{EnvironmentOptions, FileSystemOptions, RendererOptions};
+use Waypoint\View\Compiler;
 
 /**
  * A server-rendered template result: `return new View('Admin/Users', $model)`
  * renders views/Admin/Users.php inside RendererOptions::$layout (unless
  * $partial). Inside a template `$this` is this View and `$model` the model;
  * `$this->env`/`$this->csrf`/`$this->request` are set by Router before render().
- * `<?= $value ?>` is HTML-escaped; Waypoint\Html (what section(), assetTags() and
- * the like return) and `<?php echo ?>` print as they are.
+ * `{{ $value }}` and `<?= $value ?>` are HTML-escaped; Waypoint\Html (what section(),
+ * assetTags() and the like return) and `<?php echo ?>` print as they are. The
+ * template syntax (`@if`, `@foreach`, `@section`, `@model`, ...) is Compiler's.
  */
 class View
 {
@@ -73,6 +78,9 @@ class View
 
     /** @var array<string, array{int, string}> template path => its mtime and compiled code, without a cache directory */
     private static array $compiled = [];
+
+    /** @var WeakMap<Throwable, array{string, int}>|null The view and line an error came from */
+    private static ?WeakMap $origins = null;
 
     /**
      * @param string $view Path under RendererOptions::$directory without .php, '/'-separated ("Admin/Users").
@@ -320,14 +328,63 @@ class View
     {
         [$compiledFile, $code] = self::compiled($file);
         ob_start();
-        if ($compiledFile !== null) {
-            include $compiledFile;
-        } else {
-            eval('?>' . $code);
+        try {
+            if ($compiledFile !== null) {
+                include $compiledFile;
+            } else {
+                eval('?>' . $code);
+            }
+        } catch (Throwable $e) {
+            // The innermost view keeps it: a view a helper renders runs inside another
+            // Evaluated, the code's file is this one's with the line of the eval: View.php(326) : eval()'d code
+            $line = self::lineIn($e, $compiledFile ?? __FILE__ . '(');
+            self::$origins ??= new WeakMap();
+            if ($line !== null && !isset(self::$origins[$e])) {
+                self::$origins[$e] = [$file, $line];
+            }
+            throw $e;
         }
         // @codeCoverageIgnoreStart
         return ob_get_clean() ?: '';
         // @codeCoverageIgnoreEnd
+    }
+
+    /**
+     * The view file and line an error of a render came from: where it was thrown, or where the view called what
+     * threw it. The compiler keeps the lines, so they are the view's. For the developer: logs, the editor.
+     *
+     * @return array{string, int}|null
+     */
+    public static function origin(Throwable $e): ?array
+    {
+        return self::$origins[$e] ?? null;
+    }
+
+    /** The line of the compiled view (the file, or what it starts with) $e was thrown in or passed through, or null. */
+    private static function lineIn(Throwable $e, string $compiled): ?int
+    {
+        if (str_starts_with($e->getFile(), $compiled)) {
+            return $e->getLine();
+        }
+        foreach ($e->getTrace() as $frame) {
+            if (str_starts_with($frame['file'] ?? '', $compiled)) {
+                return $frame['line'] ?? null;
+            }
+        }
+        return null;
+    }
+
+    /** @internal What `@model (Type)` runs: in development a model of another type is a TypeError. */
+    protected function assertModel(Closure $check, string $type): void
+    {
+        if (!Waypoint::getConfig(EnvironmentOptions::class)->isDev()) {
+            return;
+        }
+        try {
+            $check($this->model);
+        } catch (TypeError) {
+            throw new TypeError("@model ($type): the model is " . get_debug_type($this->model));
+        }
     }
 
     /**
@@ -346,7 +403,7 @@ class View
             return [null, self::$compiled[$file][1]];
         }
         $directory = $fileSystem->getCacheDirectory() . '/views';
-        $compiled = $directory . '/' . md5($file . '|' . filemtime(__FILE__)) . '.php';
+        $compiled = $directory . '/' . md5($file . '|' . filemtime(__FILE__) . '|' . filemtime(self::compilerFile())) . '.php';
         if (!is_file($compiled) || filemtime($compiled) < $modified) {
             if (!is_dir($directory)) {
                 @mkdir($directory, 0775, true);
@@ -362,11 +419,48 @@ class View
         return [$compiled, ''];
     }
 
+    private static function compilerFile(): string
+    {
+        return (string) (new \ReflectionClass(Compiler::class))->getFileName();
+    }
+
     /**
-     * @internal A template as the PHP that runs: every `<?= expr ?>` becomes `<?= View::escape(expr) ?>`, and
-     * `__FILE__`/`__DIR__` keep naming the template itself. Every line stays where it is.
+     * @internal A template as the PHP that runs: its directives as PHP (Compiler), every `<?= expr ?>` as
+     * `<?= View::escape(expr) ?>`, `__FILE__`/`__DIR__` naming the template itself, and on its first line the
+     * imports of its `@use` and of `classes()`, then $first. Every line stays where it is. A template with an
+     * error in its syntax throws an InvalidArgumentException with the line.
      */
-    public static function compile(string $source, string $file): string
+    public static function compile(string $source, string $file, string $first = ''): string
+    {
+        $compiler = new Compiler($source);
+        foreach ($compiler->problems as $problem) {
+            if ($problem['severity'] === 'error') {
+                $error = new InvalidArgumentException("View '$file', line {$problem['line']}: {$problem['message']}");
+                self::$origins ??= new WeakMap();
+                self::$origins[$error] = [$file, $problem['line']];
+                throw $error;
+            }
+        }
+        return '<?php ' . Compiler::header('', self::imports($compiler->uses)) . $first . '?>' . self::escapeEchoes($compiler->compile(), $file);
+    }
+
+    /**
+     * @internal The imports of a view: its `@use`, and `classes()`.
+     *
+     * @param array<string, string> $uses
+     * @return list<array{string, string, string}>
+     */
+    public static function imports(array $uses): array
+    {
+        $imports = [['function', 'Waypoint\\classes', 'classes']];
+        foreach ($uses as $alias => $name) {
+            $imports[] = ['class', $name, $alias];
+        }
+        return $imports;
+    }
+
+    /** Every `<?= expr ?>` as `<?= View::escape(expr) ?>`, `__FILE__` and `__DIR__` as the template's. */
+    private static function escapeEchoes(string $source, string $file): string
     {
         $code = '';
         $open = false;

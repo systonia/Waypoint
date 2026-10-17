@@ -60,7 +60,7 @@ Registering the same plugin twice, two plugins with the same name, or a plugin b
 | [`ArgumentBinder`](../reference/Waypoint/Plugin/ArgumentBinder.md) | binds controller parameters with the plugin's own attribute or type, after the core attributes | `#[File]`, a table request |
 | [`Renderer`](../reference/Waypoint/Plugin/Renderer.md) | renders the plugin's own return types, after `View` and `Redirect` | exports, PDFs, charts |
 | [`OpenApiExtension`](../reference/Waypoint/Plugin/OpenApiExtension.md) | describes the plugin's parameters and return types in the [OpenAPI](openapi.md) document | `text/csv` for an export |
-| [`ViewHelper`](../reference/Waypoint/Plugin/ViewHelper.md) | functions templates call as `$this->name()`; one that returns markup returns a `Waypoint\Html`, or `<?= ?>` escapes it | `$this->t('key')` |
+| [`ViewHelper`](../reference/Waypoint/Plugin/ViewHelper.md) | functions templates call as `$this->name()`; one that returns markup returns a `Waypoint\Html`, or `{{ }}` escapes it | `$this->t('key')` |
 | [`ClientAsset`](../reference/Waypoint/Plugin/ClientAsset.md) | CSS and JS files, served content-hashed; rendered by `$this->pluginAssetTags()` | a component's script |
 
 An `Endpoint` or `Fallback` that changes state or shows private data checks the request itself: `#[Authenticated]` and CSRF don't apply there. A plugin script loaded through `ClientAsset` runs after `waypoint.js` and can add its own `wp-*` attributes with `Waypoint.directive()`. Two plugins offering a view helper of the same name are a boot error.
