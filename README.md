@@ -542,7 +542,8 @@ Notes:
 
 PHPStan would report an `#[Inject]` property as only read, since the container writes it: the package's
 `extension.neon` counts such properties as written and initialized (loaded by phpstan/extension-installer, or
-add `vendor/systonia/waypoint/extension.neon` to `includes`).
+add `vendor/systonia/waypoint/extension.neon` to `includes`). It also takes `#[Returns]` and `#[ListOf]` as an
+array's element type, so PHPStan asks for no `@return` or `@var` docblock next to them.
 
 Outside controllers and services (the front controller, a script), `$app->get(Service::class)` returns the
 container's instance and throws `ServiceNotFoundException` when it can't be built; `$app->find(Service::class)`

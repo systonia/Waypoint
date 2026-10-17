@@ -70,6 +70,7 @@ Each DTO becomes a component schema named after its short class name (a second c
 - A nullable property allows `null`: `"type": ["string", "null"]`, or `anyOf` with `{"type": "null"}` next to a `$ref`.
 - A property is `required` when it has neither a default nor a nullable type, the same rule `FromArray` applies.
 - An `array` property with `#[ListOf(Item::class)]` gets `items`, one with `#[ListOf(type: Item::class, map: true)]` gets `additionalProperties`. Without it the array has no `items`.
+- PHPStan, with Waypoint's `extension.neon`, takes `#[Returns]` and `#[ListOf]` as the element type and asks for no docblock next to them.
 - A property with `#[Ignore]` is left out, as it is from the JSON the route answers with.
 - A property the request cannot set (`readonly`, `protected(set)`, `private(set)`) is `readOnly`.
 - `errors` and `isValid` from `FromArray` are left out.

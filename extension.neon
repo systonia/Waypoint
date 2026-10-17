@@ -1,7 +1,12 @@
-# #[Inject] properties count as written and initialized: the container fills them. Included automatically with
+# #[Inject] properties count as written and initialized: the container fills them. #[Returns] and #[ListOf] name
+# an array's element type, so PHPStan asks for no docblock with it. Included automatically with
 # phpstan/extension-installer, otherwise add vendor/systonia/waypoint/extension.neon to "includes".
 services:
     -
         class: Waypoint\PHPStan\InjectedProperties
         tags:
             - phpstan.properties.readWriteExtension
+    -
+        class: Waypoint\PHPStan\AttributeTypes
+        tags:
+            - phpstan.ignoreErrorExtension
