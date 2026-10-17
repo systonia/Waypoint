@@ -88,6 +88,7 @@ through your app or plugin from PHPUnit.
 - [CLI Tasks](#cli-tasks)
 - [Plugins](#plugins)
 - [Testing](#testing)
+- [Types and PHPStan](#types-and-phpstan)
 - [Environment Variables](#environment-variables)
 - [Route/DI Compilation Caching & Production Performance](#routedi-compilation-caching--production-performance)
 - [Options Reference](#options-reference)
@@ -542,8 +543,8 @@ Notes:
 
 PHPStan would report an `#[Inject]` property as only read, since the container writes it: the package's
 `extension.neon` counts such properties as written and initialized (loaded by phpstan/extension-installer, or
-add `vendor/systonia/waypoint/extension.neon` to `includes`). It also takes `#[Returns]` and `#[ListOf]` as an
-array's element type, so PHPStan asks for no `@return` or `@var` docblock next to them.
+add `vendor/systonia/waypoint/extension.neon` to `includes`). It also reads `#[Returns]` and `#[ListOf]` as types
+(see [Types and PHPStan](#types-and-phpstan)).
 
 Outside controllers and services (the front controller, a script), `$app->get(Service::class)` returns the
 container's instance and throws `ServiceNotFoundException` when it can't be built; `$app->find(Service::class)`
@@ -1392,6 +1393,37 @@ final class LoginTest extends TestCase
 The framework's own suite and every plugin run on this kit.
 
 ---
+
+## Types and PHPStan
+
+Every fact about a type is written once. Native types first: an array shape becomes a small readonly class. An
+array Waypoint sees (a DTO property, a route result) is typed by its attribute only, `#[ListOf]` or `#[Returns]`, with
+no docblock; an array Waypoint does not see (a repository result) by its PHPDoc type only (`@return list<Order>`).
+
+The package's `extension.neon` turns the attributes into real types: reading a `#[ListOf(OrderLine::class)]`
+property gives `list<OrderLine>`, calling a `#[Returns(type: Product::class, list: true)]` method `list<Product>`
+(nullable when the native type is). What is returned from a `#[Returns]` method or assigned to a `#[ListOf]`
+property (also as a constructor argument of a promoted parameter) must fit: errors `waypoint.returns` and
+`waypoint.listOf`.
+
+Database rows and decoded JSON are `mixed`. `Waypoint\Support\Row` reads them with typed getters instead of casts
+or `...$row` spreading, and throws an `UnexpectedValueException` naming the key and the type found:
+
+```php
+use Waypoint\Support\Row;
+
+$row = new Row($this->db->first('SELECT id, status, lines FROM orders WHERE id = $1', [$id]));
+$order = new Order(
+    id: $row->int('id'),
+    status: $row->enum('status', OrderStatus::class),
+    lines: array_map(OrderLine::of(...), $row->rows('lines')),
+);
+$tags = Row::of($response->json())->list('tags', 'string');   // list<string>
+```
+
+The getters are `int`, `string`, `float` (also an int or numeric string, as Postgres sends `numeric`), `bool`,
+`enum`, their `nullable` variants (null for a null value or a missing key), `row`, `rows`, `list`, `map` and `has`;
+`Row::of()` and `Row::each()` take decoded JSON. More in the guide [Types and PHPStan](docs/guides/types.md).
 
 ## Environment Variables
 

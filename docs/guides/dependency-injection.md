@@ -200,7 +200,7 @@ includes:
     - vendor/systonia/waypoint/extension.neon
 ```
 
-The same extension takes `#[Returns]` on a method and `#[ListOf]` on a property or constructor parameter as the array's element type: PHPStan reports no missing iterable value type there, so no docblock repeats the attribute.
+The same extension takes `#[Returns]` on a method and `#[ListOf]` on a property or constructor parameter as the array's element type: PHPStan reports no missing iterable value type there, so no docblock repeats the attribute. It also reads the attribute's type and checks what goes in: see [Types and PHPStan](types.md).
 
 ## Outside controllers
 

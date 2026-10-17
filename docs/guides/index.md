@@ -22,6 +22,7 @@ Building apps:
 - [OpenAPI](openapi.md): the generated document and Swagger UI
 - [CLI tasks](cli-tasks.md): `#[Manager]` and `#[Task]`
 - [Plugins](plugins.md): using plugins and writing one
+- [Types and PHPStan](types.md): one place per type, the PHPStan extension, `Row` for database rows and JSON
 
 Running:
 
