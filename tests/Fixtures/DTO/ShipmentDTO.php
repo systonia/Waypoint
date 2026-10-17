@@ -2,6 +2,7 @@
 
 namespace Waypoint\Tests\Fixtures\DTO;
 
+use Waypoint\Attributes\ListOf;
 use Waypoint\FromArray;
 use Waypoint\Tests\Fixtures\Enums\{OrderStatus, Priority};
 
@@ -15,13 +16,16 @@ class ShipmentDTO
     public CityDTO $to;
     public ?CityDTO $via = null;
 
-    /** @var list<CityDTO> */
+    #[ListOf(CityDTO::class)]
     public array $stops = [];
 
-    /** @var Priority[] */
+    #[ListOf(Priority::class)]
     public array $levels = [];
 
-    /** @var array<string, int> */
+    #[ListOf(
+        type: 'int',
+        map: true
+    )]
     public array $weights = [];
 
     public private(set) int $id = 0;

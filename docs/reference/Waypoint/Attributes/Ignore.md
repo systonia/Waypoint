@@ -1,6 +1,6 @@
 ---
 title: "Ignore"
-description: "Excludes a controller (or one route method) from the generated OpenAPI spec."
+description: "On a controller or a route method: excluded from the generated OpenAPI spec."
 order: 100
 generated: true
 ---
@@ -11,4 +11,6 @@ generated: true
 class Ignore
 ```
 
-Excludes a controller (or one route method) from the generated OpenAPI spec.
+On a controller or a route method: excluded from the generated OpenAPI spec. On a property (or a promoted
+constructor parameter): left out of JSON and XML results, out of the property's OpenAPI component schema, and
+never set from input by FromArray.

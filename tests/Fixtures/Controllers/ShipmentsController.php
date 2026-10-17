@@ -2,7 +2,7 @@
 
 namespace Waypoint\Tests\Fixtures\Controllers;
 
-use Waypoint\Attributes\{Authenticated, Body, Controller, Delete, Get, Permissions, Post, Query, Role};
+use Waypoint\Attributes\{Authenticated, Body, Controller, Delete, Get, Permissions, Post, Query, Returns, Role};
 use Waypoint\Http\{Redirect, View};
 use Waypoint\Tests\Fixtures\DTO\{CityDTO, ManifestDTO, ShipmentDTO};
 use Waypoint\Tests\Fixtures\Enums\OrderStatus;
@@ -50,9 +50,57 @@ class ShipmentsController
         return new ShipmentDTO(['to' => ['city' => 'Freiburg']]);
     }
 
-    /** @return list<CityDTO> */
     #[Get('/cities')]
+    #[Returns(
+        type: CityDTO::class,
+        list: true
+    )]
     public function cities(): array
+    {
+        return [];
+    }
+
+    #[Get('/weights')]
+    #[Returns(
+        type: 'int',
+        map: true
+    )]
+    public function weights(): array
+    {
+        return [];
+    }
+
+    #[Get('/maybe-cities')]
+    #[Returns(
+        type: CityDTO::class,
+        list: true
+    )]
+    public function maybeCities(): ?array
+    {
+        return null;
+    }
+
+    #[Post('/cities')]
+    #[Returns(
+        type: CityDTO::class,
+        description: 'The city as stored',
+        status: 201
+    )]
+    public function addCity(): CityDTO
+    {
+        return new CityDTO();
+    }
+
+    #[Get('/first-stop')]
+    #[Returns(CityDTO::class)]
+    public function firstStop(): ShipmentDTO
+    {
+        return new ShipmentDTO(['to' => ['city' => 'Freiburg']]);
+    }
+
+    #[Get('/unknown')]
+    #[Returns('NoSuchDTO')]
+    public function unknown(): array
     {
         return [];
     }

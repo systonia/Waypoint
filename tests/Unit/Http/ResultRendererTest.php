@@ -4,9 +4,57 @@ namespace Waypoint\Tests\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
 use Waypoint\Http\{Response, ResultRenderer};
+use Waypoint\Tests\Fixtures\DTO\{BadgeDTO, CityDTO, ProfileDTO};
+use Waypoint\Tests\Fixtures\Enums\OrderStatus;
 
 final class ResultRendererTest extends TestCase
 {
+    private static function json(mixed $result): string
+    {
+        $res = new Response();
+        (new ResultRenderer())->render($result, $res, []);
+        unset($_SERVER['HTTP_ACCEPT_ENCODING']);
+        ob_start();
+        $res->send();
+        return (string) ob_get_clean();
+    }
+
+    private static function profile(): ProfileDTO
+    {
+        $profile = new ProfileDTO(['name' => 'Ada']);
+        $profile->passwordHash = 'secret';
+        $profile->internalId = 7;
+        $profile->friend = new ProfileDTO(['name' => 'Bob']);
+        $profile->friend->passwordHash = 'secret too';
+        return $profile;
+    }
+
+    public function testJsonLeavesIgnoredPropertiesOutAtEveryLevel(): void
+    {
+        $json = self::json(['me' => self::profile(), 'badges' => [new BadgeDTO(1, 'gold')], 'byKey' => ['x' => new BadgeDTO(2, 'red')]]);
+
+        $this->assertSame('{"me":{"name":"Ada","friend":{"name":"Bob","friend":null,"errors":[],"isValid":true},"errors":[],"isValid":true},"badges":[{"label":"gold"}],"byKey":{"x":{"label":"red"}}}', $json);
+    }
+
+    public function testJsonWithoutIgnoreIsWhatJsonEncodeWrites(): void
+    {
+        $value = ['city' => new CityDTO(['city' => 'Freiburg']), 'status' => OrderStatus::Open, 'at' => new \DateTimeImmutable('2026-01-02 03:04:05', new \DateTimeZone('UTC')), 'empty' => new \stdClass(), 'list' => [1, 2], 'none' => []];
+
+        $this->assertSame(json_encode($value), self::json($value));
+    }
+
+    public function testXmlLeavesIgnoredPropertiesOut(): void
+    {
+        $document = simplexml_load_string(self::xml(self::profile()));
+
+        $this->assertNotFalse($document);
+        $this->assertSame('Ada', (string) $document->name);
+        $this->assertSame('Bob', (string) $document->friend->name);
+        $this->assertCount(0, $document->passwordHash);
+        $this->assertCount(0, $document->friend->passwordHash);
+        $this->assertCount(0, $document->internalId);
+    }
+
     private static function xml(mixed $result): string
     {
         $res = new Response();

@@ -429,10 +429,11 @@ property without a default (`public string $name;`) is required: left unset, it 
 (a `422`, not an uninitialized-property `500`). A JSON body that doesn't parse answers `400 Bad Request` before
 any DTO is built. A backed enum property (`public OrderStatus $status`) gets the case its value names via `tryFrom()`, and
 `This value should be one of: open, done.` otherwise. A property typed with another `FromArray` DTO is built
-from the nested array, and an `array` property documented as `@var list<LineItem>` (or `LineItem[]`,
-`array<string, LineItem>`) gets each element built as a DTO or enum case; nested errors are reported under
-dotted keys (`delivery.city`, `items.0.sku`). A property that must never be settable this way
-(e.g. a server-computed value) can be excluded by overriding `fromArrayExcludes()`:
+from the nested array, and an `array` property with `#[ListOf(LineItem::class)]` (`map: true` for string
+keys) gets each element built as a DTO or enum case; nested errors are reported under
+dotted keys (`delivery.city`, `items.0.sku`). A property with `#[Ignore]` is never set from input nor
+required, and it is left out of JSON/XML results and the OpenAPI schema too. A property that must only never
+be settable this way (e.g. a server-computed value) can be excluded by overriding `fromArrayExcludes()`:
 
 ```php
 use Waypoint\FromArray;
@@ -1042,7 +1043,7 @@ class DownloadsController
 
 `#[SimpleXmlFormatter]` sends the return value as XML under `<root>`. Nested arrays and objects become
 nested elements, text is escaped, and a key that is no valid element name (a list index, say) becomes
-`<item key="…">`.
+`<item key="…">`. Properties with `#[Ignore]` are left out here as in JSON.
 
 ### File Responses
 
@@ -1149,14 +1150,15 @@ The generator is driven entirely by a compiled attribute cache (see
 reflection on every request, so serving the spec is cheap even under trust mode. It documents:
 
 - Path/query parameters with their real PHP types (`#[Param]`/`#[Query]`, and unattributed scalars)
-- `200` responses from the return type: a DTO's public properties, an enum's values, `@return list<X>`;
+- `200` responses from the return type (a DTO's public properties, an enum's values) or from `#[Returns]`
+  (type, list or map, description, status);
   routes returning a `View` or `Redirect` are left out of the document
 - `#[Body]` DTO request bodies, including nested and self-/mutually-referencing (cyclic) models
-- Backed enums as `{type, enum}`, nullable types as `type: [x, "null"]`, `@var list<X>`/`X[]`/`array<string, X>`
+- Backed enums as `{type, enum}`, nullable types as `type: [x, "null"]`, `#[ListOf]` arrays
   as `items`/`additionalProperties`, `required` for properties with neither a default nor `null`, and
   `readOnly` for properties a request cannot set
 - `#[Body(of: ...)]` array/collection request bodies (see [above](#arraycollection-request-bodies))
-- `#[Summary]`, `#[Tags]`, `#[Throws]`, `#[Deprecated]`, `#[Ignore]`
+- `#[Summary]`, `#[Tags]`, `#[Throws]`, `#[Deprecated]`, `#[Ignore]` (on a route or a DTO property)
 - `#[Schema(name: ...)]` to override a model's generated component name; two DTOs with the same short name
   never share a schema (the second is named by its full class name with dots)
 - `operationId` as `ShortClass_method`, the full class name only where two controllers share a short name

@@ -40,15 +40,37 @@ For each route:
 - **operation**: `summary` from `#[Summary]` (otherwise `Class->method`), `operationId` as `ShortClass_method` (the full class name with dots, `App.Admin.OrdersController_show`, where two controllers share a short name), `tags` from `#[Tags]` on the class and the method together, `deprecated` from PHP's `#[\Deprecated]`;
 - **parameters**: `#[Param]` and unattributed scalars named like a placeholder of the route as path parameters, `#[Query]` and the other unattributed scalars as query parameters, with their PHP types; a query parameter is required when it has neither a default nor a nullable type;
 - **request body**: a `#[Body]` DTO as `application/json` with a `$ref` to its schema, `#[Body]` with `of:` as an array of them;
-- **responses**: `200` with a schema from the return type (an object by its public properties as a component schema, an enum by its values, an `array` by its `@return list<Order>`, `@return Order[]` or `@return array<string, Order>`, a nullable type allowing `null`; a plain `array` stays an object), plus one problem response (`application/problem+json`, the shared `ProblemDetails` schema) for each `#[Throws]`, and on their own: `401` for a route with `#[Authenticated]`, `#[Role]` or `#[Permissions]`, `403` naming the role or permissions, `422` for a `#[Body]` DTO or a number, boolean or enum parameter;
+- **responses**: `200` with a schema from the return type (an object by its public properties as a component schema, an enum by its values, a nullable type allowing `null`; a plain `array` stays an object) or from `#[Returns]` (see below), plus one problem response (`application/problem+json`, the shared `ProblemDetails` schema) for each `#[Throws]`, and on their own: `401` for a route with `#[Authenticated]`, `#[Role]` or `#[Permissions]`, `403` naming the role or permissions, `422` for a `#[Body]` DTO or a number, boolean or enum parameter;
 - **security**: a guarded route requires the schemes in `OpenAPIOptions::$securitySchemes` (a JWT bearer scheme `bearerAuth` when none is configured). With a document-wide `OpenAPIOptions::$security`, guarded routes inherit it and public routes get `security: []`.
+
+`#[Returns]` names what a route answers with, and wins over the return type. That is how an `array` gets its elements, and how a response other than `200 Successful response` is documented:
+
+```php
+#[Get('')]
+#[Returns(
+    type: Order::class,
+    list: true
+)]
+public function index(): array { /* ... */ }
+
+#[Post('')]
+#[Returns(
+    type: Order::class,
+    description: 'The order as stored',
+    status: 201
+)]
+public function create(#[Body] NewOrder $order): Order { /* ... */ }
+```
+
+`type` is a class, an enum or a scalar keyword (`int`, `string`, `float`, `bool`); `list: true` documents a list of it, `map: true` an object of it by string key (`additionalProperties`). A nullable return type (`?array`) still allows `null`. A `type` that names no class, enum or scalar is logged as a warning and the schema falls back to the return type.
 
 Each DTO becomes a component schema named after its short class name (a second class of the same short name gets its full name with dots, `App.Shipping.LineItem`; `#[Schema('Name')]` picks a better one): its public properties with their types, nested DTOs as `$ref` (also self-referencing ones). In detail:
 
 - A backed enum is `{"type": "string", "enum": ["open", "done"]}` (or `integer`), for properties and for path and query parameters alike.
 - A nullable property allows `null`: `"type": ["string", "null"]`, or `anyOf` with `{"type": "null"}` next to a `$ref`.
 - A property is `required` when it has neither a default nor a nullable type, the same rule `FromArray` applies.
-- An `array` property documented as `@var list<Item>` or `@var Item[]` gets `items`, one documented as `@var array<string, Item>` gets `additionalProperties`.
+- An `array` property with `#[ListOf(Item::class)]` gets `items`, one with `#[ListOf(type: Item::class, map: true)]` gets `additionalProperties`. Without it the array has no `items`.
+- A property with `#[Ignore]` is left out, as it is from the JSON the route answers with.
 - A property the request cannot set (`readonly`, `protected(set)`, `private(set)`) is `readOnly`.
 - `errors` and `isValid` from `FromArray` are left out.
 
@@ -135,6 +157,9 @@ final class NewOrder
 | `#[Tags(['…'])]` | class, method | tags, merged from both |
 | `#[Throws]` with `exception`, an optional `status` and `description` | method, repeatable | an error response with the problem schema; without a status, the exception's own (404 for `NotFoundException`, 500 for one that is no `HttpException`), without a description, the status's reason phrase |
 | `#[Ignore]` | class, method | leaves the routes out of the document |
+| `#[Ignore]` | DTO property | leaves the property out of the schema (and out of JSON results and binding) |
+| `#[Returns(…)]` | method | the success response: `type`, `list`, `map`, `description`, `status` |
+| `#[ListOf(…)]` | DTO property | the element type of an `array` property: `type`, `map` |
 | `#[Schema('Name')]` | DTO class | the component name instead of the short class name |
 | `#[Property(…)]` | DTO property | `description`, `format`, `example`, `deprecated` |
 

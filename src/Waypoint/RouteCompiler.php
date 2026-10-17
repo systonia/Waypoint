@@ -529,7 +529,6 @@ final class RouteCompiler
                 $result[$className]['methods'][$method->getName()]['__method'] = self::attributeEntries($method->getAttributes());
                 $result[$className]['methods'][$method->getName()]['returnType'] = $returnType instanceof ReflectionNamedType ? $returnType->getName() : null;
                 $result[$className]['methods'][$method->getName()]['returnNullable'] = $returnType === null || $returnType->allowsNull();
-                $result[$className]['methods'][$method->getName()]['returnElement'] = \Waypoint\Support\DocType::element($method);
                 $result[$className]['methods'][$method->getName()]['returnsPage'] = self::returnsPage($returnType);
                 foreach ($method->getParameters() as $param) {
                     $type = $param->getType();

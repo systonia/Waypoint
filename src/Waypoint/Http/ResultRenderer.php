@@ -4,11 +4,14 @@ namespace Waypoint\Http;
 
 use SimpleXMLElement;
 use SplFileInfo;
-use Waypoint\Attributes\{FileFormatter, SimpleXmlFormatter};
+use Waypoint\Attributes\{FileFormatter, Ignore, SimpleXmlFormatter};
 
 /** Writes a route's return value to the Response as JSON (default), a raw file/body (#[FileFormatter]) or XML (#[SimpleXmlFormatter]). Views and Redirects never come here. */
 final class ResultRenderer
 {
+    /** @var array<class-string, array<string, true>> class => its #[Ignore] property names */
+    private static array $ignored = [];
+
     /** @param array{type?: string, options?: array<string, mixed>|null} $formatter */
     public function render(mixed $result, Response $res, array $formatter): void
     {
@@ -53,6 +56,7 @@ final class ResultRenderer
     {
         $res->withHeader('Content-Type', 'application/xml');
         $xml = new SimpleXMLElement('<root/>');
+        $result = self::visible($result);
         self::appendXml($xml, is_object($result) ? get_object_vars($result) : (is_array($result) ? $result : ['value' => $result]));
         // @codeCoverageIgnoreStart
         // asXML() on a document we just built can't fail.
@@ -90,6 +94,38 @@ final class ResultRenderer
     /** Throws for what JSON can't hold (invalid UTF-8, say): a logged 500 instead of a 200 with "null". */
     private static function json(mixed $value): string
     {
-        return json_encode($value, JSON_THROW_ON_ERROR);
+        return json_encode(self::visible($value), JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * $value with every object's #[Ignore] properties left out, in nested objects and arrays too: a plain object
+     * becomes its public properties as a stdClass. A JsonSerializable, an enum or a date stays as it is.
+     */
+    private static function visible(mixed $value, int $depth = 0): mixed
+    {
+        if ($depth > 512) {
+            return $value; // json_encode() reports the depth (a cycle, say) as before
+        }
+        if (is_array($value)) {
+            return array_map(static fn (mixed $item): mixed => self::visible($item, $depth + 1), $value);
+        }
+        if (!is_object($value) || $value instanceof \JsonSerializable || $value instanceof \UnitEnum || $value instanceof \DateTimeInterface) {
+            return $value;
+        }
+        $ignored = self::$ignored[$value::class] ??= self::ignoredOf($value);
+        $properties = array_diff_key(get_object_vars($value), $ignored);
+        return (object) array_map(static fn (mixed $item): mixed => self::visible($item, $depth + 1), $properties);
+    }
+
+    /** @return array<string, true> */
+    private static function ignoredOf(object $value): array
+    {
+        $ignored = [];
+        foreach ((new \ReflectionObject($value))->getProperties(\ReflectionProperty::IS_PUBLIC) as $property) {
+            if ($property->getAttributes(Ignore::class) !== []) {
+                $ignored[$property->getName()] = true;
+            }
+        }
+        return $ignored;
     }
 }

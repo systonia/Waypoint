@@ -47,6 +47,7 @@ enum Message: string
     case GeneratorPropertyHasNoType = 'OpenAPIGenerator: Property "{name}" in class "{rc}" has no type.';
     case GeneratorClassDoesNotExist = 'OpenAPIGenerator: generateModelSchema - class "{fqcn}" does not exist.';
     case GeneratorPropertyDoesNotExist2 = 'OpenAPIGenerator: Parameter type "{type}" does not exist in method {method}.';
+    case GeneratorReturnsTypeDoesNotExist = 'OpenAPIGenerator: #[Returns] type "{type}" does not exist in method {method}.';
     #endregion
 
     #region Route Versioning

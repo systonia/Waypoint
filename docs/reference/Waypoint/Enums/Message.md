@@ -66,6 +66,12 @@ case GeneratorClassDoesNotExist = 'OpenAPIGenerator: generateModelSchema - class
 case GeneratorPropertyDoesNotExist2 = 'OpenAPIGenerator: Parameter type "{type}" does not exist in method {method}.';
 ```
 
+### GeneratorReturnsTypeDoesNotExist
+
+```php
+case GeneratorReturnsTypeDoesNotExist = 'OpenAPIGenerator: #[Returns] type "{type}" does not exist in method {method}.';
+```
+
 ### RouteUnversioned
 
 ```php

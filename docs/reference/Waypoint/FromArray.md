@@ -18,7 +18,7 @@ doesn't fit the property's type is left out and recorded as a failure (a 422,
 not a TypeError 500, and never cast: "false" is no true). A form's text for a
 number or a boolean ("5", "on") is converted, a backed enum property gets the
 case its value names, and a property typed with another FromArray DTO (or an
-array whose `@var list<Dto>` says so) is built from the nested array. Private, protected, protected(set)/
+array whose #[ListOf(Dto::class)] says so) is built from the nested array. Private, protected, protected(set)/
 private(set) and static properties are never touched: the data comes from
 the request, and those are the DTO's own state.
 

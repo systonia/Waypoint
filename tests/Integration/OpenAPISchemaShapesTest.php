@@ -4,7 +4,8 @@ namespace Waypoint\Tests\Integration;
 
 use Waypoint\Waypoint;
 use Waypoint\OpenAPI\OpenAPIGenerator;
-use Waypoint\Options\OpenAPIOptions;
+use Waypoint\Options\{LoggerOptions, OpenAPIOptions};
+use Waypoint\Tests\Fixtures\Support\DummyLogger;
 use Waypoint\Tests\Fixtures\Controllers\ShipmentsController;
 
 final class OpenAPISchemaShapesTest extends IntegrationTestCase
@@ -36,12 +37,23 @@ final class OpenAPISchemaShapesTest extends IntegrationTestCase
         $this->assertSame(['type' => 'object', 'additionalProperties' => ['type' => 'integer']], $properties['weights']);
     }
 
-    public function testPromotedPropertiesTakeTheirElementsFromTheConstructorsParamTags(): void
+    public function testPromotedPropertiesTakeTheirElementsFromListOfOnTheParameter(): void
     {
         $properties = $this->generate()['components']['schemas']['ManifestDTO']['properties'];
 
         $this->assertSame(['type' => 'array', 'items' => ['$ref' => '#/components/schemas/CityDTO']], $properties['stops']);
         $this->assertSame(['type' => 'object', 'additionalProperties' => ['type' => 'string']], $properties['labels']);
+    }
+
+    public function testIgnoredPropertiesAreLeftOutOfTheSchema(): void
+    {
+        $builder = new \Waypoint\OpenAPI\SchemaBuilder(new \Waypoint\Logger());
+        $profile = $builder->generateModelSchema(\Waypoint\Tests\Fixtures\DTO\ProfileDTO::class);
+        $badge = $builder->generateModelSchema(\Waypoint\Tests\Fixtures\DTO\BadgeDTO::class);
+
+        $this->assertSame(['name', 'friend'], array_keys($profile['properties']));
+        $this->assertArrayNotHasKey('required', $profile);
+        $this->assertSame(['label'], array_keys($badge['properties']));
     }
 
     public function testNullableRequiredAndReadOnlyFollowWhatHydrationDoes(): void
@@ -112,6 +124,40 @@ final class OpenAPISchemaShapesTest extends IntegrationTestCase
         $this->assertSame(['type' => 'string', 'enum' => ['open', 'done']], self::okSchema($spec, '/shipments/status'));
         $this->assertSame(['anyOf' => [['$ref' => '#/components/schemas/CityDTO'], ['type' => 'null']]], self::okSchema($spec, '/shipments/next-stop'));
         $this->assertSame(['type' => 'object'], self::okSchema($spec, '/shipments/health'));
+    }
+
+    public function testReturnsDescribesListsMapsAndNull(): void
+    {
+        $spec = $this->generate();
+
+        $this->assertSame(['type' => 'object', 'additionalProperties' => ['type' => 'integer']], self::okSchema($spec, '/shipments/weights'));
+        $this->assertSame(['type' => ['array', 'null'], 'items' => ['$ref' => '#/components/schemas/CityDTO']], self::okSchema($spec, '/shipments/maybe-cities'));
+        $this->assertSame('Successful response', $spec['paths']['/shipments/cities']['get']['responses'][200]['description']);
+    }
+
+    public function testReturnsSetsStatusAndDescription(): void
+    {
+        $responses = $this->generate()['paths']['/shipments/cities']['post']['responses'];
+
+        $this->assertSame(['201'], array_map('strval', array_keys($responses)));
+        $this->assertSame('The city as stored', $responses[201]['description']);
+        $this->assertSame(['$ref' => '#/components/schemas/CityDTO'], $responses[201]['content']['application/json']['schema']);
+    }
+
+    public function testReturnsWinsOverTheReturnType(): void
+    {
+        $this->assertSame(['$ref' => '#/components/schemas/CityDTO'], self::okSchema($this->generate(), '/shipments/first-stop'));
+    }
+
+    public function testAnUnknownReturnsTypeIsLoggedAndLeftOut(): void
+    {
+        $logger = new DummyLogger();
+        Waypoint::create()->configure(fn (LoggerOptions $options) => $options->add($logger));
+        $spec = $this->generate();
+
+        $this->assertSame(['type' => 'object'], self::okSchema($spec, '/shipments/unknown'));
+        $messages = array_column($logger->logs, 1);
+        $this->assertContains('OpenAPIGenerator: #[Returns] type "NoSuchDTO" does not exist in method ' . ShipmentsController::class . '::unknown.', $messages);
     }
 
     public function testRoutesAnsweringWithAPageOrARedirectAreLeftOut(): void

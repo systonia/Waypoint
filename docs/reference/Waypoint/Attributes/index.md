@@ -16,10 +16,11 @@ generated: true
 - [`FileFormatter`](FileFormatter.md) · class: Sends the route's return value as a raw body instead of JSON: return an SplFileInfo to send a file from disk, a string to send that text.
 - [`Get`](Get.md) · class: Routes a controller method for HTTP GET.
 - [`HttpRoute`](HttpRoute.md) · abstract class: Shared body of #[Get]/#[Post]/#[Put]/#[Patch]/#[Delete]: a path pattern such as '/users/{id}'.
-- [`Ignore`](Ignore.md) · class: Excludes a controller (or one route method) from the generated OpenAPI spec.
+- [`Ignore`](Ignore.md) · class: On a controller or a route method: excluded from the generated OpenAPI spec.
 - [`Inject`](Inject.md) · class: Marks a property (or constructor parameter, for discovery) to be resolved from the container: Request/Response/Router per request, everything else as a shared service.
 - [`JSONFormatter`](JSONFormatter.md) · class: Sends the route's return value as JSON.
 - [`Length`](Length.md) · class: Validation: a string property's length (mb_strlen) must be within [$min, $max].
+- [`ListOf`](ListOf.md) · class: The element type of an `array` property: a class, an enum or a scalar keyword (int, string, float, bool), as a list, or with $map as values by string key.
 - [`Manager`](Manager.md) · class: Marks a class as a CLI task manager, with an optional name prefix ("prefix:task") for every #[Task] on it.
 - [`Middleware`](Middleware.md) · class: Attaches a MiddlewareBase subclass to a controller class (runs for every route on it, before any method-level middleware) or one route method: `#[Middleware(RequireAdmin::class)]`.
 - [`NoGzip`](NoGzip.md) · class: Opts a controller class, or one specific route method, out of gzip response compression (see Response::send()/CompressionOptions), e.g.
@@ -34,6 +35,7 @@ generated: true
 - [`Put`](Put.md) · class: Routes a controller method for HTTP PUT.
 - [`Query`](Query.md) · class: Binds a query-string value to a method parameter; $name overrides the key when it differs from the parameter name.
 - [`Regex`](Regex.md) · class: Validation: the value must match $pattern (a full PCRE pattern including delimiters).
+- [`Returns`](Returns.md) · class: Documents what a route method answers with in generated OpenAPI: the success response's status, description and schema.
 - [`Role`](Role.md) · class: Requires `$req->jwt['role']` to equal $role.
 - [`RouteAttribute`](RouteAttribute.md) · interface: Contract of the HTTP-method route attributes (Get, Post, Put, Patch, Delete).
 - [`SameAs`](SameAs.md) · class: Validation: the property must equal the DTO's $property (e.g.

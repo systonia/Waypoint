@@ -10,7 +10,7 @@ namespace Waypoint;
  * not a TypeError 500, and never cast: "false" is no true). A form's text for a
  * number or a boolean ("5", "on") is converted, a backed enum property gets the
  * case its value names, and a property typed with another FromArray DTO (or an
- * array whose `@var list<Dto>` says so) is built from the nested array. Private, protected, protected(set)/
+ * array whose #[ListOf(Dto::class)] says so) is built from the nested array. Private, protected, protected(set)/
  * private(set) and static properties are never touched: the data comes from
  * the request, and those are the DTO's own state.
  *
@@ -79,15 +79,15 @@ trait FromArray
     }
 
     /**
-     * The elements of an array as the property's `@var list<Item>` (or `Item[]`, `array<string, Item>`) says: a
-     * FromArray DTO built from each array, a backed enum case from each value. One that doesn't fit is left out and
+     * The elements of an array as the property's #[ListOf] says: a FromArray DTO built from each array, a backed
+     * enum case from each value. One that doesn't fit is left out and
      * reported under "property.index".
      * @param array<array-key, mixed> $items
      * @return array<array-key, mixed>
      */
     private function elements(\ReflectionProperty $property, array $items): array
     {
-        $class = Support\DocType::element($property)[1] ?? null;
+        $class = ($property->getAttributes(Attributes\ListOf::class)[0] ?? null)?->newInstance()->type;
         if ($class === null || (!self::hydratable($class) && !is_subclass_of($class, \BackedEnum::class))) {
             return $items;
         }
@@ -233,14 +233,15 @@ trait FromArray
         return $missing;
     }
 
-    /** True for a public, non-static property whose set visibility is public too (no protected(set)/private(set)). */
+    /** True for a public, non-static property whose set visibility is public too (no protected(set)/private(set)) and without #[Ignore]. */
     private static function isWritableFromInput(object $target, string $name): bool
     {
         if (!property_exists($target, $name)) {
             return false;
         }
         $property = new \ReflectionProperty($target, $name);
-        return $property->isPublic() && !$property->isStatic() && !$property->isProtectedSet() && !$property->isPrivateSet();
+        return $property->isPublic() && !$property->isStatic() && !$property->isProtectedSet() && !$property->isPrivateSet()
+            && $property->getAttributes(Attributes\Ignore::class) === [];
     }
 
     /**

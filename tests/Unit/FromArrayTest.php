@@ -179,4 +179,14 @@ final class FromArrayTest extends TestCase
         $this->assertSame([1, false], [$bad->qty, $bad->admin]);
         $this->assertSame(['qty', 'admin'], array_keys($bad->errors));
     }
+
+    public function testIgnoredPropertiesAreNeverSetFromInputNorRequired(): void
+    {
+        $dto = new \Waypoint\Tests\Fixtures\DTO\ProfileDTO(['name' => 'Ada', 'passwordHash' => 'x', 'internalId' => 3]);
+
+        $this->assertSame('Ada', $dto->name);
+        $this->assertSame('', $dto->passwordHash);
+        $this->assertFalse((new \ReflectionProperty($dto, 'internalId'))->isInitialized($dto));
+        $this->assertSame([], $dto->errors);
+    }
 }

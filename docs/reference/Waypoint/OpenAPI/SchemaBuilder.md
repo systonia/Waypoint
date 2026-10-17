@@ -1,6 +1,6 @@
 ---
 title: "SchemaBuilder"
-description: "Builds and collects the `components.schemas` of a spec: one object schema per DTO class (public properties, typed; nested DTOs by $ref, recursion- safe; enums inline with their values; lists from `@var list<X>`), plus the shared RFC 9457 ProblemDetails schema."
+description: "Builds and collects the `components.schemas` of a spec: one object schema per DTO class (public properties, typed; nested DTOs by $ref, recursion- safe; enums inline with their values; lists from #[ListOf]), plus the shared RFC 9457 ProblemDetails schema."
 order: 100
 generated: true
 ---
@@ -13,7 +13,7 @@ final class SchemaBuilder
 
 Builds and collects the `components.schemas` of a spec: one object schema
 per DTO class (public properties, typed; nested DTOs by $ref, recursion-
-safe; enums inline with their values; lists from `@var list<X>`), plus the shared RFC 9457 ProblemDetails schema. Also owns the
+safe; enums inline with their values; lists from #[ListOf]), plus the shared RFC 9457 ProblemDetails schema. Also owns the
 PHP-type -> OpenAPI-type mapping parameters use.
 
 ## Methods
@@ -79,7 +79,7 @@ Registers the shared RFC 9457 schema every #[Throws] response $refs.
 public function generateModelSchema(string $fqcn): array
 ```
 
-An object schema from $fqcn's public properties. A property is required when it has no default and is not
+An object schema from $fqcn's public properties without #[Ignore]. A property is required when it has no default and is not
 nullable: FromArray reports exactly those as missing. A nullable one allows null (`type: [x, "null"]`), and one
 the request cannot set (readonly, protected(set), private(set)) is `readOnly`, as FromArray never fills it.
 
@@ -106,14 +106,15 @@ $schema that also allows null: `type: [x, "null"]` (with null among an enum's va
 ### arraySchema()
 
 ```php
-public function arraySchema(?array $element): array
+public function arraySchema(?string $type, bool $map = false): array
 ```
 
-An array from its docblock's element type: `list<X>` / `X[]` as items, `array<string, X>` as additionalProperties.
+An array of $type elements (#[ListOf], #[Returns]): a list as items, a map as additionalProperties.
 
 **Parameters**
 
-- `$element` `array{0: 'list'|'map', 1: string}|null`
+- `$type` `?string`
+- `$map` `bool`
 
 **Returns** `array<string, mixed>`
 

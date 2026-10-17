@@ -136,6 +136,7 @@ Backed enums, nested DTOs and lists of them are built from the data too:
 
 namespace App\Dto;
 
+use Waypoint\Attributes\ListOf;
 use Waypoint\FromArray;
 
 final class NewOrder
@@ -146,16 +147,18 @@ final class NewOrder
 
     public Address $delivery;                         // a FromArray DTO, built from {"city": ...}
 
-    /** @var list<LineItem> */
+    #[ListOf(LineItem::class)]
     public array $items = [];                         // each element a LineItem
 }
 ```
 
 - A backed enum property gets the case its value names (`tryFrom()`); a value no case has fails with `This value should be one of: open, done.`.
 - A property typed with another class that uses `FromArray` gets that DTO built from the nested array. Its errors appear under the property's name: `delivery.city`.
-- An `array` property whose docblock says `@var list<LineItem>`, `@var LineItem[]` or `@var array<string, LineItem>` gets each element built the same way, for DTOs and backed enums. An element that doesn't fit is left out and reported as `items.2`; a nested DTO's own errors as `items.0.sku`.
+- An `array` property with `#[ListOf(LineItem::class)]` (or `#[ListOf(type: LineItem::class, map: true)]` for string keys) gets each element built the same way, for DTOs and backed enums. An element that doesn't fit is left out and reported as `items.2`; a nested DTO's own errors as `items.0.sku`.
 
-Exclude properties that must never come from input with `fromArrayExcludes()`:
+A property with `#[Ignore]` is never set from input and never required, even without a default: the DTO sets it itself. It is also left out of JSON results and of the OpenAPI schema, so it suits server-side state like a database id or a password hash. On a promoted constructor parameter it applies to the property; the constructor still has to fill it (a default does).
+
+To exclude a property from input only, use `fromArrayExcludes()`:
 
 ```php
 <?php

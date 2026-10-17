@@ -150,7 +150,23 @@ $res->withoutCookie('theme');
 
 ## JSON
 
-A returned array, object or scalar goes out as JSON with `Content-Type: application/json`. An object is encoded by its public properties, or by `jsonSerialize()` when it implements `JsonSerializable`.
+A returned array, object or scalar goes out as JSON with `Content-Type: application/json`. An object is encoded by its public properties, or by `jsonSerialize()` when it implements `JsonSerializable`. A property with `#[Ignore]` is left out, in nested objects and lists too, and from XML (`#[SimpleXmlFormatter]`) as well:
+
+```php
+use Waypoint\Attributes\Ignore;
+
+final class Account
+{
+    public function __construct(
+        public string $name,
+        #[Ignore]
+        public string $passwordHash = '',
+    ) {
+    }
+}
+```
+
+`jsonSerialize()` decides on its own: `#[Ignore]` changes nothing for a `JsonSerializable` object.
 
 A value JSON can't hold, such as a string with invalid UTF-8, is not sent as `null`: the request fails with `500`, and the reason goes to the [log](logging.md).
 

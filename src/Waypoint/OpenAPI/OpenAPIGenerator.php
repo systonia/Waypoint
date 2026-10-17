@@ -5,7 +5,7 @@ namespace Waypoint\OpenAPI;
 use Deprecated;
 use stdClass;
 use Waypoint\{Logger, Router, Waypoint};
-use Waypoint\Attributes\{Authenticated, Body, Claims, FileFormatter, Ignore, Param, Permissions, Query, Role, SimpleXmlFormatter, Summary, Tags, Throws};
+use Waypoint\Attributes\{Authenticated, Body, Claims, FileFormatter, Ignore, Param, Permissions, Query, Returns, Role, SimpleXmlFormatter, Summary, Tags, Throws};
 use Waypoint\Enums\Message;
 use Waypoint\Exceptions\HttpException;
 use Waypoint\Options\OpenAPIOptions;
@@ -276,9 +276,20 @@ class OpenAPIGenerator
         $entry = $this->methodCacheEntry($controllerClass, $methodName);
         $returnType = $entry['returnType'] ?? null;
         $returnType = is_string($returnType) ? $returnType : null;
-        $content = $returnType !== null ? $this->pluginContent($returnType) : null;
-        $responses = [200 => array_filter([
-            'description' => 'Successful response',
+        $returns = self::findAttr($methodAttrs, Returns::class);
+        $returnsType = $returns !== null ? self::stringArg($returns, 0, 'type') : null;
+        if ($returnsType !== null && !SchemaBuilder::isScalar($returnsType) && !class_exists($returnsType) && !interface_exists($returnsType) && !enum_exists($returnsType)) {
+            $this->logger->warning(Message::GeneratorReturnsTypeDoesNotExist->interpolate(type: $returnsType, method: "$controllerClass::$methodName"));
+            $returnsType = null;
+        }
+        $status = $returns['status'] ?? $returns[4] ?? 200;
+        $content = match (true) {
+            $returnsType !== null => $this->returnsContent($returnsType, (bool) ($returns['list'] ?? $returns[1] ?? false), (bool) ($returns['map'] ?? $returns[2] ?? false), $entry),
+            $returnType !== null => $this->pluginContent($returnType),
+            default => null,
+        };
+        $responses = [(is_int($status) ? $status : 200) => array_filter([
+            'description' => ($returns !== null ? self::stringArg($returns, 3, 'description') : null) ?? 'Successful response',
             'content' => $content ?? $this->resultContent($returnType, $entry, $methodAttrs),
         ])];
         foreach ($methodAttrs as $attr) {
@@ -443,9 +454,24 @@ class OpenAPIGenerator
     }
 
     /**
-     * The 200 content for what the method returns: an object by its public properties, an enum by its values, a list
-     * by its `@return list<X>`. A void method writes its response itself and a formatter's output is no JSON
-     * schema: neither says more than before.
+     * The success content #[Returns] names: $type itself, a list of it or a map of it; null too when the return type
+     * allows it.
+     * @param array<string, mixed> $entry The method's attribute cache entry
+     * @return array<string, array<string, mixed>>
+     */
+    private function returnsContent(string $type, bool $list, bool $map, array $entry): array
+    {
+        $schema = $list || $map ? $this->schemas->arraySchema($type, $map) : $this->schemas->typeSchema($type);
+        if (($entry['returnNullable'] ?? false) === true && $entry['returnType'] !== null && $entry['returnType'] !== 'mixed') {
+            $schema = SchemaBuilder::nullable($schema);
+        }
+        return ['application/json' => ['schema' => $schema]];
+    }
+
+    /**
+     * The success content for what the method returns: an object by its public properties, an enum by its values, a
+     * bare array as an object (#[Returns] names its elements). A void method writes its response itself and a
+     * formatter's output is no JSON schema: neither says more than before.
      * @param array<string, mixed> $entry The method's attribute cache entry
      * @param list<array{name: string, args: array<int|string, mixed>}> $methodAttrs
      * @return array<string, array<string, mixed>>|null
@@ -460,13 +486,9 @@ class OpenAPIGenerator
                 return ['application/json' => ['schema' => ['type' => 'object']]];
             }
         }
-        $element = $entry['returnElement'] ?? null;
         $schema = match (true) {
-            $type === null, $type === 'object' => ['type' => 'object'],
+            $type === null, $type === 'object', $type === 'array', $type === 'iterable' => ['type' => 'object'],
             $type === 'mixed' => [],
-            $type === 'array', $type === 'iterable' => is_array($element) && count($element) === 2 && in_array($element[0], ['list', 'map'], true) && is_string($element[1])
-                ? $this->schemas->arraySchema([$element[0], $element[1]])
-                : ['type' => 'object'],
             is_a($type, \JsonSerializable::class, true) => [],
             default => $this->schemas->typeSchema($type),
         };

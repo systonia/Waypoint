@@ -7,15 +7,14 @@ use ReflectionNamedType;
 use ReflectionProperty;
 use RuntimeException;
 use stdClass;
-use Waypoint\Attributes\{Property, Schema};
+use Waypoint\Attributes\{Ignore, ListOf, Property, Schema};
 use Waypoint\Enums\Message;
 use Waypoint\Logger;
-use Waypoint\Support\DocType;
 
 /**
  * Builds and collects the `components.schemas` of a spec: one object schema
  * per DTO class (public properties, typed; nested DTOs by $ref, recursion-
- * safe; enums inline with their values; lists from `@var list<X>`), plus the shared RFC 9457 ProblemDetails schema. Also owns the
+ * safe; enums inline with their values; lists from #[ListOf]), plus the shared RFC 9457 ProblemDetails schema. Also owns the
  * PHP-type -> OpenAPI-type mapping parameters use.
  */
 final class SchemaBuilder
@@ -88,7 +87,7 @@ final class SchemaBuilder
     }
 
     /**
-     * An object schema from $fqcn's public properties. A property is required when it has no default and is not
+     * An object schema from $fqcn's public properties without #[Ignore]. A property is required when it has no default and is not
      * nullable: FromArray reports exactly those as missing. A nullable one allows null (`type: [x, "null"]`), and one
      * the request cannot set (readonly, protected(set), private(set)) is `readOnly`, as FromArray never fills it.
      *
@@ -103,8 +102,8 @@ final class SchemaBuilder
         $properties = [];
         $required = [];
         foreach ((new ReflectionClass($fqcn))->getProperties(ReflectionProperty::IS_PUBLIC) as $prop) {
-            if ($prop->isVirtual() || $prop->isStatic()) {
-                continue; // FromArray's $errors/$isValid are computed, never part of the payload
+            if ($prop->isVirtual() || $prop->isStatic() || $prop->getAttributes(Ignore::class) !== []) {
+                continue; // FromArray's $errors/$isValid are computed, never part of the payload; #[Ignore] never is either
             }
             $name = $prop->getName();
             $type = $prop->getType();
@@ -182,7 +181,8 @@ final class SchemaBuilder
             return ['type' => self::mapType($typeName)];
         }
         if ($typeName === 'array' || $typeName === 'iterable') {
-            return $this->arraySchema($prop !== null ? DocType::element($prop) : null);
+            $listOf = ($prop?->getAttributes(ListOf::class)[0] ?? null)?->newInstance();
+            return $this->arraySchema($listOf?->type, $listOf->map ?? false);
         }
         if (!class_exists($typeName) && !interface_exists($typeName) && !enum_exists($typeName)) {
             $this->logger->warning(Message::GeneratorPropertyDoesNotExist->interpolate(property: $typeName, name: $propertyName, rc: $ownerFqcn));
@@ -192,18 +192,16 @@ final class SchemaBuilder
     }
 
     /**
-     * An array from its docblock's element type: `list<X>` / `X[]` as items, `array<string, X>` as additionalProperties.
-     * @param array{0: 'list'|'map', 1: string}|null $element
+     * An array of $type elements (#[ListOf], #[Returns]): a list as items, a map as additionalProperties.
      * @return array<string, mixed>
      */
-    public function arraySchema(?array $element): array
+    public function arraySchema(?string $type, bool $map = false): array
     {
-        if ($element === null) {
+        if ($type === null) {
             return ['type' => 'array'];
         }
-        [$kind, $type] = $element;
         $items = $this->typeSchema($type);
-        return $kind === 'map' ? ['type' => 'object', 'additionalProperties' => $items] : ['type' => 'array', 'items' => $items];
+        return $map ? ['type' => 'object', 'additionalProperties' => $items] : ['type' => 'array', 'items' => $items];
     }
 
     /**
