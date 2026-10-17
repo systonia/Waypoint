@@ -67,4 +67,14 @@ final class AttributeChecked
         new self(['wrongArgument']);
         new self(tags: [5]);
     }
+
+    /** @param list<self> $all */
+    public function nested(array $all): void
+    {
+        foreach ($all as $one) {
+            foreach ($one->children as $child) {
+                \PHPStan\dumpType($child);
+            }
+        }
+    }
 }

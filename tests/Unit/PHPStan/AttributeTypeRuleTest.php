@@ -25,6 +25,8 @@ final class AttributeTypeRuleTest extends TestCase
         $this->assertStringContainsString(':51:Dumped type: array<string, int>', $output);
         $this->assertStringContainsString(':52:Dumped type: list<string>|null', $output);
         $this->assertStringContainsString(":53:Dumped type: list<$fixture>", $output);
+        // A receiver typed only by PHPDoc (mixed natively) still gets the attribute's element type in a loop
+        $this->assertStringContainsString(":76:Dumped type: $fixture", $output);
         // An attribute that does not narrow the native type leaves it alone
         $this->assertStringContainsString(':54:Dumped type: stdClass', $output);
         // An offset of the attribute's array has the element type, also where PHPStan narrows it

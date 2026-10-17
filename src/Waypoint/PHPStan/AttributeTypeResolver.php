@@ -8,6 +8,7 @@ use PHPStan\Analyser\Scope;
 use PHPStan\PhpDoc\TypeStringResolver;
 use PHPStan\Reflection\ClassReflection;
 use PHPStan\Type\ExpressionTypeResolverExtension;
+use PHPStan\Type\MixedType;
 use PHPStan\Type\Type;
 use PHPStan\Type\TypeCombinator;
 use Waypoint\Attributes\ListOf;
@@ -34,7 +35,14 @@ final class AttributeTypeResolver implements ExpressionTypeResolverExtension
         if ((!$property && !$expr instanceof Expr\MethodCall) || !$expr->name instanceof Identifier) {
             return null;
         }
-        $classes = $scope->getType($expr->var)->getObjectClassReflections();
+        $receiver = $scope->getType($expr->var);
+        $classes = $receiver->getObjectClassReflections();
+        if ($classes === [] && TypeCombinator::removeNull($receiver)->isObject()->maybe()) {
+            // A receiver PHPStan knows nothing of: mixed, as without this extension. Declining instead would also
+            // decline the PHPDoc flavour of the same expression, which PHPStan asks after the native one: a
+            // `$order` typed only by PHPDoc is mixed natively, and `foreach ($order->lines as $line)` would lose its type
+            return new MixedType();
+        }
         if (count($classes) !== 1) {
             return null;
         }
