@@ -18,7 +18,7 @@ final class ViewAssets
 
     /**
      * Every view file under $viewsDir as its View name: the path relative to $viewsDir, no .php,
-     * '/'-separated on every platform ("Home", "Admin/Users"). The same string keys compile()'s
+     * '/'-separated on every platform ("Shop/Catalog", "Backoffice/Sales"). The same string keys compile()'s
      * 'views' map and is baked into the CSS scope, so a nested view's assets resolve exactly like a
      * top-level one's.
      *

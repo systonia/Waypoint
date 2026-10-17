@@ -4,38 +4,47 @@ description: Create the app, configure it with Options classes, read settings fr
 order: 10
 ---
 
-Every Waypoint app has one front controller, usually `public/index.php`. It does four things, always in this order:
+Every Waypoint app has one script that builds it and serves it: `public/index.php` under PHP-FPM, any script under Tenma. It does four things, always in this order. Here they are from [Sonnenkorn](https://github.com/systonia/Waypoint-Bakery), the made-up bakery these guides take their examples from, put together from its `app.php` and `index.php` and shortened:
 
 ```php
 <?php
 
-require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/vendor/autoload.php';
 
-use App\Controllers\{CustomersController, OrdersController};
+use Bakery\Controllers\{ApiController, BackofficeController, SessionController, ShopController};
+use Bakery\Tasks\DatabaseTasks;
 use Waypoint\Environment;
-use Waypoint\Options\{CsrfOptions, EnvironmentOptions, FileSystemOptions, JWTOptions};
+use Waypoint\Options\{CsrfOptions, EnvironmentOptions, FileSystemOptions, JWTOptions, RendererOptions};
 use Waypoint\Waypoint;
 
 // 1. create
 $app = Waypoint::create();
 
 // 2. configure
-$app->configure(fn (EnvironmentOptions $env) => $env->load(dirname(__DIR__)));
+$app->configure(fn (EnvironmentOptions $env) => $env->load(__DIR__));
+$env = $app->get(Environment::class);
 
-$app->configure(function (FileSystemOptions $fs, JWTOptions $jwt, CsrfOptions $csrf, Environment $env) {
-    $fs->publicDirectory = __DIR__;
-    $fs->cacheDirectory = dirname(__DIR__) . '/var/cache';
-    $jwt->secret = $env->get('JWT_SECRET');
-    $csrf->secret = $env->get('CSRF_SECRET');
+$app->configure(function (FileSystemOptions $fs, RendererOptions $views, JWTOptions $jwt, CsrfOptions $csrf) use ($env) {
+    $fs->publicDirectory = __DIR__ . '/public';
+    $views->directory = __DIR__ . '/views';
+    $views->layout = '_Layout.php';
+    $jwt->secret = $env->string('JWT_SECRET');
+    $jwt->cookieName = 'session';
+    $csrf->secret = $env->string('CSRF_SECRET');
 });
 
 // 3. attach
 $app->useJwt();
-$app->attach([CustomersController::class, OrdersController::class]);
+$app->attach([
+    ShopController::class, SessionController::class, BackofficeController::class, ApiController::class,
+    DatabaseTasks::class,
+]);
 
 // 4. serve
 $app->serve();
 ```
+
+The bakery's `app.php` ends with `return $app;`, and `index.php` requires it and calls `serve()`, so its tests load the same app without serving it.
 
 ## Creating the app
 
@@ -49,7 +58,7 @@ Settings live in plain Options classes under `Waypoint\Options`, one per feature
 $app->configure(fn (CompressionOptions $gzip) => $gzip->minBytes = 2048);
 
 $app->configure(function (CorsOptions $cors, SecurityHeaderOptions $headers) {
-    $cors->allowOrigin = 'https://shop.example.com';
+    $cors->allowOrigin = 'https://till.sonnenkorn.test';
     $headers->frameOptions = 'SAMEORIGIN';
 });
 ```
@@ -86,10 +95,10 @@ Secrets and per-machine settings come from [`Environment`](../reference/Waypoint
 
 A value set with `Environment::set()` wins over all of them. Missing files are skipped. Keys starting with `HTTP_` are never read from any source: under FPM and CGI those are the request's headers, which the client chose.
 
-The files are read from the current working directory unless `load()` names another one. A front controller in `public/` points it at the project root, so it doesn't matter where the server was started:
+The files are read from the current working directory unless `load()` names another one. The bakery points it at the directory of `app.php`, so it doesn't matter where the server was started (a front controller in `public/` would pass `dirname(__DIR__)`):
 
 ```php
-$app->configure(fn (EnvironmentOptions $env) => $env->load(dirname(__DIR__)));
+$app->configure(fn (EnvironmentOptions $env) => $env->load(__DIR__));
 ```
 
 Without that call the files are loaded from the working directory on the first `get()`.
@@ -98,41 +107,45 @@ Without that call the files are loaded from the working directory on the first `
 
 ```bash
 # .env, not committed
-APP_ENV=development
+APP_ENV=production
 JWT_SECRET=6f1d0c0b2a5b4e3f8a9c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a
 CSRF_SECRET=0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b
-DATABASE_URL=postgres://lento@localhost/shop
+DATABASE_URL=postgres://bakery@db.internal/bakery
 ```
 
 The JSON files are flat objects whose values keep their JSON type (`true`, `25`, a list):
 
 ```json
 {
-    "PAGE_SIZE": 25,
-    "FEATURE_EXPORT": true
+    "BAKERY_TIMEZONE": "Europe/Berlin",
+    "UNCONFIRMED_MINUTES": 15,
+    "OPENAPI": true
 }
 ```
 
 The intended split: `config.json` and `config.<APP_ENV>.json` hold safe defaults and are committed; `.env` and `config.local.json` hold secrets and personal overrides and are listed in `.gitignore`.
 
-Read values where they are needed: in `configure()`, or in a service that injects `Environment`:
+Read values where they are needed: in `configure()`, or in a service that injects `Environment`. The bakery's holiday lookup (from `src/Services/Holidays.php`, shortened) reads its address, country and timeout that way, with defaults for each:
 
 ```php
 <?php
 
-namespace App\Services;
+namespace Bakery\Services;
 
 use Waypoint\Attributes\Inject;
 use Waypoint\Environment;
 
-final class Pagination
+final class Holidays
 {
     #[Inject]
     private Environment $env;
 
-    public function pageSize(): int
+    public function upcoming(): ?array
     {
-        return $this->env->int('PAGE_SIZE', 20);
+        $url = rtrim($this->env->string('HOLIDAYS_URL', 'https://date.nager.at'), '/')
+            . '/api/v3/NextPublicHolidays/' . rawurlencode($this->env->string('HOLIDAY_COUNTRY', 'DE'));
+        $response = \Tenma::fetch($url, timeout: $this->env->float('API_TIMEOUT', 2.5));
+        // …
     }
 }
 ```
@@ -160,9 +173,11 @@ Without a default, a missing key throws a `RuntimeException` naming it (`Environ
 
 ```php
 $app->attach([
-    CustomersController::class,
-    OrdersController::class,
-    MaintenanceTasks::class,
+    ShopController::class,
+    SessionController::class,
+    BackofficeController::class,
+    ApiController::class,
+    DatabaseTasks::class,
 ]);
 ```
 
@@ -176,17 +191,25 @@ It boots the registered [plugins](plugins.md), finds every service the classes i
 |---|---|
 | Tenma | starts the HTTP server on `serve($port)`, else `PORT` from the environment, else 8080; Tenma serves `FileSystemOptions::$publicDirectory` itself |
 | PHP-FPM, `php -S` | handles the one request in the superglobals and sends the response |
-| CLI (`php public/index.php users:sync`) | runs the named [task](cli-tasks.md) and exits with its code |
+| CLI (`php public/index.php db:migrate`, `tenma index.php db:migrate`) | runs the named [task](cli-tasks.md) and exits with its code |
 
 The lower-level entry points exist for runtimes that need them: [`handle()`](../reference/Waypoint/App.md#handle) takes a [`Request`](../reference/Waypoint/Http/Request.md) and returns the finished [`Response`](../reference/Waypoint/Http/Response.md) without sending it, which is what the Tenma bridge, the PSR-15 handler and the testing kit use. See [Runtimes](runtimes.md).
 
 ## Reaching services from the front controller
 
-[`$app->get()`](../reference/Waypoint/App.md#get) returns the container's instance of a class and throws a `ServiceNotFoundException` when it can't be built; [`$app->find()`](../reference/Waypoint/App.md#find) returns `null` instead. They are for code outside controllers and services, such as a script that needs a configured service:
+[`$app->get()`](../reference/Waypoint/App.md#get) returns the container's instance of a class and throws a `ServiceNotFoundException` when it can't be built; [`$app->find()`](../reference/Waypoint/App.md#find) returns `null` instead. They are for code outside controllers and services. The bakery's `index.php` takes the repositories its background timers need:
 
 ```php
-$port = $app->get(Environment::class)->int('PORT', 8080);
-$mailer = $app->find(Mailer::class);   // null when the app has none
+/** @var Waypoint\App $app */
+$app = require __DIR__ . '/app.php';
+$env = $app->get(Environment::class);
+$orders = $app->get(Orders::class);
+
+Tenma::setInterval(function () use ($orders, $env) {
+    $orders->expireUnconfirmed($env->int('UNCONFIRMED_MINUTES', 15));
+}, 30);
+
+$app->serve();
 ```
 
 Inside controllers and services, use `#[Inject]` instead (see [Dependency injection](dependency-injection.md)).

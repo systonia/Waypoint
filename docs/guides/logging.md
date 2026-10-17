@@ -9,23 +9,35 @@ order: 100
 ```php
 <?php
 
-namespace App\Services;
+namespace Bakery\Services;
 
+use JsonException;
+use RuntimeException;
 use Waypoint\Attributes\Inject;
 use Waypoint\Logger;
 
-final class Checkout
+/** The week's forecast at the bakery, from api.open-meteo.com. */
+final class Weather
 {
     #[Inject]
     private Logger $logger;
 
-    public function pay(string $orderId, int $cents): void
+    /** @return array<string, WeatherDay>|null */
+    public function week(): ?array
     {
-        $this->logger->info('Payment started', ['order' => $orderId, 'cents' => $cents]);
-        // …
+        $url = 'https://api.open-meteo.com/v1/forecast?latitude=47.99&longitude=7.85&daily=weather_code';
+        try {
+            $response = \Tenma::fetch($url, timeout: 2.5);
+            // …
+        } catch (RuntimeException|JsonException $e) {
+            $this->logger->warning('weather: ' . $e->getMessage());
+            return null;
+        }
     }
 }
 ```
+
+This is shortened from the Bakery's `src/Services/Weather.php`: when the weather service is down, the product page goes on without the forecast, and the log says why.
 
 ## Where log lines go
 
@@ -39,7 +51,7 @@ use Psr\Log\LogLevel;
 use Waypoint\Options\LoggerOptions;
 
 $app->configure(function (LoggerOptions $logs) {
-    $logs->addMono('app', new StreamHandler('php://stderr'), [
+    $logs->addMono('bakery', new StreamHandler('php://stderr'), [
         LogLevel::INFO, LogLevel::NOTICE, LogLevel::WARNING,
         LogLevel::ERROR, LogLevel::CRITICAL, LogLevel::ALERT, LogLevel::EMERGENCY,
     ]);
@@ -66,8 +78,8 @@ Every request has a correlation id, `$req->id`:
 The id goes back to the client as `X-Request-ID`, and every line logged while the request runs gets it as `request_id` in its context, without passing it around:
 
 ```php
-$this->logger->warning('Card declined', ['order' => $orderId]);
-// context: ['request_id' => 'c0a8f6e2-…', 'order' => 'A-1001']
+$this->logger->warning('Out of stock', ['order' => $order->code, 'product' => 'croissant']);
+// context: ['request_id' => 'c0a8f6e2-…', 'order' => '3f9a1c2b7d', 'product' => 'croissant']
 ```
 
 A support request that quotes the `X-Request-ID` of a failed response finds the matching log lines. Under Tenma the id follows the request into the tasks it starts and into its WebSocket or stream handler. Outside a request (a CLI task) there is no id.
@@ -79,14 +91,18 @@ Mark properties that must never appear in a log with `#[Sensitive]` (credentials
 ```php
 <?php
 
-namespace App\Dto;
+namespace Bakery\Requests;
 
-use Waypoint\Attributes\{Email, NotBlank, PII, Sensitive};
+use Waypoint\Attributes\{Email, NotBlank, PII, Regex, Sensitive};
 use Waypoint\FromArray;
 
-final class SignUp
+final class CheckoutForm
 {
     use FromArray;
+
+    #[NotBlank]
+    #[PII]
+    public string $name = '';
 
     #[NotBlank]
     #[Email]
@@ -94,17 +110,17 @@ final class SignUp
     public string $email = '';
 
     #[NotBlank]
-    #[Sensitive]
-    public string $password = '';
-
-    public string $plan = 'free';
+    #[Regex('/^\d{4}-\d{2}-\d{2}$/')]
+    public string $pickupDate = '';
 }
 ```
 
 ```php
-$this->logger->info('Sign-up', ['form' => Waypoint::redact($signUp)]);
-// ['email' => '**redacted**', 'password' => '**redacted**', 'plan' => 'free']
+$this->logger->info('Checkout', ['form' => Waypoint::redact($form)]);
+// ['name' => '**redacted**', 'email' => '**redacted**', 'pickupDate' => '2026-10-20']
 ```
+
+The password of the back office's `LoginForm` would take `#[Sensitive]` the same way.
 
 `#[Sensitive('[secret]')]` sets another placeholder. The attributes do nothing by themselves: only values passed through `redact()` are replaced, so log DTOs that way rather than as they are.
 

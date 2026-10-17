@@ -41,7 +41,7 @@ Waypoint's defaults are chosen to fail closed: a missing secret stops the app in
 ## What the app does
 
 - **Keep markup in `Html`.** Views escape what `{{ }}` and `<?= ?>` print; only a `Waypoint\Html` value or `<?php echo ?>` goes out unescaped. Never wrap a value from the model, the request or the database in `Html`.
-- **Keep secrets out of the repository.** Read them from [`Environment`](application.md#environment-and-env-files): `.env` and `config.local.json` belong in `.gitignore`.
+- **Keep secrets out of the repository.** Read them from [`Environment`](application.md#environment-and-env-files): `.env` and `config.local.json` belong in `.gitignore`. `$env->string('JWT_SECRET')` without a default throws when the value is missing, so the bakery's `app.php` stops at boot instead of starting without its secrets.
 - **Serve over HTTPS.** Cookies (`withCookie()`, the CSRF cookie) get `Secure` when the request came over HTTPS; behind a proxy that ends TLS, list it in `ProxyOptions` so `$req->https` is right, or set `secure: true` and `CsrfOptions::$cookieSecure = true` yourself.
 - **Check redirect targets.** Never redirect to a URL from the request without checking it against your own paths.
 - **Treat uploads as untrusted.** Never use the client's file name as a path; check the content, not the declared type (see [Requests and responses](requests-responses.md#uploaded-files)).

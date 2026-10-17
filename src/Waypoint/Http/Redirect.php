@@ -6,7 +6,7 @@ use InvalidArgumentException;
 
 /**
  * Returned from a route method to send a redirect instead of a body:
- * `return new Redirect('/dashboard')` next to the View the same handler
+ * `return new Redirect('/backoffice')` next to the View the same handler
  * renders on failure (POST/redirect/GET). Router turns it into status +
  * Location; cookies/headers already queued on the Response are kept.
  * A plain result, not an exception: a redirect is a normal outcome, and

@@ -4,20 +4,19 @@ description: Serve an OpenAPI 3.1 document and Swagger UI generated from the rou
 order: 120
 ---
 
-Waypoint generates an OpenAPI 3.1.0 document from what the code already says: routes, parameter types, `#[Body]` DTOs and their properties. Turn the endpoint on in [`OpenAPIOptions`](../reference/Waypoint/Options/OpenAPIOptions.md); there is nothing to attach:
+Waypoint generates an OpenAPI 3.1.0 document from what the code already says: routes, parameter types, `#[Body]` DTOs and their properties. Turn the endpoint on in [`OpenAPIOptions`](../reference/Waypoint/Options/OpenAPIOptions.md); there is nothing to attach. The Bakery documents its JSON API for the till and the delivery app (from `app.php`):
 
 ```php
 use Waypoint\Environment;
 use Waypoint\Options\OpenAPIOptions;
 
 $app->configure(function (OpenAPIOptions $api, Environment $env) {
-    $api->enabled = $env->isDev();
-    $api->title = 'Shop API';
-    $api->version = '2.3.0';
-    $api->description = 'Products, orders and customers.';
-    $api->servers = [['url' => 'https://api.shop.example.com']];
+    $api->enabled = $env->bool('OPENAPI', false);
+    $api->title = 'Sonnenkorn bakery API';
+    $api->version = '1.0.0';
+    $api->description = 'The range, and the open orders for the people in the bakery.';
+    $api->servers = [['url' => 'https://shop.sonnenkorn.test']];
     $api->securitySchemes = ['bearer' => ['type' => 'http', 'scheme' => 'bearer', 'bearerFormat' => 'JWT']];
-    $api->security = [['bearer' => []]];
 });
 ```
 
@@ -27,7 +26,7 @@ $app->configure(function (OpenAPIOptions $api, Environment $env) {
 | `GET /openapi/spec.v1.json` | the routes of one `#[Version]`; `404` for an unknown version |
 | `GET /openapi/swagger.html` | Swagger UI for the document |
 
-`OpenAPIOptions::$path` moves the prefix (`/openapi` by default). The endpoint answers before routing and without route checks: anyone who can reach the app can read the document. Enable it only where that is fine, for example in development as above, or for a public API.
+`OpenAPIOptions::$path` moves the prefix (`/openapi` by default). The endpoint answers before routing and without route checks: anyone who can reach the app can read the document. Enable it only where that is fine: in development, or for a public API. The Bakery turns it on with `OPENAPI=true`.
 
 The document is built from the compiled attribute cache, not by reflecting the controllers on each request.
 
@@ -37,7 +36,7 @@ For each route that answers with data. A route whose return type is a `View` or 
 
 For each route:
 
-- **operation**: `summary` from `#[Summary]` (otherwise `Class->method`), `operationId` as `ShortClass_method` (the full class name with dots, `App.Admin.OrdersController_show`, where two controllers share a short name), `tags` from `#[Tags]` on the class and the method together, `deprecated` from PHP's `#[\Deprecated]`;
+- **operation**: `summary` from `#[Summary]` (otherwise `Class->method`), `operationId` as `ShortClass_method` (the full class name with dots, `Bakery.Controllers.ApiController_order`, where two controllers share a short name), `tags` from `#[Tags]` on the class and the method together, `deprecated` from PHP's `#[\Deprecated]`;
 - **parameters**: `#[Param]` and unattributed scalars named like a placeholder of the route as path parameters, `#[Query]` and the other unattributed scalars as query parameters, with their PHP types; a query parameter is required when it has neither a default nor a nullable type;
 - **request body**: a `#[Body]` DTO as `application/json` with a `$ref` to its schema, `#[Body]` with `of:` as an array of them;
 - **responses**: `200` with a schema from the return type (an object by its public properties as a component schema, an enum by its values, a nullable type allowing `null`; a plain `array` stays an object) or from `#[Returns]` (see below), plus one problem response (`application/problem+json`, the shared `ProblemDetails` schema) for each `#[Throws]`, and on their own: `401` for a route with `#[Authenticated]`, `#[Role]` or `#[Permissions]`, `403` naming the role or permissions, `422` for a `#[Body]` DTO or a number, boolean or enum parameter;
@@ -46,27 +45,33 @@ For each route:
 `#[Returns]` names what a route answers with, and wins over the return type. That is how an `array` gets its elements, and how a response other than `200 Successful response` is documented:
 
 ```php
-#[Get('')]
+#[Get('/orders')]
+#[Authenticated]
 #[Returns(
-    type: Order::class,
+    type: OrderSummary::class,
     list: true
 )]
-public function index(): array { /* ... */ }
+public function openOrders(): array
+{
+    return array_map(OrderSummary::of(...), $this->orders->open());
+}
 
-#[Post('')]
+#[Post('/tokens')]
 #[Returns(
-    type: Order::class,
-    description: 'The order as stored',
+    type: BearerToken::class,
+    description: 'A token for the Authorization header',
     status: 201
 )]
-public function create(#[Body] NewOrder $order): Order { /* ... */ }
+public function token(#[Body] Credentials $credentials): BearerToken { /* ... */ }
 ```
+
+The first is `ApiController::openOrders()` of the Bakery; the Bakery's own `token()` answers `200` and has no `#[Returns]`, the status here only shows the argument.
 
 `type` is a class, an enum or a scalar keyword (`int`, `string`, `float`, `bool`); `list: true` documents a list of it, `map: true` an object of it by string key (`additionalProperties`). A nullable return type (`?array`) still allows `null`. A `type` that names no class, enum or scalar is logged as a warning and the schema falls back to the return type.
 
-Each DTO becomes a component schema named after its short class name (a second class of the same short name gets its full name with dots, `App.Shipping.LineItem`; `#[Schema('Name')]` picks a better one): its public properties with their types, nested DTOs as `$ref` (also self-referencing ones). In detail:
+Each DTO becomes a component schema named after its short class name (a second class of the same short name gets its full name with dots, `Bakery.Models.OrderLine`; `#[Schema('Name')]` picks a better one): its public properties with their types, nested DTOs as `$ref` (also self-referencing ones). In detail:
 
-- A backed enum is `{"type": "string", "enum": ["open", "done"]}` (or `integer`), for properties and for path and query parameters alike.
+- A backed enum is `{"type": "string", "enum": ["pending", "received", "baking", "ready", "picked_up", "cancelled"]}` (or `integer`), for properties and for path and query parameters alike.
 - A nullable property allows `null`: `"type": ["string", "null"]`, or `anyOf` with `{"type": "null"}` next to a `$ref`.
 - A property is `required` when it has neither a default nor a nullable type, the same rule `FromArray` applies.
 - An `array` property with `#[ListOf(Item::class)]` gets `items`, one with `#[ListOf(type: Item::class, map: true)]` gets `additionalProperties`. Without it the array has no `items`.
@@ -75,82 +80,102 @@ Each DTO becomes a component schema named after its short class name (a second c
 - A property the request cannot set (`readonly`, `protected(set)`, `private(set)`) is `readOnly`.
 - `errors` and `isValid` from `FromArray` are left out.
 
+The Bakery's API at `/v1`, shortened from `src/Controllers/ApiController.php`, with a second `#[Throws]` for the `422`:
+
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use App\Dto\NewOrder;
-use Waypoint\Attributes\{Body, Controller, Get, Ignore, Param, Post, Summary, Tags, Throws, Version};
+use Bakery\Models\Order;
+use Bakery\Repositories\Orders;
+use Bakery\Requests\StatusChange;
+use Bakery\Responses\OrderSummary;
+use Waypoint\Attributes\{Authenticated, Body, Controller, Inject, Patch, SkipCsrf, Summary, Tags, Throws, Version};
 use Waypoint\Exceptions\{NotFoundException, ValidationException};
 
-#[Controller('/orders')]
+#[Controller]
 #[Version('v1')]
-#[Tags(['Orders'])]
-final class OrdersApiController
+#[SkipCsrf]
+final class ApiController
 {
-    #[Get('/{id}')]
-    #[Summary('Fetch one order')]
-    #[Throws(
-        exception: NotFoundException::class,
-        status: 404,
-        description: 'No order with this id'
-    )]
-    public function show(#[Param] int $id): array
-    {
-        return ['id' => $id, 'status' => 'open'];
-    }
+    #[Inject]
+    private Orders $orders;
 
-    #[Post('')]
-    #[Summary('Place an order')]
+    /** Moves the order one step on; the customer's page and every order board show it at once. */
+    #[Patch('/orders/{code}')]
+    #[Authenticated]
+    #[Tags(['Orders'])]
+    #[Summary('Move an order to its next step')]
+    #[Throws(NotFoundException::class)]
     #[Throws(
         exception: ValidationException::class,
-        status: 422
+        description: 'The status is not the next step of the order'
     )]
-    public function create(#[Body] NewOrder $order): array
+    public function advance(string $code, #[Body] StatusChange $change): OrderSummary
     {
-        return ['id' => 1, 'sku' => $order->sku, 'quantity' => $order->quantity];
+        $order = $this->find($code);
+        if ($order->status->next() !== $change->status || !$this->orders->advance($order->id, $order->status)) {
+            throw new ValidationException(errors: ['status' => 'That is not the next step of the order.']);
+        }
+        return OrderSummary::of($this->find($code));
     }
 
-    #[Get('/internal/stats')]
-    #[Ignore]
-    public function stats(): array
+    private function find(string $code): Order
     {
-        return ['orders' => 1];
+        return $this->orders->byCode($code) ?? throw new NotFoundException("No order $code");
     }
 }
 ```
 
+The body and the answer are a DTO and a readonly class (`src/Requests/StatusChange.php`, `src/Responses/OrderSummary.php`):
+
 ```php
 <?php
 
-namespace App\Dto;
+namespace Bakery\Requests;
 
-use Waypoint\Attributes\{NotBlank, Property, Schema};
+use Bakery\Models\OrderStatus;
+use Waypoint\Attributes\Property;
 use Waypoint\FromArray;
 
-#[Schema('OrderRequest')]
-final class NewOrder
+final class StatusChange
 {
     use FromArray;
 
-    #[NotBlank]
     #[Property(
-        description: 'Stock keeping unit',
-        example: 'LAMP-1'
+        description: 'The next step of the order: received → baking → ready → picked_up',
+        example: 'baking'
     )]
-    public string $sku = '';
-
-    #[Property(
-        description: 'Number of items',
-        format: 'int32',
-        example: 2
-    )]
-    public int $quantity = 1;
-
-    public ?string $note = null;
+    public ?OrderStatus $status = null;
 }
 ```
+
+```php
+<?php
+
+namespace Bakery\Responses;
+
+use Bakery\Models\{Order, OrderLine, OrderStatus};
+use Waypoint\Attributes\ListOf;
+
+/** An order as the API shows it: without the customer's email and the internal id. */
+final readonly class OrderSummary
+{
+    public function __construct(
+        public string $code,
+        public string $customer,
+        public string $pickupDate,
+        public OrderStatus $status,
+        public int $totalCents,
+        #[ListOf(OrderLine::class)]
+        public array $lines,
+    ) {
+    }
+}
+```
+
+The document then has `PATCH /v1/orders/{code}` with the summary, the tag, `code` as a path parameter, a request body with a `$ref` to `StatusChange` (its `status` an enum of the six steps plus `null`), a `200` with a `$ref` to `OrderSummary` (its `lines` a `readOnly` array of `OrderLine`), and the problem responses `401`, `404` and `422`. The back office's pages return a `View` and stay out of it; `BackofficeController` also carries `#[Ignore]`, so its CSV and XLSX exports stay out as well. `Product`, which `GET /v1/products` answers with, marks its `id` and `picture` with `#[Ignore]`: its schema and its JSON show neither. The Bakery's `ApiControllerTest` reads the document back from `/openapi/spec.json` and checks these parts.
 
 | Attribute | On | Effect |
 |---|---|---|

@@ -1,6 +1,6 @@
 ---
 title: "Middleware"
-description: "Attaches a MiddlewareBase subclass to a controller class (runs for every route on it, before any method-level middleware) or one route method: `#[Middleware(RequireAdmin::class)]`."
+description: "Attaches a MiddlewareBase subclass to a controller class (runs for every route on it, before any method-level middleware) or one route method: `#[Middleware(CartCookie::class)]`."
 order: 100
 generated: true
 ---
@@ -13,7 +13,7 @@ class Middleware
 
 Attaches a MiddlewareBase subclass to a controller class (runs for every
 route on it, before any method-level middleware) or one route method:
-`#[Middleware(RequireAdmin::class)]`. Its handle() is what runs; a class
+`#[Middleware(CartCookie::class)]`. Its handle() is what runs; a class
 that doesn't extend MiddlewareBase fails the route compile.
 
 ## Properties

@@ -8,9 +8,10 @@ Waypoint is checked at PHPStan level 10, and an app can be too. The rule that ke
 
 ## One place per fact
 
-1. **Native types first.** An array shape such as `array{code: int, max: float, rain: int}` becomes a small readonly class. Its properties carry native types and need no docblock:
+1. **Native types first.** An array shape such as `array{code: int, max: float, rain: int}` becomes a small readonly class. Its properties carry native types and need no docblock (the Bakery's `src/Models/WeatherDay.php`):
 
    ```php
+   /** One day's forecast: the WMO weather code, the highest temperature in °C and the chance of rain in percent. */
    final readonly class WeatherDay
    {
        public function __construct(
@@ -22,19 +23,22 @@ Waypoint is checked at PHPStan level 10, and an app can be too. The rule that ke
    }
    ```
 
-2. **Arrays Waypoint sees** (DTO properties, route results): the attribute only. `#[ListOf]` on a property and `#[Returns]` on a route already name the elements for binding and [OpenAPI](openapi.md); Waypoint's PHPStan extension turns them into real types, so there is no `@var` or `@return` next to them:
+2. **Arrays Waypoint sees** (DTO properties, route results): the attribute only. `#[ListOf]` on a property and `#[Returns]` on a route already name the elements for binding and [OpenAPI](openapi.md); Waypoint's PHPStan extension turns them into real types, so there is no `@var` or `@return` next to them. From the Bakery's `OrderSummary` and `ApiController`:
 
    ```php
-   final class OrderRequest
+   final readonly class OrderSummary
    {
-       use FromArray;
-
-       #[ListOf(OrderLine::class)]
-       public array $lines = [];
+       public function __construct(
+           public string $code,
+           public OrderStatus $status,
+           #[ListOf(OrderLine::class)]
+           public array $lines,
+       ) {
+       }
    }
 
    #[Get('/products')]
-   #[Summary('All products')]
+   #[Summary('The range with prices in cents and what is left')]
    #[Returns(
        type: Product::class,
        list: true
@@ -48,7 +52,7 @@ Waypoint is checked at PHPStan level 10, and an app can be too. The rule that ke
 3. **Arrays Waypoint does not see** (domain classes, repositories): the PHPDoc type only.
 
    ```php
-   /** @return list<Order> */
+   /** @return list<Order> everything not picked up or cancelled yet, oldest pickup first */
    public function open(): array
    ```
 
@@ -78,7 +82,7 @@ Waypoint is checked at PHPStan level 10, and an app can be too. The rule that ke
   public function products(): array
   {
       return $this->db->query('SELECT * FROM products');
-      // Method ProductController::products() should return list<Product> as #[Returns] says, list<array<string, mixed>> returned.
+      // Method ApiController::products() should return list<Product> as #[Returns] says, list<array<string, mixed>> returned.
   }
   ```
 
@@ -86,18 +90,23 @@ Waypoint is checked at PHPStan level 10, and an app can be too. The rule that ke
 
 A database row or decoded JSON is `mixed` to PHPStan, and rightly so: nothing in the code guarantees its shape. `Row` reads it with typed getters that throw when the value is missing or of another type:
 
+The Bakery's `Orders` repository builds an `Order` from a row this way, its lines from a `json_agg()` column:
+
 ```php
 use Waypoint\Support\Row;
 
-$row = new Row($this->db->first('SELECT id, code, status, total FROM orders WHERE id = $1', [$id]));
+$row = new Row($this->db->first(self::SELECT . ' WHERE o.code = $1', [$code]) ?? throw new NotFoundException("No order $code"));
 
 return new Order(
     id: $row->int('id'),
     code: $row->string('code'),
+    customerName: $row->string('customerName'),
+    pickupDate: $row->string('pickupDate'),
     status: $row->enum('status', OrderStatus::class),
-    total: $row->float('total'),
-    note: $row->nullableString('note'),
-    lines: array_map(OrderLine::of(...), $row->rows('lines')),
+    lines: array_map(
+        fn (Row $line) => new OrderLine($line->int('product'), $line->string('name'), $line->int('priceCents'), $line->int('quantity')),
+        $row->rows('lines'),
+    ),
 );
 ```
 
@@ -116,12 +125,19 @@ return new Order(
 
 Values are not converted, with one exception: `float()` also takes an int and a numeric string, since Postgres sends a `numeric` that a float cannot hold exactly as text. A broken value throws an `UnexpectedValueException` that names the key and the type found (`Row value 'id' is not an int, string found.`): a broken row is a program error, not a validation error. For request input, use [binding and validation](binding.md) instead.
 
-External JSON that may be broken is read the same way, with the exception caught where the app can carry on without it:
+External JSON that may be broken is read the same way, with the exception caught where the app can carry on without it. The Bakery's `Weather` service reads the forecast of open-meteo, and the product page goes on without it when the answer has another shape:
 
 ```php
 try {
     $daily = Row::of($response->json())->row('daily');
-    return array_combine($daily->list('time', 'string'), $daily->list('weather_code', 'int'));
+    $codes = $daily->list('weather_code', 'int');
+    $max = $daily->list('temperature_2m_max', 'float');
+    $rain = $daily->list('precipitation_probability_max', 'int');
+    $week = [];
+    foreach ($daily->list('time', 'string') as $i => $day) {
+        $week[$day] = new WeatherDay($codes[$i] ?? 0, $max[$i] ?? 0.0, $rain[$i] ?? 0);
+    }
+    return $week;
 } catch (UnexpectedValueException) {
     return null;
 }

@@ -17,8 +17,9 @@ Base class for app and plugin tests: a fresh Waypoint per test, clean
 superglobals, and a request builder that drives App::handle() through
 Request::fromParts(), without header()/echo.
 
-  $this->post('/login', ['email' => 'a@b.de', 'password' => 'x'])->assertStatus(200)->assertSee('Invalid');
-  $this->request('GET', '/dashboard')->withJwt(['sub' => '1'])->send()->assertOk();
+  $this->request('POST', '/backoffice/login')->withBody(['email' => 'ben@sonnenkorn.test', 'password' => 'wrong'])->withCsrf()->send()
+      ->assertStatus(422)->assertSee('Wrong email or password.');
+  $this->request('GET', '/backoffice')->withJwt(['sub' => 2, 'role' => 'staff'])->send()->assertOk();
 
 ## Methods
 

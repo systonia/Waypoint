@@ -4,12 +4,75 @@ description: Run code before and after requests with MiddlewareBase, app-wide or
 order: 60
 ---
 
-A middleware is a class that extends [`MiddlewareBase`](../reference/Waypoint/Http/MiddlewareBase.md) and overrides `before()`, `after()` or both:
+A middleware is a class that extends [`MiddlewareBase`](../reference/Waypoint/Http/MiddlewareBase.md) and overrides `before()`, `after()` or both. The bakery gives every browser a cart id in a cookie, so its cart survives going from page to page (from `src/Services/CartCookie.php`):
 
 ```php
 <?php
 
-namespace App\Middleware;
+namespace Bakery\Services;
+
+use Waypoint\Http\{MiddlewareBase, Request, Response};
+use Waypoint\Support\Uuid;
+
+final class CartCookie extends MiddlewareBase
+{
+    public const NAME = 'cart';
+
+    public static function valid(string $id): bool
+    {
+        return preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $id) === 1;
+    }
+
+    protected function before(Request $req, Response $res): bool
+    {
+        if ($req->method === 'GET' && !self::valid($req->cookies[self::NAME] ?? '')) {
+            // This request's components see it already, the browser sends it from the next request on
+            $req->cookies[self::NAME] = Uuid::v4();
+            $res->withCookie(self::NAME, $req->cookies[self::NAME], maxAge: 30 * 86400);
+        }
+        return true;
+    }
+}
+```
+
+`before()` runs before the request goes on, `after()` once the response is built. Returning `false` from `before()` stops the request there: neither the rest of the chain nor `after()` runs, and the response as `before()` left it is sent. Both are optional; the defaults do nothing. A middleware that wants to stop a request with an error throws an [HTTP exception](errors.md) instead.
+
+A middleware that answers by itself, for the days the shop takes a break:
+
+```php
+<?php
+
+namespace Bakery\Services;
+
+use Waypoint\Attributes\Inject;
+use Waypoint\Environment;
+use Waypoint\Http\{MiddlewareBase, Request, Response};
+
+final class ClosedForHolidays extends MiddlewareBase
+{
+    #[Inject]
+    private Environment $env;
+
+    protected function before(Request $req, Response $res): bool
+    {
+        if (!$this->env->bool('SHOP_CLOSED', false)) {
+            return true;
+        }
+        $res->status(503)
+            ->withHeader('Retry-After', '86400')
+            ->withHeader('Content-Type', 'text/plain')
+            ->write("Sonnenkorn is on holiday. We bake again from Monday.\n");
+        return false;
+    }
+}
+```
+
+A middleware with `after()` measures how long a request took:
+
+```php
+<?php
+
+namespace Bakery\Services;
 
 use Waypoint\Http\{MiddlewareBase, Request, Response};
 
@@ -31,47 +94,19 @@ final class ServerTiming extends MiddlewareBase
 }
 ```
 
-`before()` runs before the request goes on, `after()` once the response is built. Returning `false` from `before()` stops the request there: neither the rest of the chain nor `after()` runs, and the response as `before()` left it is sent. Both are optional; the defaults do nothing. A middleware that wants to stop a request with an error throws an [HTTP exception](errors.md) instead.
-
-```php
-<?php
-
-namespace App\Middleware;
-
-use Waypoint\Attributes\Inject;
-use Waypoint\Environment;
-use Waypoint\Http\{MiddlewareBase, Request, Response};
-
-final class MaintenanceMode extends MiddlewareBase
-{
-    #[Inject]
-    private Environment $env;
-
-    protected function before(Request $req, Response $res): bool
-    {
-        if ($this->env->get('MAINTENANCE') !== 'on') {
-            return true;
-        }
-        $res->status(503)
-            ->withHeader('Retry-After', '600')
-            ->withHeader('Content-Type', 'text/plain')
-            ->write("Back in a few minutes.\n");
-        return false;
-    }
-}
-```
-
 ## App-wide middleware
 
 [`$app->use()`](../reference/Waypoint/App.md#use) adds a middleware instance that runs for every request, before routing:
 
 ```php
 $app->use(new SecurityHeadersMiddleware());
-$app->use(new MaintenanceMode());
-$app->attach([AccountController::class]);
+$app->use(new CartCookie());
+$app->useJwt();
+
+$app->attach([ShopController::class, SessionController::class, BackofficeController::class, ApiController::class]);
 ```
 
-The first one registered is the outermost: its `before()` runs first and its `after()` last. App-wide middlewares also see requests that end in a `404`, `405`, a file from the public directory under PHP-FPM, or an exception; an exception they throw goes through the [exception handlers](errors.md#exception-handlers). `#[Inject]` properties of an instance passed to `use()` are set when it is registered, and the instance is shared by all requests, so such a middleware keeps nothing per request in its properties. `MaintenanceMode` qualifies; `ServerTiming` above, which keeps the start time, belongs on routes (or keeps the time in a [`FiberLocal`](../reference/Waypoint/Support/FiberLocal.md)).
+The first one registered is the outermost: its `before()` runs first and its `after()` last. App-wide middlewares also see requests that end in a `404`, `405`, a file from the public directory under PHP-FPM, or an exception; an exception they throw goes through the [exception handlers](errors.md#exception-handlers). `#[Inject]` properties of an instance passed to `use()` are set when it is registered, and the instance is shared by all requests, so such a middleware keeps nothing per request in its properties. `CartCookie` and `ClosedForHolidays` qualify; `ServerTiming` above, which keeps the start time, belongs on routes (or keeps the time in a [`FiberLocal`](../reference/Waypoint/Support/FiberLocal.md)).
 
 Plugins add their middlewares at `attach()`, after the app's own. `useCors()` and `useJwt()` are middlewares too and take their place in the order of the calls.
 
@@ -82,17 +117,18 @@ Plugins add their middlewares at `attach()`, after the app's own. `useCors()` an
 ```php
 <?php
 
-namespace App\Middleware;
+namespace Bakery\Services;
 
 use Waypoint\Exceptions\ForbiddenException;
 use Waypoint\Http\{MiddlewareBase, Request, Response};
 
-final class RequireVerifiedEmail extends MiddlewareBase
+/** Stock changes only from the bakery's own network, not from a phone at home. */
+final class BakeryNetworkOnly extends MiddlewareBase
 {
     protected function before(Request $req, Response $res): bool
     {
-        if (($req->jwt['emailVerified'] ?? false) !== true) {
-            throw new ForbiddenException('Please verify your email address first.');
+        if (!str_starts_with($req->ip, '192.168.10.')) {
+            throw new ForbiddenException('The stock can only be changed in the bakery.');
         }
         return true;
     }
@@ -102,27 +138,28 @@ final class RequireVerifiedEmail extends MiddlewareBase
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use App\Middleware\{RequireVerifiedEmail, ServerTiming};
-use Waypoint\Attributes\{Authenticated, Controller, Get, Middleware, Post};
+use Bakery\Services\{BakeryNetworkOnly, ServerTiming};
+use Waypoint\Attributes\{Authenticated, Controller, Get, Middleware};
+use Waypoint\Http\View;
 
-#[Controller('/account')]
+#[Controller('/backoffice')]
 #[Authenticated]
 #[Middleware(ServerTiming::class)]
-final class AccountController
+final class BackofficeController
 {
     #[Get('')]
-    public function show(): array
+    public function board(): View
     {
-        return ['page' => 'account'];
+        return new View('Backoffice/Board', layout: '_Backoffice.php');
     }
 
-    #[Post('/payout')]
-    #[Middleware(RequireVerifiedEmail::class)]
-    public function payout(): array
+    #[Get('/stock')]
+    #[Middleware(BakeryNetworkOnly::class)]
+    public function stock(): View
     {
-        return ['paid' => true];
+        return new View('Backoffice/Stock', layout: '_Backoffice.php');
     }
 }
 ```
@@ -132,7 +169,7 @@ final class AccountController
 - It runs after the route's access checks (`#[Authenticated]`, `#[Role]`, `#[Permissions]`, CSRF and plugin guards) and before the arguments are bound.
 - A class that doesn't exist or doesn't extend `MiddlewareBase` fails the route compilation with an `InvalidArgumentException`, rather than leaving the route without the check it was declared to have.
 
-A `MiddlewareBase` subclass without per-request properties works both ways: as `#[Middleware(MaintenanceMode::class)]` on some routes and as `$app->use(new MaintenanceMode())` on all.
+A `MiddlewareBase` subclass without per-request properties works both ways: as `#[Middleware(ClosedForHolidays::class)]` on some routes and as `$app->use(new ClosedForHolidays())` on all.
 
 ## Security headers
 
@@ -163,14 +200,14 @@ Each has an `…Enabled` switch in [`SecurityHeaderOptions`](../reference/Waypoi
 
 ## CORS
 
-For an API called from browsers on other origins, configure [`CorsOptions`](../reference/Waypoint/Options/CorsOptions.md) and call [`useCors()`](../reference/Waypoint/App.md#usecors):
+For an API called from browsers on other origins (the bakery's till app on its own host, say), configure [`CorsOptions`](../reference/Waypoint/Options/CorsOptions.md) and call [`useCors()`](../reference/Waypoint/App.md#usecors):
 
 ```php
 use Waypoint\Options\CorsOptions;
 
 $app->configure(function (CorsOptions $cors) {
-    $cors->allowOrigin = 'https://app.example.com';
-    $cors->allowMethods = 'GET, POST, PUT, DELETE, OPTIONS';
+    $cors->allowOrigin = 'https://till.sonnenkorn.test';
+    $cors->allowMethods = 'GET, POST, PATCH, OPTIONS';
     $cors->allowHeaders = 'Content-Type, Authorization';
     $cors->exposeHeaders = 'X-Request-ID';
     $cors->maxAge = 86400;

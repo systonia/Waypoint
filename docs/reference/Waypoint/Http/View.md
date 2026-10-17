@@ -1,6 +1,6 @@
 ---
 title: "View"
-description: "A server-rendered template result: `return new View('Admin/Users', $model)` renders views/Admin/Users.php inside RendererOptions::$layout (unless $partial)."
+description: "A server-rendered template result: `return new View('Backoffice/Sales', $model)` renders views/Backoffice/Sales.php inside RendererOptions::$layout (unless $partial)."
 order: 100
 generated: true
 ---
@@ -11,8 +11,8 @@ generated: true
 class View
 ```
 
-A server-rendered template result: `return new View('Admin/Users', $model)`
-renders views/Admin/Users.php inside RendererOptions::$layout (unless
+A server-rendered template result: `return new View('Backoffice/Sales', $model)`
+renders views/Backoffice/Sales.php inside RendererOptions::$layout (unless
 $partial). Inside a template `$this` is this View and `$model` the model;
 `$this->env`/`$this->csrf`/`$this->request` are set by Router before render().
 `{{ $value }}` and `<?= $value ?>` are HTML-escaped; Waypoint\Html (what section(),
@@ -189,7 +189,7 @@ public function __construct(
 
 **Parameters**
 
-- `$view` `string`: Path under RendererOptions::$directory without .php, '/'-separated ("Admin/Users"). A leading '/', a backslash or a '..' segment is rejected: the name is often built from request input.
+- `$view` `string`: Path under RendererOptions::$directory without .php, '/'-separated ("Backoffice/Sales"). A leading '/', a backslash or a '..' segment is rejected: the name is often built from request input.
 - `$model` `mixed`
 - `$partial` `bool`
 - `$layout` `string|null`: Overrides RendererOptions::$layout for this render.

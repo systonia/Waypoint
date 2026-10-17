@@ -10,64 +10,68 @@ order: 160
 composer require --dev phpunit/phpunit
 ```
 
-A test extends [`Waypoint\Testing\TestCase`](../reference/Waypoint/Testing/TestCase.md), sets the app up the way the front controller does, and sends requests:
+A test extends [`Waypoint\Testing\TestCase`](../reference/Waypoint/Testing/TestCase.md), sets the app up the way the front controller does, and sends requests. The Sonnenkorn bakery builds its app in `app.php`, which `index.php` serves and every test loads; this test covers its JSON API (shortened from `tests/Controllers/ApiControllerTest.php` and `SessionControllerTest.php`):
 
 ```php
 <?php
 
-namespace App\Tests;
+namespace Bakery\Tests\Controllers;
 
-use App\Controllers\{CustomersController, GreetingController};
-use Waypoint\Options\CsrfOptions;
+use Bakery\Tasks\DatabaseTasks;
 use Waypoint\Testing\TestCase;
 
-final class CustomersTest extends TestCase
+final class ApiControllerTest extends TestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
-        $app = $this->app();
-        $app->configure(fn (CsrfOptions $csrf) => $csrf->secret = str_repeat('x', 32));
-        $app->attach([GreetingController::class, CustomersController::class]);
+        require __DIR__ . '/../../app.php';   // configures and attaches $this->app(), as index.php does
+        $this->app()->get(DatabaseTasks::class)->reset();
     }
 
-    public function testGreets(): void
+    public function testAnyoneCanReadTheRange(): void
     {
-        $this->get('/hello/Ada?shout=yes')
+        $this->get('/v1/products')
             ->assertOk()
             ->assertContentType('application/json')
-            ->assertJson(['greeting' => 'HELLO, ADA!']);
+            ->assertJsonPath('2.slug', 'pretzel')
+            ->assertJsonPath('2.priceCents', 120);
     }
 
-    public function testRejectsAnInvalidCustomer(): void
+    public function testRejectsAnInvalidAddress(): void
     {
-        $this->request('POST', '/customers')
-            ->withJson(['name' => 'Ada', 'email' => 'not-an-address'])
-            ->withCsrf()
-            ->send()
+        $this->json('POST', '/v1/tokens', ['email' => 'ben', 'password' => 'pretzel'])
             ->assertStatus(422)
             ->assertJsonPath('errors.email', 'This value is not a valid email address.');
     }
 
-    public function testNeedsTheCsrfToken(): void
+    public function testTheOrdersNeedAToken(): void
     {
-        $this->json('POST', '/customers', ['name' => 'Ada', 'email' => 'ada@example.com'])->assertStatus(403);
+        $this->get('/v1/orders')->assertStatus(401);
+        $token = $this->json('POST', '/v1/tokens', ['email' => 'ben@sonnenkorn.test', 'password' => 'pretzel'])
+            ->assertOk()
+            ->json('token');
+        $this->assertIsString($token);
+        $this->get('/v1/orders', ['Authorization' => "Bearer $token"])->assertOk()->assertJson([]);
     }
 
-    public function testCreatesACustomer(): void
+    public function testAnUnknownOrderIsNotFound(): void
     {
-        $response = $this->request('POST', '/customers')
-            ->withBody(['name' => 'Ada', 'email' => 'ada@example.com', 'newsletter' => 'on'])
-            ->withCsrf()
+        $this->request('PATCH', '/v1/orders/NOPE')
+            ->withJwt(['sub' => 2, 'name' => 'Ben', 'role' => 'staff'])
+            ->withJson(['status' => 'baking'])
             ->send()
-            ->assertStatus(201);
+            ->assertStatus(404);
+    }
 
-        $this->assertTrue($response->json('newsletter'));
+    public function testTheSignInFormNeedsTheCsrfToken(): void
+    {
+        $this->post('/backoffice/login', ['email' => 'ben@sonnenkorn.test', 'password' => 'pretzel'])->assertStatus(403);
     }
 }
 ```
 
-Every test starts with a fresh app ([`Waypoint::reset()`](../reference/Waypoint/Waypoint.md#reset)) and empty superglobals. `$this->app()` is that app; configure and attach it in `setUp()` or in the test itself. A test that overrides `setUp()` or `tearDown()` calls the parent's.
+Every test starts with a fresh app ([`Waypoint::reset()`](../reference/Waypoint/Waypoint.md#reset)) and empty superglobals. `$this->app()` is that app, the same one `Waypoint::create()` returns, so a front controller that calls `Waypoint::create()` configures it when the test loads it; configure and attach it in `setUp()` or in the test itself. A test that overrides `setUp()` or `tearDown()` calls the parent's.
 
 ## Sending requests
 
@@ -83,7 +87,7 @@ Every test starts with a fresh app ([`Waypoint::reset()`](../reference/Waypoint/
 | `withHeader($name, $value)`, `withHeaders([...])` | request headers |
 | `withBody([...])` | form fields |
 | `withJson([...])` | a JSON body |
-| `withFile($field, $name, $contents, $type)` | an uploaded file, named as in the form (`avatar`, `photos[]`, `doc[a]`) |
+| `withFile($field, $name, $contents, $type)` | an uploaded file, named as in the form (`picture`, `photos[]`, `doc[a]`) |
 | `withCookie($name, $value)` | a cookie for this request |
 | `withJwt([...])` | a bearer token for the payload, signed with the configured `JWTOptions` |
 | `withCsrf()` | a valid CSRF cookie and header, bound to the session cookie the request carries; nothing when CSRF is off |
@@ -100,7 +104,7 @@ A [`TestResponse`](../reference/Waypoint/Testing/TestResponse.md) has readers an
 |---|---|
 | `status()` | `assertStatus(404)`, `assertOk()` |
 | `header('Location')`, `headers()` | `assertHeader($name, $value)`, `assertHeaderMissing($name)`, `assertContentType('text/html')` |
-| `cookie('session')`, `cookies()` | `assertCookie($name, $value)` |
+| `cookie('session')` (null when none was set), `cookies()` | `assertCookie($name, $value)` |
 | `body()` | `assertSee($text)`, `assertDontSee($text)`, `assertBody($exact)` |
 | `json()`, `json('errors.email')` | `assertJson([...])`, `assertJsonPath('errors.email', $value)` |
 | | `assertRedirect('/login', 303)` |
@@ -108,19 +112,19 @@ A [`TestResponse`](../reference/Waypoint/Testing/TestResponse.md) has readers an
 A cookie that was removed reads as `''`. A redirect can be followed by sending the next request to its `Location`, carrying over the cookies the response set:
 
 ```php
-public function testSignInLeadsToTheDashboard(): void
+public function testSignInLeadsToTheOrderBoard(): void
 {
-    $login = $this->request('POST', '/login')
-        ->withBody(['email' => 'ada@example.com', 'password' => 'secret'])
+    $login = $this->request('POST', '/backoffice/login')
+        ->withBody(['email' => 'ben@sonnenkorn.test', 'password' => 'pretzel'])
         ->withCsrf()
         ->send()
-        ->assertRedirect('/dashboard', 303);
+        ->assertRedirect('/backoffice', 303);
 
-    $this->request('GET', $login->header('Location'))
-        ->withCookie('session', $login->cookie('session'))
+    $this->request('GET', $login->header('Location') ?? '')
+        ->withCookie('session', $login->cookie('session') ?? '')
         ->send()
         ->assertOk()
-        ->assertSee('Hello');
+        ->assertSee('Sign out Ben');
 }
 ```
 
@@ -140,6 +144,6 @@ Testing with a cache directory also exercises the cached route plans, which is w
 vendor/bin/phpunit
 ```
 
-The requests run in the test process. For an app meant for Tenma, also run it under Tenma with parallel requests, which shows state shared between requests that a sequential test can't (see [Dependency injection](dependency-injection.md#controllers-per-request-services-per-process)).
+The requests run in the test process. An app that waits with Tenma's own functions (its Postgres client, `Tenma::fetch()`) needs Tenma's event loop in the test run as well: the bakery's `tests/Support/bootstrap.php` hands the whole PHPUnit run to `tenma` for that. For an app meant for Tenma, also run it under Tenma with parallel requests, which shows state shared between requests that a sequential test can't (see [Dependency injection](dependency-injection.md#controllers-per-request-services-per-process)).
 
 See also: [`TestCase`](../reference/Waypoint/Testing/TestCase.md), [`TestRequest`](../reference/Waypoint/Testing/TestRequest.md), [`TestResponse`](../reference/Waypoint/Testing/TestResponse.md), [Plugins](plugins.md#testing-a-plugin).

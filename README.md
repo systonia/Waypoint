@@ -126,14 +126,17 @@ the app:
 <?php
 require __DIR__ . '/vendor/autoload.php';
 
+use Bakery\Controllers\{ApiController, ShopController};
 use Waypoint\Waypoint;
-use App\Controllers\HelloController;
 
 $app = Waypoint::create();
-$app->attach([HelloController::class]);
+$app->attach([ShopController::class, ApiController::class]);
 
 $app->serve();
 ```
+
+The Sonnenkorn bakery ([Waypoint-Bakery](https://github.com/systonia/Waypoint-Bakery)), the example app these docs
+draw on, splits this in two: `app.php` builds the app and `index.php` serves it.
 
 `attach()` discovers every class reachable from your controllers via `#[Inject]` (see
 [Dependency Injection](#dependency-injection) below) and wires up the router and container. Outside
@@ -146,7 +149,7 @@ A runtime that hands requests over itself, instead of filling the superglobals, 
 `Content-Length` already applied) without sending anything:
 
 ```php
-$res = $app->handle(Request::fromParts('GET', '/customers/7?tab=orders', $headers, $body, $cookies, https: true, ip: $peer));
+$res = $app->handle(Request::fromParts('GET', '/products/croissant?live', $headers, $body, $cookies, https: true, ip: $peer));
 // $res->getStatus(), $res->getHeaders(), $res->getCookies() (one Set-Cookie value each), $res->getBody()
 ```
 
@@ -196,14 +199,14 @@ request id (on every log line), the CSRF token and whatever a plugin keeps in a 
 request itself, such as the JWT claims, go in through `use`:
 
 ```php
-#[Get('/chat')]
+#[Get('/backoffice/notes')]
 #[Authenticated]
-public function chat(Request $req, Response $res): void
+public function notes(Request $req, Response $res): void
 {
-    $userId = $req->jwt['sub'];
-    $res->upgrade(\Tenma\Http\Response::websocket(function (\Tenma\Http\WebSocket $socket) use ($userId) {
-        while (($message = $socket->receive()) !== null) {
-            $socket->send("$userId: $message");
+    $name = $req->jwt['name'];   // "Ben", from the claims Users::verify() returned at sign-in
+    $res->upgrade(\Tenma\Http\Response::websocket(function (\Tenma\Http\WebSocket $socket) use ($name) {
+        while (($note = $socket->receive()) !== null) {
+            $socket->send("$name: $note");   // "Ben: two more rye loaves for the market"
         }
     }));
 }
@@ -227,22 +230,27 @@ Each request is translated in and out, so the direct `Tenma::serve(8080, $app)` 
 Tenma. PSR-15 middlewares run around the whole app, not per route, and see neither guards nor
 `#[Authenticated]`. `Response::upgrade()` works through the handler only under Tenma with `tenma/psr`.
 
-A minimal controller:
+A minimal controller, shortened from the bakery's `src/Controllers/ApiController.php`:
 
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use Waypoint\Attributes\{Controller, Get, Param};
+use Bakery\Repositories\Products;
+use Waypoint\Attributes\{Controller, Get, Inject, Version};
 
-#[Controller('/hello')]
-class HelloController
+#[Controller]
+#[Version('v1')]   // every route under /v1
+final class ApiController
 {
-    #[Get('/{name}')]
-    public function greet(#[Param] string $name): array
+    #[Inject]
+    private Products $products;
+
+    #[Get('/products')]
+    public function products(): array
     {
-        return ['message' => "Hello, $name!"];
+        return $this->products->all();   // a list of Product objects, sent as JSON
     }
 }
 ```
@@ -260,9 +268,9 @@ depending on where the value comes from:
 
 | Attribute   | Description                                                     | Example                              |
 |-------------|-------------------------------------------------------------------|---------------------------------------|
-| `#[Param]`  | Binds a route placeholder (e.g. `{customerId}`)                  | `#[Param] string $customerId`         |
-| `#[Query]`  | Binds a query string (`?foo=`) parameter                         | `#[Query] string $search`             |
-| `#[Body]`   | Binds the request body to a DTO: JSON for a JSON `Content-Type` (`application/json`, `application/*+json`), form fields otherwise | `#[Body] UserDTO $user`               |
+| `#[Param]`  | Binds a route placeholder (e.g. `{code}`)                        | `#[Param] string $code`               |
+| `#[Query]`  | Binds a query string (`?category=`) parameter                    | `#[Query] ?string $category`          |
+| `#[Body]`   | Binds the request body to a DTO: JSON for a JSON `Content-Type` (`application/json`, `application/*+json`), form fields otherwise | `#[Body] StatusChange $change`        |
 
 An unattributed scalar-typed parameter (`string`/`int`/`float`/`bool`) is bound implicitly: Waypoint
 tries the route placeholder first, then falls back to the query string. The text converts by its
@@ -274,36 +282,40 @@ otherwise. `#[Body] array $data` gets the decoded body as it came. `Request`/`Re
 type-hinted parameters (or properties) are injected directly, no attribute needed. A non-nullable parameter
 none of this binds stops the app at boot with an `InvalidArgumentException` instead of failing each request.
 
-Placeholder values arrive URL-decoded, once: `/user/J%C3%BCrgen` binds `Jürgen`, `/user/%2541` binds `%41`,
-and an encoded `%2F` stays inside its own segment. Everything around the placeholders matches literally, so
-`/file/{name}.json` matches `/file/report.json` but not `/file/reportxjson`.
+Placeholder values arrive URL-decoded, once: `/products/br%C3%B6tchen` binds `brötchen`, `/products/%2541`
+binds `%41`, and an encoded `%2F` stays inside its own segment. Everything around the placeholders matches
+literally, so the bakery's `/backoffice/orders.{format}` matches `/backoffice/orders.csv` but not
+`/backoffice/ordersxcsv`.
 
 ```php
-use Waypoint\Attributes\{Get, Post, Param, Query, Body};
+use Bakery\Requests\StatusChange;
+use Bakery\Responses\OrderSummary;
+use Waypoint\Attributes\{Body, Controller, Get, Param, Patch, Query, Version};
 
-class UserController
+#[Controller]
+#[Version('v1')]
+final class ApiController
 {
-    #[Get('/{customerId}')]
-    public function getProfile(
-        #[Param] string $customerId,          // from /{customerId}
-        #[Query] ?string $expand = null,       // from ?expand=...
-    ) {
+    #[Get('/products')]
+    public function products(
+        #[Query] ?string $category = null,   // from ?category=bread
+    ): array {
         // ...
     }
 
-    #[Post('/{customerId}')]
-    public function updateProfile(
-        #[Param] string $customerId,
-        #[Body] UserProfileUpdateDTO $payload  // hydrated from the JSON/form body
-    ) {
+    #[Patch('/orders/{code}')]
+    public function advance(
+        #[Param] string $code,               // from /orders/{code}
+        #[Body] StatusChange $change,        // hydrated from the JSON/form body
+    ): OrderSummary {
         // ...
     }
 }
 ```
 
 By default `#[Param]`/`#[Query]` match the parameter's own name; pass a name to bind a
-differently-named placeholder or query key: `#[Param('uuid')] string $userId`, `#[Query('q')] string
-$queryTerm`.
+differently-named placeholder or query key: `#[Param('code')] string $orderCode`, `#[Query('q')] string
+$search`.
 
 Class-level attributes are inherited from base controllers, although PHP itself doesn't inherit
 attributes: an `#[Authenticated]`, `#[Role]`, `#[Middleware]` or `#[Version]` on an abstract base
@@ -317,16 +329,25 @@ JSON array of objects, type the parameter `array` and give `#[Body]` an `of:` el
 Each element is hydrated into (and validated against) that DTO individually:
 
 ```php
-use Waypoint\Attributes\{Post, Body};
+use Bakery\Requests\StockLevel;
+use Waypoint\Attributes\{Body, Put};
 
-class OrdersController
+final class ApiController
 {
-    #[Post('/bulk')]
-    public function bulkCreate(#[Body(of: LineItemDTO::class)] array $items): array
-    {
-        // $items is LineItemDTO[]; a validation failure on any element throws
+    /** The morning's count from the till: [{"slug": "croissant", "stock": 40}, ...] */
+    #[Put('/stock')]
+    public function restock(
+        #[Body(
+            of: StockLevel::class
+        )]
+        array $levels,
+    ): array {
+        // $levels is StockLevel[]; a validation failure on any element throws
         // ValidationException with per-index error details (e.g. "1" => [...]).
-        return ['count' => count($items)];
+        foreach ($levels as $level) {
+            $this->products->setStockBySlug($level->slug, $level->stock);
+        }
+        return ['updated' => count($levels)];
     }
 }
 ```
@@ -335,25 +356,26 @@ The body must be a JSON list of objects. A single object answers `422` with a `b
 element that is no object (`[1, "two"]`) answers `422` with an error under its index.
 
 This is reflected in the generated OpenAPI schema too: the request body documents as
-`{"type": "array", "items": {"$ref": "#/components/schemas/LineItemDTO"}}` rather than a single `$ref`.
+`{"type": "array", "items": {"$ref": "#/components/schemas/StockLevel"}}` rather than a single `$ref`.
 
 ### File uploads
 
 A `multipart/form-data` request carries its fields in `$req->body` and its files in `$req->files`, nested as
-the field names say (`photos[]` becomes a list). `$req->file()` returns one, named as in the form: `'avatar'`,
+the field names say (`photos[]` becomes a list). `$req->file()` returns one, named as in the form: `'picture'`,
 `'doc[a]'`, `'photos[1]'`. An empty file input is left out, and a list stays numbered without gaps. The same works
-under FPM, Tenma, any PSR-7 server and the testing kit (`->withFile('avatar', 'me.png', $bytes, 'image/png')`):
+under FPM, Tenma, any PSR-7 server and the testing kit (`->withFile('picture', 'pretzel.png', $bytes, 'image/png')`):
 
 ```php
-#[Post('/profile/avatar')]
-public function avatar(Request $req): Redirect
+#[Post('/backoffice/products/{slug}/picture')]
+#[Role('owner')]
+public function picture(string $slug, Request $req): Redirect
 {
-    $avatar = $req->file('avatar') ?? throw new ValidationException(errors: ['avatar' => 'Choose a picture.']);
-    if (!$avatar->isValid() || getimagesizefromstring($avatar->contents()) === false) {
-        throw new ValidationException(errors: ['avatar' => 'This is not a picture.']);
+    $picture = $req->file('picture') ?? throw new ValidationException(errors: ['picture' => 'Choose a picture.']);
+    if (!$picture->isValid() || getimagesizefromstring($picture->contents()) === false) {
+        throw new ValidationException(errors: ['picture' => 'This is not a picture.']);
     }
-    $avatar->moveTo(__DIR__ . '/../storage/avatars/' . bin2hex(random_bytes(8)) . '.png');
-    return new Redirect('/profile', 303);
+    $picture->moveTo(__DIR__ . '/../../public/products/' . bin2hex(random_bytes(8)) . '.png');
+    return new Redirect("/products/$slug", 303);
 }
 ```
 
@@ -367,27 +389,38 @@ trusting the type. `isValid()` is false when PHP or the runtime refused the file
 DTOs used with `#[Body]` can carry validation attributes on their public properties:
 
 ```php
-use Waypoint\Attributes\{NotBlank, Email, Length, Regex, OneOf, SameAs};
+use Waypoint\Attributes\{Email, Length, NotBlank, OneOf, Regex, SameAs};
+use Waypoint\FromArray;
 
-class CreateProductDTO
+/** The owner adds someone to the bakery's staff. */
+final class NewStaffMember
 {
+    use FromArray;
+
     #[NotBlank]
+    #[Length(
+        min: 2,
+        max: 80
+    )]
     public string $name = '';
 
+    #[NotBlank]
     #[Email]
-    public ?string $contactEmail = null;
+    public string $email = '';
 
-    #[Length(min: 2, max: 12)]
-    #[Regex(pattern: '/^[A-Z0-9\-]+$/')]
-    public string $sku = '';
+    #[OneOf(['owner', 'staff'])]
+    public string $role = 'staff';
 
-    #[OneOf(['draft', 'live'])]
-    public string $status = 'draft';
+    #[Regex('/^\+?[0-9 ]{6,20}$/')]
+    public ?string $phone = null;
 
+    #[Length(
+        min: 10
+    )]
     public string $password = '';
 
     #[SameAs('password')]
-    public string $passwordConfirm = '';
+    public string $passwordRepeat = '';
 }
 ```
 
@@ -396,7 +429,7 @@ against the named property of the same DTO.
 
 A failing DTO throws `ValidationException`, which the default exception handler turns into a `422`
 RFC 9457 Problem Details response, with per-field errors under `errors`:
-`{"type": "about:blank", "title": "Validation failed", "status": 422, "detail": "Validation failed", "errors": {"sku": "..."}}`.
+`{"type": "about:blank", "title": "Validation failed", "status": 422, "detail": "Validation failed", "errors": {"email": "..."}}`.
 See [Exception Handling](#exception-handling). The messages are English by default; a plugin can bind
 `Waypoint\Validation\Messages` to translate them (the `waypoint-i18n` plugin does, see [Plugins](#plugins)).
 
@@ -409,46 +442,50 @@ exactly that, instead of writing (and keeping in sync across every DTO) the same
 loop by hand:
 
 ```php
+use Waypoint\Attributes\{Email, NotBlank};
 use Waypoint\FromArray;
-use Waypoint\Attributes\{NotBlank, Email};
 
-class CreateProductDTO
+// src/Requests/LoginForm.php
+final class LoginForm
 {
     use FromArray;
 
     #[NotBlank]
-    public string $name = '';
-
     #[Email]
-    public ?string $contactEmail = null;
+    public string $email = '';
+
+    #[NotBlank]
+    public string $password = '';
 }
 ```
 
 Unknown keys in the input array are silently ignored, and so are keys naming a private, protected,
 `protected(set)`/`private(set)` or static property: those are the DTO's own state, never request input. A writable
-property without a default (`public string $name;`) is required: left unset, it fails `This value is required.`
+property without a default (`public string $email;`) is required: left unset, it fails `This value is required.`
 (a `422`, not an uninitialized-property `500`). A JSON body that doesn't parse answers `400 Bad Request` before
 any DTO is built. A backed enum property (`public OrderStatus $status`) gets the case its value names via `tryFrom()`, and
-`This value should be one of: open, done.` otherwise. A property typed with another `FromArray` DTO is built
-from the nested array, and an `array` property with `#[ListOf(LineItem::class)]` (`map: true` for string
+`This value should be one of: pending, received, baking, ready, picked_up, cancelled.` otherwise. A property typed with another `FromArray` DTO is built
+from the nested array, and an `array` property with `#[ListOf(OrderLine::class)]` (`map: true` for string
 keys) gets each element built as a DTO or enum case; nested errors are reported under
-dotted keys (`delivery.city`, `items.0.sku`). A property with `#[Ignore]` is never set from input nor
+dotted keys (`customer.email`, `lines.0.quantity`). A property with `#[Ignore]` is never set from input nor
 required, and it is left out of JSON/XML results and the OpenAPI schema too. A property that must only never
 be settable this way (e.g. a server-computed value) can be excluded by overriding `fromArrayExcludes()`:
 
 ```php
 use Waypoint\FromArray;
 
-class ProductDTO
+final class CheckoutForm
 {
     use FromArray;
 
-    public ?ProductDTO $relatedProduct = null; // set server-side, never from client input
+    public string $name = '';
+
+    public ?string $voucher = null;   // filled in from the customer's earlier order, never from client input
 
     /** @return array<int, string> */
     protected function fromArrayExcludes(): array
     {
-        return ['relatedProduct'];
+        return ['voucher'];
     }
 }
 ```
@@ -463,15 +500,27 @@ For an HTML form handler that re-renders the page with the errors, bind with `#[
 method gets the DTO even when it is invalid, and a `View` it returns then answers with status `422`. Built by
 hand or bound that way, the DTO validates itself. `isValid` and `errors` are computed properties: every read applies the attribute
 rules, so there is no validator to construct and no moment where the result is stale. `fail()` adds a
-failure only your code can know about (a taken email, a wrong current password) to the same list:
+failure only your code can know about (a wrong password, an email the bakery already has) to the same list:
 
 ```php
-$data = new RegisterDTO($req->body());
-if ($data->isValid && $this->users->findByEmail($data->email)) {
-    $data->fail('email', 'That email is already registered.');
-}
-if (!$data->isValid) {
-    return $this->registerView($req, error: implode(' ', $data->errors));
+// from src/Controllers/SessionController.php
+#[Post('/login')]
+public function login(
+    #[Body(
+        validate: false
+    )]
+    LoginForm $form,
+    Response $res,
+): View|Redirect {
+    $user = $form->isValid ? $this->users->verify($form->email, $form->password) : null;
+    if ($user === null) {
+        if ($form->isValid) {
+            $form->fail('password', 'Wrong email or password.');
+        }
+        return new View('Backoffice/Login', $form, layout: '_Backoffice.php');   // 422 with $form->errors
+    }
+    JWT::signIn($res, $user);
+    return new Redirect('/backoffice', 303);
 }
 ```
 
@@ -492,42 +541,52 @@ service" attribute**: reachability via `#[Inject]` is what registers a class.
 ```php
 <?php
 
-namespace App\Services;
+namespace Bakery\Services;
 
+use Bakery\Models\{Holiday, WeatherDay};
 use Waypoint\Attributes\Inject;
-use Waypoint\Logger;
-use App\Entities\User;
 
-class UserService
+// from src/Services/LastKnown.php: the last good answer of each web service, in this worker's memory
+final class LastKnown
 {
     #[Inject]
-    private Logger $logger;
+    private Holidays $holidayService;
 
-    public function getUser(string $name): ?User
+    #[Inject]
+    private Weather $weatherService;
+
+    /** @var array<string, Holiday>|null */
+    public private(set) ?array $holidays = null;
+
+    public function refreshHolidays(): void
     {
-        $user = User::where('name', $name)->first();
-        if (!$user) {
-            $this->logger->error("user not found");
-        }
-        return $user;
+        $this->holidays = $this->holidayService->upcoming() ?? $this->holidays;
     }
 }
 ```
 
 ```php
-#[Controller('/users')]
-class UserController
+// from src/Controllers/ShopController.php
+#[Controller]
+final class ShopController
 {
     #[Inject]
-    private UserService $users;
+    private Products $products;
 
-    #[Get('/{name}')]
-    public function show(#[Param] string $name): array
+    #[Inject]
+    private LastKnown $lastKnown;
+
+    #[Get('/products/{slug}')]
+    public function product(string $slug): View
     {
-        return $this->users->getUser($name)?->toArray() ?? [];
+        $product = $this->products->bySlug($slug) ?? throw new NotFoundException("No product $slug");
+        // ... the next pickup days, without the holidays in $this->lastKnown->holidays
     }
 }
 ```
+
+`ShopController` reaches `LastKnown`, and `LastKnown` reaches `Holidays` and `Weather`: all four are in the
+container without being listed anywhere.
 
 Notes:
 
@@ -563,12 +622,12 @@ on I/O, anything a service keeps in a property is visible to every other request
 not keep per-request state in its properties**:
 
 ```php
-class AuthService
+final class Cart
 {
-    private ?User $user = null;
+    private string $cartId = '';
 
-    public function signIn(Request $req): void { $this->user = User::fromJwt($req->jwt); } // wrong
-    public function user(): ?User { return $this->user; }                                  // another request's user
+    public function open(Request $req): void { $this->cartId = $req->cookies['cart']; } // wrong
+    public function lines(): array { return $this->carts->lines($this->cartId); }      // another customer's cart
 }
 ```
 
@@ -577,12 +636,12 @@ switching shared state per request (`$translator->setLocale(...)`, `$db->setTena
 request (a list of messages, a query counter) and half-built objects (set fields, wait, then `build()`).
 
 Fine in a service: configuration and dependencies that never change after boot, caches whose content
-holds for everyone (compiled templates, exchange rates; nothing user-specific unless the user is part of
+holds for everyone (compiled templates, the public holidays; nothing user-specific unless the user is part of
 the key), and stateless helpers that get everything they need as arguments.
 
 Instead of per-request state in a service:
 
-- pass it along as an argument: `$auth->user($req)` rather than `$auth->user()`;
+- pass it along as an argument: `$auth->user($req)` rather than `$auth->user()`, `$carts->lines($req->cookies['cart'])`;
 - keep it on the request, as `useJwt()` does with `$req->jwt`;
 - or, for a value that really has to be implicitly "current" (a request id for log lines), hold it in a
   `Waypoint\Support\FiberLocal`, as `RequestContext` and `Csrf` do.
@@ -602,34 +661,36 @@ use Waypoint\Attributes\Inject;
 use Waypoint\Environment;
 use Waypoint\Http\{MiddlewareBase, Request, Response};
 
-final class MaintenanceMode extends MiddlewareBase
+/** The shop is closed for the summer holidays: every page says so. */
+final class ClosedForHolidays extends MiddlewareBase
 {
     #[Inject]
     private Environment $env;
 
     protected function before(Request $req, Response $res): bool
     {
-        if ($this->env->get('MAINTENANCE') !== 'on') {
+        if (!$this->env->bool('CLOSED_FOR_HOLIDAYS', false)) {
             return true;
         }
         $res->status(503)
-            ->withHeader('Retry-After', '600')
+            ->withHeader('Retry-After', '86400')
             ->withHeader('Content-Type', 'text/plain')
-            ->write("Back in a few minutes.\n");
+            ->write("Sonnenkorn is on holiday. We bake again from Monday.\n");
         return false;
     }
 }
 
-$app->use(new MaintenanceMode());
+$app->use(new ClosedForHolidays());
 ```
 
 The instance is shared by all requests, so a middleware passed to `use()` keeps nothing per request in its
-properties.
+properties. The bakery's `CartCookie` (`src/Services/CartCookie.php`) is one: it gives every browser a cart id
+in a cookie and keeps nothing itself.
 
 `useCors()` and `useJwt()` (see below) are both just built-in middleware registered this way.
 
-`$req->path` is the path the router matches: slashes at either end trimmed and percent-decoded, so `//admin/`
-and `/%61dmin` are both `/admin`, and a check on it covers every spelling that reaches the same route. A path
+`$req->path` is the path the router matches: slashes at either end trimmed and percent-decoded, so `//backoffice/`
+and `/%62ackoffice` are both `/backoffice`, and a check on it covers every spelling that reaches the same route. A path
 with an encoded slash (`%2F`) or NUL in a segment stays encoded as a whole.
 
 Per-route middleware is declared with `#[Middleware(Class::class)]` directly on a controller method
@@ -643,12 +704,13 @@ yourself:
 use Waypoint\Http\{MiddlewareBase, Request, Response};
 use Waypoint\Exceptions\ForbiddenException;
 
-class RequireAdminMiddleware extends MiddlewareBase
+final class DuringOpeningHours extends MiddlewareBase
 {
     protected function before(Request $req, Response $res): bool
     {
-        if (($req->jwt['role'] ?? null) !== 'admin') {
-            throw new ForbiddenException('Admin access required.');
+        $hour = (int) date('G');
+        if ($hour < 6 || $hour >= 18) {
+            throw new ForbiddenException('The till only books sales while the shop is open.');
         }
         return true; // false vetoes: $next() and after() are both skipped
     }
@@ -656,15 +718,15 @@ class RequireAdminMiddleware extends MiddlewareBase
 ```
 
 ```php
-use Waypoint\Attributes\{Get, Middleware};
+use Waypoint\Attributes\{Body, Middleware, Post};
 
-class AdminController
+final class ApiController
 {
-    #[Get('/dashboard')]
-    #[Middleware(RequireAdminMiddleware::class)]
-    public function dashboard(): array
+    #[Post('/sales')]
+    #[Middleware(DuringOpeningHours::class)]
+    public function sale(#[Body] TillSale $sale): array
     {
-        return ['ok' => true];
+        // ...
     }
 }
 ```
@@ -718,7 +780,7 @@ use Waypoint\Environment;
 use Waypoint\Options\CsrfOptions;
 
 $app->configure(function (CsrfOptions $opts, Environment $env) {
-    $opts->secret = $env->get('CSRF_SECRET'); // required to actually enable checking, at least 32 bytes
+    $opts->secret = $env->string('CSRF_SECRET'); // required to actually enable checking, at least 32 bytes
     $opts->cookieSecure = null;               // default: Secure exactly when the request came over HTTPS
 });
 ```
@@ -739,10 +801,13 @@ token.
 Inside a view template, `$this->csrf` renders the classic no-JS `<form>` half of that pattern:
 
 ```html
-<form method="post">
-    {{ $this->csrf->field() }}  <!-- hidden input -->
+<form method="post" action="/backoffice/logout">
+    {{ $this->csrf->field() }}
+    <button>{{ $this->t('Sign out') }}</button>
 </form>
 ```
+
+That is the sign-out form of the bakery's `views/_Backoffice.php`; `field()` renders the hidden input.
 
 The AJAX/`fetch()` half needs no app code at all if you're loading
 [`waypoint.js`](#views) (see `$this->waypointJsTag()` in [Views](#views)): it patches `fetch()`
@@ -750,7 +815,7 @@ itself so every same-origin `POST`/`PUT`/`PATCH`/`DELETE` call automatically car
 the token straight from the cookie. A plain `fetch()` call needs to know nothing about CSRF:
 
 ```js
-fetch('/orders', { method: 'POST', body: JSON.stringify(data) }); // X-CSRF-Token attached automatically
+fetch('/backoffice/stock', { method: 'POST', body: JSON.stringify(levels) }); // X-CSRF-Token attached automatically
 ```
 
 Not using `waypoint.js`? Read the cookie and attach the header yourself the same way it does.
@@ -763,11 +828,13 @@ Opt a token-auth-only JSON API (or any route with no double-submit cookie to che
 `#[SkipCsrf]`, on the controller class or a single method:
 
 ```php
-use Waypoint\Attributes\SkipCsrf;
+use Waypoint\Attributes\{Controller, SkipCsrf, Version};
 
-#[Controller('/api')]
+// from src/Controllers/ApiController.php: the till and the delivery app send a bearer token, not cookies
+#[Controller]
+#[Version('v1')]
 #[SkipCsrf] // every route below skips CSRF verification
-class ApiController
+final class ApiController
 {
 }
 ```
@@ -780,7 +847,7 @@ Configure `CorsOptions`, then enable the feature; `useCors()` takes no parameter
 use Waypoint\Options\CorsOptions;
 
 $app->configure(function (CorsOptions $opts) {
-    $opts->allowOrigin = 'https://yourdomain.com';
+    $opts->allowOrigin = 'https://till.sonnenkorn.test';   // the till's web app
     $opts->allowMethods = 'GET, POST, OPTIONS';
     $opts->allowHeaders = 'Content-Type, Authorization';
     $opts->allowCredentials = true;
@@ -810,7 +877,7 @@ the one your own domain exceptions should extend too. Its fields map directly on
 ```php
 use Waypoint\Exceptions\HttpException;
 
-class OutOfStockException extends HttpException
+final class SoldOutException extends HttpException
 {
     public function __construct(string $detail)
     {
@@ -854,12 +921,14 @@ first, then parent classes, then implemented interfaces, then the `Throwable` ca
 cover app-level middleware (`$app->use()`) as well as routes, so an auth check there can simply throw.
 
 ```php
+use Bakery\Models\OutOfStock;
 use Waypoint\Http\{Request, Response};
 
-$app->useExceptionHandler(MyDomainException::class, function (MyDomainException $e, Request $req, Response $res) {
+// Orders::place() throws OutOfStock (a plain RuntimeException) when the last croissant went to someone else
+$app->useExceptionHandler(OutOfStock::class, function (OutOfStock $e, Request $req, Response $res) {
     $res->status(409)
         ->withHeader('Content-Type', 'application/json')
-        ->write(json_encode(['error' => $e->getMessage()]));
+        ->write(json_encode(['error' => "Not enough {$e->product} left."]));
     // no need to call ->send(), see below
 });
 ```
@@ -882,11 +951,16 @@ layouts, named sections, and per-view/per-layout scoped CSS/JS:
 ```php
 use Waypoint\Http\View;
 
-#[Get('/products/{id}')]
-public function show(#[Param] string $id): View
+// from src/Controllers/ShopController.php
+#[Get('/products/{slug}')]
+public function product(string $slug): View
 {
-    $product = Product::find($id);
-    return new View('ProductDetail', $product);
+    $product = $this->products->bySlug($slug) ?? throw new NotFoundException("No product $slug");
+    return new View('Shop/Product', new ProductPage(
+        product: $product,
+        days: PickupCalendar::days($today, $hours, $holidays, 3),
+        // ...
+    ));
 }
 ```
 
@@ -896,7 +970,7 @@ Configure where views/layouts live via `RendererOptions`:
 use Waypoint\Options\RendererOptions;
 
 $app->configure(function (RendererOptions $opts) {
-    $opts->directory = __DIR__ . '/../views';
+    $opts->directory = __DIR__ . '/views';
     $opts->layout = '_Layout.php'; // default layout, per-View override via the 4th constructor argument
 });
 ```
@@ -904,26 +978,46 @@ $app->configure(function (RendererOptions $opts) {
 `$opts->layout` defaults to `'_Layout'` with **no extension**, which never matches a real file. Pass an
 explicit `.php` name, or no layout is applied and every render falls back to the bare view content.
 
-Inside a view/layout `.php` file, `$model` is whatever was passed to `View`'s constructor (commonly an
-array, e.g. `$model['product']`), and `$this` is the `View` instance itself.
+Inside a view/layout `.php` file, `$model` is whatever was passed to `View`'s constructor (here the
+`ProductPage`), and `$this` is the `View` instance itself. The bakery's back office passes its own layout:
+`new View('Backoffice/Board', layout: '_Backoffice.php')`.
 
 A view is PHP with a few directives on top:
 
 ```html
-@use (App\Status)
-@model (App\Models\ProductPage)
-@section('title'){{ $model->product->name }}@endsection
+@use (Bakery\Services\Format)
+@model (Bakery\Models\ProductPage)
 
-<h1>{{ $model->product->name }}</h1>
-@foreach ($model->product->tags as $tag)
-    <span @class.new="$tag->isNew()">{{ $tag->label }}</span>
-@endforeach
-@if ($model->status === Status::SoldOut)
-    <p>Sold out</p>
+@code
+    $locale = $this->locale();
+    $product = $model->product;
+@endcode
+
+@section('title')
+    {{ $product->name($locale) }}
+@endsection
+
+<h1>
+    {{ $product->name($locale) }}
+</h1>
+<p class="price" @class.sold-out="$product->stock === 0">{{ Format::price($product->priceCents, $locale) }}</p>
+<ul>
+    @foreach ($model->days as $day)
+        <li>{{ Format::day($day, $locale) }}</li>
+    @endforeach
+</ul>
+@if ($product->stock > 0)
+    <app-add-to-cart product="{{ $product->id }}"></app-add-to-cart>
+@else
+    <p>{{ $this->t('Sold out for today') }}</p>
 @endif
 ```
 
-and its layout places the sections and the page: `<title>@yield('title')</title>`, `<main>{{ $content }}</main>`.
+That is `views/Shop/Product.php` of the bakery, shortened (`$this->locale()` and `$this->t()` come from the
+I18n plugin, `<app-add-to-cart>` is a live component)
+
+, and its layout `views/_Layout.php` places the sections and the page: `<title>@yield('title') · Sonnenkorn</title>`,
+`<main>{{ $content }}</main>`.
 
 `{{ $value }}` and `<?= $value ?>` are HTML-escaped. Markup goes out as it is only as a `Waypoint\Html` value
 (`{{ new Html($trusted) }}`) or through `<?php echo $markup ?>`; the layout's `$content`, `@yield`, `section()`,
@@ -949,11 +1043,11 @@ gets the element class there, in views, Live templates and plain PHP files alike
   `$this->endSection()` / `$this->section('name', required: false)`: named content blocks a layout pulls in,
   e.g. for per-page `<head>` scripts.
 - `$this->assetTags()` / `$this->layoutAssetTags()`: `<link>`/`<script>` tags for the current view's own
-  sibling `.css`/`.js` (`ProductDetail.css` next to `ProductDetail.php`), and for the layout's own, if
+  sibling `.css`/`.js` (`Shop/Product.css` next to `Shop/Product.php`), and for the layout's own, if
   either has one.
 - `$this->scopeAttribute()` / `$this->layoutScopeAttribute()`: a `data-view="..."` attribute for the
   element that content should be scoped to; the matching CSS is automatically wrapped in a
-  `[data-view="..."]` nesting selector, so plain rules in `ProductDetail.css` only ever apply where that
+  `[data-view="..."]` nesting selector, so plain rules in `Shop/Product.css` only ever apply where that
   attribute is present.
 
 The client half, `waypoint.js` (automatic CSRF headers, `wp-onclick`/`wp-onsubmit` handlers and
@@ -964,9 +1058,9 @@ defaults the tag also carries `data-csrf-cookie`/`data-csrf-header` for the clie
 duplicated in the template.
 
 A view or layout's sibling `.css`/`.js` is discovered automatically (same basename, same directory,
-either role), with nothing to register. Views can live in subdirectories: `views/Admin/Users.php` is
-`new View('Admin/Users')`, always `/`-separated, and its `Admin/Users.css` is found, scoped
-(`[data-view="Admin/Users"]`) under that same name. A name that starts with `/` or
+either role), with nothing to register. Views can live in subdirectories: `views/Backoffice/Sales.php` is
+`new View('Backoffice/Sales')`, always `/`-separated, and its `Backoffice/Sales.css` is found, scoped
+(`[data-view="Backoffice/Sales"]`) under that same name. A name that starts with `/` or
 contains a `..` segment is rejected at construction, so a view name built from request input can never
 reach outside the views directory. The layout is still resolved from the root of the directory only.
 Compiled, content-hashed copies are written under
@@ -984,16 +1078,23 @@ Return `Waypoint\Http\Redirect` to send a redirect instead of a body, typically 
 that succeeded (POST/redirect/GET), next to the `View` the same handler renders when it didn't:
 
 ```php
-use Waypoint\Http\{Redirect, Request, Response, View};
+use Waypoint\Http\{Redirect, Response, View};
 
+// from src/Controllers/SessionController.php
 #[Post('/login')]
-public function loginSubmit(Request $req, Response $res): View|Redirect
-{
-    if (!$this->credentialsValid($req)) {
-        return new View('Login', ['error' => 'Invalid email or password.']);
+public function login(
+    #[Body(
+        validate: false
+    )]
+    LoginForm $form,
+    Response $res,
+): View|Redirect {
+    $user = $form->isValid ? $this->users->verify($form->email, $form->password) : null;
+    if ($user === null) {
+        return new View('Backoffice/Login', $form, layout: '_Backoffice.php');
     }
-    JWT::signIn($res, ['sub' => $userId]);
-    return new Redirect('/dashboard');
+    JWT::signIn($res, $user);
+    return new Redirect('/backoffice', 303);
 }
 ```
 
@@ -1017,7 +1118,7 @@ always wins over a route at the same path; any other method goes to routing:
 use Waypoint\Options\FileSystemOptions;
 
 $app->configure(function (FileSystemOptions $fs) {
-    $fs->publicDirectory = __DIR__ . '/../public';
+    $fs->publicDirectory = __DIR__ . '/public';   // the bakery's app.css, favicon.svg and products/*.svg
 });
 ```
 
@@ -1058,13 +1159,13 @@ method (just that route):
 ```php
 use Waypoint\Attributes\{Controller, Get, NoGzip};
 
-#[Controller('/downloads')]
+#[Controller('/backoffice/pictures')]
 #[NoGzip] // every route below skips compression
-class DownloadsController
+final class PictureController
 {
-    #[Get('/report.csv')]
+    #[Get('/{slug}.webp')]
     #[NoGzip] // equivalent here, since the whole class already opts out
-    public function report(): string
+    public function picture(string $slug): \SplFileInfo
     {
         // ...
     }
@@ -1084,13 +1185,17 @@ a file from disk. A returned string is always the content itself, even when it h
 so text from a user can never turn into a file read:
 
 ```php
-use Waypoint\Attributes\{Get, FileFormatter};
+use Waypoint\Attributes\{FileFormatter, Get};
 
-#[Get('/invoice')]
-#[FileFormatter(mimetype: 'application/pdf', download: true)] // filename defaults to the file's own name
-public function invoice(): \SplFileInfo
+/** The price list the bakery hangs in the shop window, as a PDF. */
+#[Get('/price-list')]
+#[FileFormatter(
+    mimetype: 'application/pdf',
+    download: true
+)] // filename defaults to the file's own name
+public function priceList(): \SplFileInfo
 {
-    return new \SplFileInfo('/srv/invoices/2026-10.pdf');
+    return new \SplFileInfo(__DIR__ . '/../../storage/price-list-2026-10.pdf');
 }
 ```
 
@@ -1107,7 +1212,7 @@ in the future (`JWT::encode()` always sets one):
 use Waypoint\Options\JWTOptions;
 
 $app->configure(function (JWTOptions $opts, Environment $env) {
-    $opts->secret = $env->get('JWT_SECRET'); // required, at least 32 bytes: bin2hex(random_bytes(32))
+    $opts->secret = $env->string('JWT_SECRET'); // required, at least 32 bytes: bin2hex(random_bytes(32))
     $opts->ttl = 3600;                   // default, seconds
     $opts->tokenType = 'Bearer';         // default
     $opts->header = 'Authorization';     // default
@@ -1118,9 +1223,9 @@ $app->useJwt();
 ```
 
 Once enabled, a valid token's decoded payload is available as `$req->jwt` (an array, or `null`) in any
-controller/middleware that receives the `Request`. `#[Claims] UserClaims $user` binds it to a `FromArray` DTO
+controller/middleware that receives the `Request`. `#[Claims] StaffMember $staff` binds it to a `FromArray` DTO
 instead; it implies `#[Authenticated]` (401 without a token, or with claims that don't fill the DTO), and a
-nullable `?UserClaims` makes the user optional.
+nullable `?StaffMember` makes the person optional.
 
 A plain browser page navigation never sends a bearer `Authorization` header; only an explicit
 `fetch()`/XHR call that sets one itself does. Set `JWTOptions::$cookieName` to also read the token back
@@ -1129,10 +1234,13 @@ out of a same-named cookie whenever the header didn't already produce one, so a 
 load too:
 
 ```php
-$app->configure(function (JWTOptions $opts, CsrfOptions $csrf, Environment $env) {
-    $opts->secret = $env->get('JWT_SECRET');
-    $opts->cookieName = 'auth_token';
-    $csrf->secret = $env->get('CSRF_SECRET');
+// from the bakery's app.php: the back office signs in with a JWT in an HttpOnly cookie
+$app->configure(function (JWTOptions $jwt, CsrfOptions $csrf) use ($env) {
+    $jwt->secret = $env->string('JWT_SECRET');
+    $jwt->cookieName = 'session';
+    $jwt->ttl = 12 * 3600;
+    $jwt->loginRedirectUrl = '/backoffice/login';
+    $csrf->secret = $env->string('CSRF_SECRET');
 });
 ```
 
@@ -1145,20 +1253,26 @@ sets the `cookieName` cookie (HttpOnly, `SameSite=Lax`, `Max-Age` of `ttl`, `Sec
 HTTPS). `JWT::signOut($res)` removes it on logout:
 
 ```php
+// from src/Controllers/SessionController.php
 #[Post('/login')]
-public function login(#[Body] LoginDTO $data, Response $res): array
+public function login(#[Body] LoginForm $form, Response $res): Redirect
 {
-    $token = JWT::signIn($res, ['sub' => $userId]);
-    return ['accessToken' => $token];        // also usable as a Bearer token directly
+    $user = $this->users->verify($form->email, $form->password)   // ['sub' => 2, 'name' => 'Ben', 'role' => 'staff']
+        ?? throw new UnauthorizedException('Wrong email or password.');
+    JWT::signIn($res, $user);   // returns the token too, also usable as a Bearer token directly
+    return new Redirect('/backoffice', 303);
 }
 
 #[Post('/logout')]
-public function logout(Response $res): array
+public function logout(Response $res): Redirect
 {
     JWT::signOut($res);
-    return ['loggedOut' => true];
+    return new Redirect('/backoffice/login', 303);
 }
 ```
+
+A program sends the token as a header instead: the bakery's `POST /v1/tokens` answers `JWT::encode($user)` for
+the till, which then calls `/v1/orders` with `Authorization: Bearer …`.
 
 ---
 
@@ -1167,8 +1281,8 @@ public function logout(Response $res): array
 Switch the endpoint on via `OpenAPIOptions` (nothing to attach):
 
 ```php
-$app->configure(function (OpenAPIOptions $opts) {
-    $opts->enabled = true;
+$app->configure(function (OpenAPIOptions $opts) use ($env) {
+    $opts->enabled = $env->bool('OPENAPI', false);   // the bakery's switch, off unless OPENAPI=true
     $opts->path = '/openapi'; // default
 });
 ```
@@ -1204,12 +1318,44 @@ reflection on every request, so serving the spec is cheap even under trust mode.
 ```php
 use Waypoint\Options\OpenAPIOptions;
 
-$app->configure(function (OpenAPIOptions $opts) {
-    $opts->title = 'My API';
-    $opts->version = '1.2.0';
-    $opts->servers = [['url' => 'https://api.example.com']];
+// from the bakery's app.php
+$app->configure(function (OpenAPIOptions $api) {
+    $api->title = 'Sonnenkorn bakery API';
+    $api->version = '1.0.0';
+    $api->description = 'The range, and the open orders for the people in the bakery.';
+    $api->servers = [['url' => 'https://shop.sonnenkorn.test']];
+    $api->securitySchemes = ['bearer' => ['type' => 'http', 'scheme' => 'bearer', 'bearerFormat' => 'JWT']];
 });
 ```
+
+A route of the bakery's API, with what the document says about it in its attributes:
+
+```php
+// from src/Controllers/ApiController.php
+#[Patch('/orders/{code}')]
+#[Authenticated]
+#[Tags(['Orders'])]
+#[Summary('Move an order to its next step')]
+#[Throws(NotFoundException::class)]
+public function advance(string $code, #[Body] StatusChange $change): OrderSummary
+{
+    // ...
+}
+
+#[Get('/orders')]
+#[Authenticated]
+#[Returns(
+    type: OrderSummary::class,
+    list: true
+)]
+public function openOrders(): array
+{
+    return array_map(OrderSummary::of(...), $this->orders->open());
+}
+```
+
+`OrderSummary` becomes a schema from its constructor's properties (its `OrderStatus` as an enum, its
+`#[ListOf(OrderLine::class)] array $lines` as an array of `OrderLine`), and `StatusChange` the request body.
 
 ---
 
@@ -1228,10 +1374,10 @@ stamped onto every `Logger` call made during that request, under the `request_id
 to pass it around by hand:
 
 ```php
-#[Get('/{id}')]
-public function show(#[Param] string $id, Request $req): array
+#[Get('/orders/{code}')]
+public function order(string $code, Request $req): OrderSummary
 {
-    $this->logger->info('Fetching widget', ['id' => $id]);
+    $this->logger->info('Fetching order', ['code' => $code]);
     // logged with 'request_id' => $req->id automatically added to context
     // ...
 }
@@ -1253,7 +1399,7 @@ use Waypoint\Options\LoggerOptions;
 use Psr\Log\LogLevel;
 
 $app->configure(function (LoggerOptions $opts) {
-    $opts->add($myPsr3Logger, [LogLevel::ERROR, LogLevel::CRITICAL]);
+    $opts->add($pager, [LogLevel::ERROR, LogLevel::CRITICAL]);   // any PSR-3 logger, here one that texts the owner
 
     // Or Monolog directly, without wrapping it yourself:
     $opts->addMono('app', new \Monolog\Handler\StreamHandler('php://stdout'), [LogLevel::INFO]);
@@ -1261,23 +1407,24 @@ $app->configure(function (LoggerOptions $opts) {
 ```
 
 ```php
-use Waypoint\Attributes\{Controller, Get, Inject};
+use Waypoint\Attributes\Inject;
 use Waypoint\Logger;
 
-#[Controller('/orders')]
-class OrdersController
+// shortened from src/Services/Holidays.php: the shop carries on without the holidays when the service fails
+final class Holidays
 {
     #[Inject]
     private Logger $logger;
 
-    #[Get('/{id}')]
-    public function show(string $id): array
+    /** @return array<string, Holiday>|null */
+    public function upcoming(): ?array
     {
         try {
+            $response = \Tenma::fetch('https://date.nager.at/api/v3/NextPublicHolidays/DE', timeout: 2.5);
             // ...
-        } catch (\Throwable $e) {
-            $this->logger->error('Something went wrong', ['exception' => $e]);
-            throw $e;
+        } catch (RuntimeException|JsonException $e) {
+            $this->logger->warning('holidays: ' . $e->getMessage());
+            return null;
         }
     }
 }
@@ -1290,31 +1437,47 @@ class OrdersController
 The same front controller can serve HTTP *and* run background/maintenance jobs: under the `cli` SAPI,
 `$app->serve()` (or `$app->runCli()`, which returns an exit code instead of calling `exit()`) reads the
 process's own `$argv` and dispatches to a `#[Task]`-attributed method instead of routing an HTTP
-request. Under Tenma `serve()` starts the server instead, so tasks run with `php`.
+request. Under Tenma, `serve()` with arguments (`tenma index.php db:migrate`) runs the task too, inside the
+event loop, so a task can wait on Postgres or `Tenma::fetch()`; without arguments it starts the server.
 
 ```php
-use Waypoint\Attributes\{Manager, Task};
+use Tenma\Db\Postgres;
+use Waypoint\Attributes\{Inject, Manager, Task};
 
-#[Manager('users')]
-class UserTasks
+// shortened from src/Tasks/DatabaseTasks.php
+#[Manager('db')]
+final class DatabaseTasks
 {
-    #[Task('sync')]
-    public function sync(): string
+    #[Inject]
+    private Postgres $db;
+
+    /** Applies database/migrations/*.sql in name order, each file once. */
+    #[Task('migrate')]
+    public function migrate(): string
     {
         // ...
-        return "Synced.\n";
+        return "Applied: 0003_order_totals.sql\n";
+    }
+
+    /** Migrates, then loads database/seed.sql. */
+    #[Task('seed')]
+    public function seed(): string
+    {
+        $this->migrate();
+        $this->db->script(\Tenma\Fs::readFile(__DIR__ . '/../../database/seed.sql'));
+        return "Seeded the demo data.\n";
     }
 }
 ```
 
 ```php
-$app->attach([UserTasks::class]);
+$app->attach([ShopController::class, DatabaseTasks::class]);
 $app->serve();
 ```
 
 ```bash
-php index.php users:sync
-tenma index.php users:sync   # under Tenma: runs the task in a Tenma task (Postgres pool, fetch) instead of serving
+tenma index.php db:migrate   # under Tenma: runs the task in a Tenma task (Postgres pool, fetch) instead of serving
+php index.php db:migrate     # without Tenma; this task needs Tenma's Postgres client, so not here
 ```
 
 ---
@@ -1325,9 +1488,15 @@ Anything beyond the core (translations, LDAP, sessions, rate limiting, ...) is a
 package registered with one line before `attach()`:
 
 ```php
-$app->plugin(new \Waypoint\I18n\I18nPlugin());
-$app->configure(fn (\Waypoint\I18n\I18nOptions $i18n) => $i18n->default = 'de');
-$app->attach([...]);
+// from the bakery's app.php
+$app->plugin(new I18nPlugin());
+$app->plugin(new FlashPlugin());
+$app->plugin(new ChartsPlugin());
+$app->configure(function (I18nOptions $i18n) {
+    $i18n->directory = __DIR__ . '/lang';
+    $i18n->supported = ['en', 'de'];
+});
+$app->attach([ShopController::class, SessionController::class, BackofficeController::class, ApiController::class]);
 ```
 
 A plugin is one class implementing `Waypoint\Plugin\Plugin` (extend `PluginBase` for the defaults). It
@@ -1373,7 +1542,7 @@ Available plugins:
 | `systonia/waypoint-i18n` | `$this->t('Source text')` with JSON catalogs kept by CLI tasks, per-request locale, translated validation errors. |
 | `systonia/waypoint-flash` | Flash messages across a redirect, shown once, with and without JavaScript; the reference for the client plugin API. |
 | `systonia/waypoint-charts` | Bar and line charts as server-rendered SVG with a data table; `$this->chart($chart)` in views or `return $chart;` as `image/svg+xml`. |
-| `systonia/waypoint-export` | `return Sheet::file('users.xlsx')->columns([...])->rows($rows);` downloads CSV, JSON Lines, HTML, XML with schema, XLSX or ODS by extension; `$this->sheet()` for an inline table. |
+| `systonia/waypoint-export` | `return Sheet::file('orders.xlsx')->column('code', 'Order')->rows($orders);` downloads CSV, JSON Lines, HTML, XML with schema, XLSX or ODS by extension; `$this->sheet()` for an inline table. |
 | `systonia/waypoint-export-fixed` | Fixed-width record files (`#[Fixed]` layouts, Windows-1252/EBCDIC) as a sub-plugin of waypoint-export; the reference for plugins that extend a plugin. |
 
 ---
@@ -1388,33 +1557,45 @@ the app with `Request::fromParts()` and `App::handle()`, so nothing goes through
 ```php
 use Waypoint\Testing\TestCase;
 
-final class LoginTest extends TestCase
+// after tests/Controllers/SessionControllerTest.php and ApiControllerTest.php of the bakery
+final class BackofficeTest extends TestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
-        $app = $this->app();          // Waypoint::create()
-        $app->configure(fn (CsrfOptions $csrf) => $csrf->secret = str_repeat('x', 32));
-        $app->attach([PagesController::class]);
+        require __DIR__ . '/../app.php';   // configures $this->app(), the same Waypoint::create()
     }
 
-    public function testWrongPasswordStaysOnTheLoginPage(): void
+    public function testAWrongPasswordStaysOnTheSignInPage(): void
     {
-        $this->post('/login', ['email' => 'a@b.de', 'password' => 'wrong'])
+        $this->request('POST', '/backoffice/login')
+            ->withBody(['email' => 'ben@sonnenkorn.test', 'password' => 'baguette'])
+            ->withCsrf()
+            ->send()
+            ->assertStatus(422)
+            ->assertSee('Wrong email or password.');
+    }
+
+    public function testTheBoardNeedsASignIn(): void
+    {
+        $this->request('GET', '/backoffice')->asNavigation()->send()->assertRedirect('/backoffice/login');
+        $this->request('GET', '/backoffice')->withJwt(['sub' => 2, 'name' => 'Ben', 'role' => 'staff'])->send()->assertOk();
+    }
+
+    public function testTheApiWantsAToken(): void
+    {
+        $this->get('/v1/orders')->assertStatus(401);
+        $token = $this->json('POST', '/v1/tokens', ['email' => 'ben@sonnenkorn.test', 'password' => 'pretzel'])
             ->assertOk()
-            ->assertSee('Invalid email or password');
-    }
-
-    public function testDashboardNeedsALogin(): void
-    {
-        $this->request('GET', '/dashboard')->asNavigation()->send()->assertRedirect('/login');
-        $this->request('GET', '/dashboard')->withJwt(['sub' => '1'])->send()->assertOk();
+            ->json('token');
+        $this->assertIsString($token);
+        $this->get('/v1/orders', ['Authorization' => "Bearer $token"])->assertOk();
     }
 }
 ```
 
 - Requests: `get()`, `post()` (form fields), `json()` (raw JSON body), or `request()` for the builder:
-  `withHeader()`, `withCookie()`, `withJwt($payload)`, `withCsrf()` (a valid cookie + header pair), `withHttps()`,
+  `withHeader()`, `withBody()` (form fields), `withJson()`, `withCookie()`, `withJwt($payload)`, `withCsrf()` (a valid cookie + header pair), `withHttps()`,
   `asNavigation()` (what a browser sends), then `send()`.
 - Responses: `status()`, `header()`, `cookie()`, `body()`, `json('errors.email')`, and fluent
   `assertStatus/Ok/Redirect/Header/HeaderMissing/ContentType/Cookie/See/DontSee/Body/Json/JsonPath`.
@@ -1442,13 +1623,19 @@ or `...$row` spreading, and throws an `UnexpectedValueException` naming the key 
 ```php
 use Waypoint\Support\Row;
 
-$row = new Row($this->db->first('SELECT id, status, lines FROM orders WHERE id = $1', [$id]));
+// from src/Repositories/Orders.php
+$row = new Row($values);
 $order = new Order(
     id: $row->int('id'),
+    code: $row->string('code'),
     status: $row->enum('status', OrderStatus::class),
-    lines: array_map(OrderLine::of(...), $row->rows('lines')),
+    lines: array_map(fn (Row $line) => new OrderLine($line->int('product'), $line->string('name'), $line->int('priceCents'), $line->int('quantity')), $row->rows('lines')),
+    // ...
 );
-$tags = Row::of($response->json())->list('tags', 'string');   // list<string>
+
+// from src/Services/Weather.php: the forecast of open-meteo
+$daily = Row::of($response->json())->row('daily');
+$days = $daily->list('time', 'string');   // list<string>
 ```
 
 The getters are `int`, `string`, `float` (also an int or numeric string, as Postgres sends `numeric`), `bool`,
@@ -1473,7 +1660,7 @@ later `load()`.
 
 `get($key, $default)` returns the value as read (a string from `.env`, the JSON type from a JSON file);
 `string()`, `int()`, `float()` and `bool()` (`"false"`, `"0"`, `"off"` are `false`) convert it, and without a
-default throw a `RuntimeException` naming a missing key: `$env->int('PAGE_SIZE', 20)`, `$env->string('DATABASE_URL')`.
+default throw a `RuntimeException` naming a missing key: `$env->int('UNCONFIRMED_MINUTES', 15)`, `$env->string('DATABASE_URL')`.
 
 `$dir` **defaults to the current working directory** (the project root, for how PHP is normally invoked:
 `php -S ... -t public`, `composer`/CLI tasks, most process managers), not this file's own location.
@@ -1483,24 +1670,28 @@ either directly or via `configure()`:
 ```php
 use Waypoint\Options\EnvironmentOptions;
 
-// e.g. from public/index.php, where the project root is one level up
-$app->configure(fn (EnvironmentOptions $env) => $env->load(dirname(__DIR__)));
+// from the bakery's app.php: config.json, config.<APP_ENV>.json and .env next to this file
+$app->configure(fn (EnvironmentOptions $env) => $env->load(__DIR__));
+$env = $app->get(Environment::class);
+date_default_timezone_set($env->string('BAKERY_TIMEZONE', 'Europe/Berlin'));
 ```
 
 ```php
-use Waypoint\Attributes\{Controller, Get, Inject};
+use Waypoint\Attributes\Inject;
 use Waypoint\Environment;
 
-#[Controller('/auth')]
-class AuthController
+// shortened from src/Services/Holidays.php
+final class Holidays
 {
     #[Inject]
     private Environment $env;
 
-    #[Get('/config')]
-    public function config(): array
+    public function upcoming(): ?array
     {
-        return ['issuer' => $this->env->get('JWT_ISSUER')];
+        $url = rtrim($this->env->string('HOLIDAYS_URL', 'https://date.nager.at'), '/') . '/api/v3/NextPublicHolidays/'
+            . rawurlencode($this->env->string('HOLIDAY_COUNTRY', 'DE'));
+        $response = \Tenma::fetch($url, timeout: $this->env->float('API_TIMEOUT', 2.5));
+        // ...
     }
 }
 ```
@@ -1582,8 +1773,9 @@ Every `Waypoint\Options\*` class is a plain, container-resolved settings object,
 way regardless of which one it is:
 
 ```php
-$app->configure(function (SomeOptions $opts) {
-    $opts->someSetting = 'value';
+$app->configure(function (CsrfOptions $csrf, OpenAPIOptions $api) use ($env) {
+    $csrf->secret = $env->string('CSRF_SECRET');
+    $api->title = 'Sonnenkorn bakery API';
 });
 ```
 

@@ -26,27 +26,27 @@ A request that the server hands over in pieces:
 
 ## PSR-15
 
-[`Waypoint\Psr\Handler`](../reference/Waypoint/Psr/Handler.md) makes the app a PSR-15 `RequestHandlerInterface`, for any server or stack that speaks PSR-7: behind PSR-15 middlewares of other packages, or on a PSR-7 server. It takes any PSR-17 factory, for example `nyholm/psr7`:
+[`Waypoint\Psr\Handler`](../reference/Waypoint/Psr/Handler.md) makes the app a PSR-15 `RequestHandlerInterface`, for any server or stack that speaks PSR-7: behind PSR-15 middlewares of other packages, or on a PSR-7 server. It takes any PSR-17 factory, for example `nyholm/psr7`. With the `ProductController` from [A first app](../index.md#a-first-app):
 
 ```php
 <?php
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use App\Controllers\GreetingController;
+use Bakery\Controllers\ProductController;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Nyholm\Psr7\ServerRequest;
 use Waypoint\Psr\Handler;
 use Waypoint\Waypoint;
 
 $app = Waypoint::create();
-$app->attach([GreetingController::class]);
+$app->attach([ProductController::class]);
 
 $factory = new Psr17Factory();
 $handler = new Handler($app, $factory);
 
-$response = $handler->handle(new ServerRequest('GET', 'http://localhost/hello/Ada'));
-echo $response->getStatusCode(), ' ', $response->getBody(), "\n";   // 200 {"greeting":"Hello, Ada!"}
+$response = $handler->handle(new ServerRequest('GET', 'http://localhost/products/croissant?quantity=6'));
+echo $response->getStatusCode(), ' ', $response->getBody(), "\n";   // 200 {"product":"croissant","quantity":6,"totalCents":1080}
 ```
 
 Every request is translated from PSR-7 to Waypoint's `Request` and back, with headers, cookies (each `Set-Cookie` separately), the parsed body, uploaded files and the `REMOTE_ADDR` server parameter. PSR-15 middlewares run around the whole app: they see neither route guards nor `#[Authenticated]`, and the app's own middlewares still run inside.
@@ -68,9 +68,9 @@ use Waypoint\Http\Request;
 
 $response = $app->handle(Request::fromParts(
     method: 'POST',
-    uri: '/customers?source=import',
+    uri: '/v1/tokens',
     headers: ['Content-Type' => 'application/json'],
-    body: '{"name": "Ada", "email": "ada@example.com"}',
+    body: '{"email": "ben@sonnenkorn.test", "password": "pretzel"}',
     cookies: [],
     https: true,
     ip: '203.0.113.7',

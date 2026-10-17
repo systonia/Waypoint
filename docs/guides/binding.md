@@ -11,7 +11,7 @@ Waypoint fills a route method's parameters from the request before it calls the 
 | `Request $req`, `Response $res` | the current request and response |
 | `#[Param] int $id` | the route placeholder `{id}` |
 | `#[Query] string $q` | the query string value `?q=` |
-| `#[Body] NewCustomer $customer` | the body as a DTO, validated |
+| `#[Body] Credentials $credentials` | the body as a DTO, validated |
 | `#[Body]` with `of:` on an `array` parameter | the body as a list of DTOs, each validated |
 | `#[Body] array $data` | the decoded body as it came |
 | `int $id` or `OrderStatus $status` without attribute | the placeholder `{id}` if the route has one, else `?id=` |
@@ -24,30 +24,31 @@ Any other parameter receives `null`, so it has to be nullable: a non-nullable on
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use Waypoint\Attributes\{Controller, Get, Param, Query};
+use Waypoint\Attributes\{Authenticated, Controller, Get, Param, Query};
 
-#[Controller('/customers')]
-final class CustomerSearchController
+#[Controller('/backoffice/products')]
+#[Authenticated]
+final class ProductOrdersController
 {
-    #[Get('/{customerId}/orders')]
+    #[Get('/{productId}/orders')]
     public function orders(
-        #[Param('customerId')] int $id,
+        #[Param('productId')] int $id,
         #[Query('status')] ?string $state = null,
-        bool $archived = false,
+        bool $cancelled = false,
         int $page = 1,
     ): array {
-        return ['customer' => $id, 'status' => $state, 'archived' => $archived, 'page' => $page];
+        return ['product' => $id, 'status' => $state, 'cancelled' => $cancelled, 'page' => $page];
     }
 }
 ```
 
-`GET /customers/42/orders?status=open&archived=yes&page=2` calls `orders(42, 'open', true, 2)`.
+`GET /backoffice/products/3/orders?status=ready&cancelled=yes&page=2` calls `orders(3, 'ready', true, 2)`.
 
-- `#[Param]` and `#[Query]` bind by the parameter's name; `#[Param('customerId')]` and `#[Query('status')]` bind a differently named placeholder or key.
+- `#[Param]` and `#[Query]` bind by the parameter's name; `#[Param('productId')]` and `#[Query('status')]` bind a differently named placeholder or key.
 - A parameter without an attribute and with a scalar type (`string`, `int`, `float`, `bool`) or a backed enum looks for a placeholder of its name first, then for the query key.
-- A backed enum (`#[Query] OrderStatus $status`) gets the case whose value the text names (`tryFrom()`); any other text answers `422` with `This value should be one of: open, done.`. Missing and without a default or `null`, it answers `422` with `This value is required.`.
+- A backed enum (`#[Query] OrderStatus $status`) gets the case whose value the text names (`tryFrom()`); any other text answers `422` with `This value should be one of: pending, received, baking, ready, picked_up, cancelled.`. Missing and without a default or `null`, it answers `422` with `This value is required.`.
 - The text is converted to the parameter's type: `int` takes whole numbers only, `float` numbers, and `bool` takes `true`/`false`, `1`/`0`, `yes`/`no` and `on`/`off`. A value that doesn't convert, such as `?page=abc`, answers `422` with the parameter in `errors`; the method is not called.
 - A missing value gives the parameter's default, `null` if the type allows it, else the type's empty value (`''`, `0`, `0.0`, `false`). Give a default whenever a value is optional.
 
@@ -55,56 +56,63 @@ Placeholder values arrive URL-decoded once (see [Routing](routing.md#placeholder
 
 ## Request bodies as DTOs
 
-`#[Body]` turns the request body into an object of the parameter's class. The body is read as JSON for a JSON `Content-Type` and as form fields for a form, so the same route serves a `fetch()` call and a plain HTML form:
+`#[Body]` turns the request body into an object of the parameter's class. The body is read as JSON for a JSON `Content-Type` and as form fields for a form, so the same route serves a `fetch()` call and a plain HTML form. The bakery's API exchanges email and password for a bearer token; the DTO is `src/Requests/Credentials.php`:
 
 ```php
 <?php
 
-namespace App\Dto;
+namespace Bakery\Requests;
 
-use Waypoint\Attributes\{Email, Length, NotBlank, OneOf};
+use Waypoint\Attributes\{Email, NotBlank, Property};
 use Waypoint\FromArray;
 
-final class NewCustomer
+final class Credentials
 {
     use FromArray;
 
     #[NotBlank]
-    #[Length(
-        max: 120
-    )]
-    public string $name = '';
-
-    #[NotBlank]
     #[Email]
+    #[Property(
+        example: 'ben@sonnenkorn.test'
+    )]
     public string $email = '';
 
-    #[OneOf(['de', 'en'])]
-    public string $language = 'de';
-
-    public ?string $phone = null;
-
-    public bool $newsletter = false;
+    #[NotBlank]
+    #[Property(
+        example: 'pretzel'
+    )]
+    public string $password = '';
 }
 ```
+
+`#[Property]` only describes the field in the [OpenAPI document](openapi.md). The route (from `src/Controllers/ApiController.php`):
 
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use App\Dto\NewCustomer;
-use Waypoint\Attributes\{Body, Controller, Post};
-use Waypoint\Http\Response;
+use Bakery\Repositories\Users;
+use Bakery\Requests\Credentials;
+use Bakery\Responses\BearerToken;
+use Waypoint\Attributes\{Body, Controller, Inject, Post, SkipCsrf, Version};
+use Waypoint\Exceptions\UnauthorizedException;
+use Waypoint\JWT;
 
-#[Controller('/customers')]
-final class CustomersController
+#[Controller]
+#[Version('v1')]
+#[SkipCsrf]
+final class ApiController
 {
-    #[Post('')]
-    public function create(#[Body] NewCustomer $customer, Response $res): array
+    #[Inject]
+    private Users $users;
+
+    #[Post('/tokens')]
+    public function token(#[Body] Credentials $credentials): BearerToken
     {
-        $res->status(201);
-        return ['name' => $customer->name, 'email' => $customer->email, 'newsletter' => $customer->newsletter];
+        $user = $this->users->verify($credentials->email, $credentials->password)
+            ?? throw new UnauthorizedException('Wrong email or password.');
+        return new BearerToken(JWT::encode($user));
     }
 }
 ```
@@ -112,8 +120,8 @@ final class CustomersController
 When the DTO is not valid, the method is not called. The request answers `422` with every failing field:
 
 ```text
-$ curl -X POST localhost:8080/customers -H 'Content-Type: application/json' -d '{"name": "", "email": "ada@", "language": "fr"}'
-{"type":"about:blank","title":"Validation failed","status":422,"detail":"Validation failed","errors":{"name":"This value should not be blank.","email":"This value is not a valid email address.","language":"This value should be one of: de, en."}}
+$ curl -X POST localhost:8080/v1/tokens -H 'Content-Type: application/json' -d '{"email": "ben@", "password": ""}'
+{"type":"about:blank","title":"Validation failed","status":422,"detail":"Validation failed","errors":{"email":"This value is not a valid email address.","password":"This value should not be blank."}}
 ```
 
 A JSON body that doesn't parse answers `400 Bad Request` before any DTO is built; `$req->bodyError` holds the reason.
@@ -122,7 +130,7 @@ The DTO the route built is also in `$req->bodyDto`, even when validation failed,
 
 ### FromArray
 
-A `#[Body]` DTO is created as `new NewCustomer($req->body())`. The [`FromArray`](../reference/Waypoint/FromArray.md) trait provides that constructor:
+A `#[Body]` DTO is created as `new Credentials($req->body())`. The [`FromArray`](../reference/Waypoint/FromArray.md) trait provides that constructor:
 
 - Each key that names a public property is assigned. Unknown keys are ignored, and so are private, protected, `protected(set)`, `private(set)` and static properties: those are the object's own state, never input.
 - A value has to fit the property's type. Form text for a number or a boolean is converted (`"5"` for an `int`, `"on"` for a `bool`); nothing else is. A value that doesn't fit (`"abc"` for an `int`, `"yes"` for a `string[]`, an object for a `string`) leaves the property at its default and is reported under that key, so the request answers `422`, never `500`.
@@ -134,8 +142,9 @@ Backed enums, nested DTOs and lists of them are built from the data too:
 ```php
 <?php
 
-namespace App\Dto;
+namespace Bakery\Requests;
 
+use Bakery\Models\OrderStatus;
 use Waypoint\Attributes\ListOf;
 use Waypoint\FromArray;
 
@@ -143,41 +152,42 @@ final class NewOrder
 {
     use FromArray;
 
-    public OrderStatus $status = OrderStatus::Open;   // "done" becomes OrderStatus::Done
+    public OrderStatus $status = OrderStatus::Pending;   // "received" becomes OrderStatus::Received
 
-    public Address $delivery;                         // a FromArray DTO, built from {"city": ...}
+    public Customer $customer;                           // a FromArray DTO, built from {"name": ..., "email": ...}
 
-    #[ListOf(LineItem::class)]
-    public array $items = [];                         // each element a LineItem
+    #[ListOf(OrderItem::class)]
+    public array $items = [];                            // each element an OrderItem
 }
 ```
 
-- A backed enum property gets the case its value names (`tryFrom()`); a value no case has fails with `This value should be one of: open, done.`.
-- A property typed with another class that uses `FromArray` gets that DTO built from the nested array. Its errors appear under the property's name: `delivery.city`.
-- An `array` property with `#[ListOf(LineItem::class)]` (or `#[ListOf(type: LineItem::class, map: true)]` for string keys) gets each element built the same way, for DTOs and backed enums. An element that doesn't fit is left out and reported as `items.2`; a nested DTO's own errors as `items.0.sku`.
+- A backed enum property gets the case its value names (`tryFrom()`); a value no case has fails with `This value should be one of: pending, received, baking, ready, picked_up, cancelled.`.
+- A property typed with another class that uses `FromArray` gets that DTO built from the nested array. Its errors appear under the property's name: `customer.email`.
+- An `array` property with `#[ListOf(OrderItem::class)]` (or `#[ListOf(type: OrderItem::class, map: true)]` for string keys, as `Product` uses for its names per language) gets each element built the same way, for DTOs and backed enums. An element that doesn't fit is left out and reported as `items.2`; a nested DTO's own errors as `items.0.quantity`.
 
-A property with `#[Ignore]` is never set from input and never required, even without a default: the DTO sets it itself. It is also left out of JSON results and of the OpenAPI schema, so it suits server-side state like a database id or a password hash. On a promoted constructor parameter it applies to the property; the constructor still has to fill it (a default does).
+A property with `#[Ignore]` is never set from input and never required, even without a default: the DTO sets it itself. It is also left out of JSON results and of the OpenAPI schema, so it suits server-side state like a database id or a file name: the bakery's `Product` has it on `$id` and `$picture`. On a promoted constructor parameter it applies to the property; the constructor still has to fill it (a default does).
 
 To exclude a property from input only, use `fromArrayExcludes()`:
 
 ```php
 <?php
 
-namespace App\Dto;
+namespace Bakery\Requests;
 
+use Bakery\Models\Order;
 use Waypoint\FromArray;
 
-final class OrderUpdate
+final class OrderNote
 {
     use FromArray;
 
     public string $note = '';
 
-    public ?Address $deliveryAddress = null;   // set by the controller, not from input
+    public ?Order $order = null;   // set by the controller, not from input
 
     protected function fromArrayExcludes(): array
     {
-        return ['deliveryAddress'];
+        return ['order'];
     }
 }
 ```
@@ -187,12 +197,12 @@ A DTO that needs more than the plain assignment declares its own constructor and
 ```php
 <?php
 
-namespace App\Dto;
+namespace Bakery\Requests;
 
 use Waypoint\Attributes\NotBlank;
 use Waypoint\FromArray;
 
-final class Search
+final class ProductSearch
 {
     use FromArray;
 
@@ -216,28 +226,38 @@ For a body that is a JSON list of objects, type the parameter `array` and name t
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use App\Dto\OrderLine;
-use Waypoint\Attributes\{Body, Controller, Post};
+use Bakery\Repositories\Products;
+use Bakery\Requests\StockCount;
+use Waypoint\Attributes\{Authenticated, Body, Controller, Inject, Put, SkipCsrf, Version};
 
-#[Controller('/orders')]
-final class BulkOrdersController
+#[Controller('/stock')]
+#[Version('v1')]
+#[Authenticated]
+#[SkipCsrf]
+final class StockApi
 {
-    #[Post('/{orderId}/lines')]
-    public function addLines(
-        int $orderId,
+    #[Inject]
+    private Products $products;
+
+    /** The morning's count: [{"product": 3, "stock": 40}, …] */
+    #[Put('')]
+    public function count(
         #[Body(
-            of: OrderLine::class
+            of: StockCount::class
         )]
-        array $lines,
+        array $counts,
     ): array {
-        return ['order' => $orderId, 'added' => count($lines)];
+        foreach ($counts as $count) {
+            $this->products->setStock($count->product, $count->stock);
+        }
+        return ['updated' => count($counts)];
     }
 }
 ```
 
-Each element becomes an `OrderLine` and is validated on its own. The errors are reported per index: `{"errors": {"1": {"quantity": "…"}}}`. A body that is a single object instead of a list answers `422` with a `body` error, and an element that is no object (`[1, "two"]`) with an error under its index.
+Each element becomes a `StockCount` and is validated on its own. The errors are reported per index: `{"errors": {"1": {"stock": "…"}}}`. A body that is a single object instead of a list answers `422` with a `body` error, and an element that is no object (`[1, "two"]`) with an error under its index.
 
 ## Validation attributes
 
@@ -248,86 +268,102 @@ The rules are attributes on the DTO's public properties:
 | `#[NotBlank]` | the value is `null`, a string of only whitespace, or an empty array |
 | `#[Email]` | the value is not `null` and not a valid email address |
 | `#[Length]` with `min:` and `max:` | the string is shorter than `min` or longer than `max`, counted in characters; `null` passes (add `#[NotBlank]` to require the value) |
-| `#[Regex('/^[A-Z]{2}\d{4}$/')]` | the value doesn't match; numbers match by their text, `null` passes, arrays and booleans never match |
-| `#[OneOf(['draft', 'live'])]` | the value is not `null` and not one of the values, compared strictly (`'1'` is not `1`) |
+| `#[Regex('/^\d{4}-\d{2}-\d{2}$/')]` | the value doesn't match; numbers match by their text, `null` passes, arrays and booleans never match |
+| `#[OneOf(['bread', 'rolls', 'pastry', 'cake'])]` | the value is not `null` and not one of the values, compared strictly (`'1'` is not `1`) |
 | `#[SameAs('password')]` | the value differs from the named property, e.g. a password confirmation |
 
 A property can carry several rules; when more than one fails, `errors` holds the message of the last one in the order of the table. The messages are English. A plugin can translate them by binding [`Waypoint\Validation\Messages`](../reference/Waypoint/Validation/Messages.md) in the container, as `systonia/waypoint-i18n` does.
 
+The bakery's checkout form (from `src/Requests/CheckoutForm.php`) combines several:
+
 ```php
 <?php
 
-namespace App\Dto;
+namespace Bakery\Requests;
 
-use Waypoint\Attributes\{Email, Length, NotBlank, Regex, SameAs};
+use Waypoint\Attributes\{Email, Length, NotBlank, Regex};
 use Waypoint\FromArray;
 
-final class Registration
+final class CheckoutForm
 {
     use FromArray;
+
+    #[NotBlank]
+    #[Length(
+        max: 80
+    )]
+    public string $name = '';
 
     #[NotBlank]
     #[Email]
     public string $email = '';
 
-    #[Length(
-        min: 12
-    )]
-    public string $password = '';
-
-    #[SameAs('password')]
-    public string $passwordConfirmation = '';
-
-    #[Regex('/^\d{5}$/')]
-    public ?string $postcode = null;
+    #[NotBlank]
+    #[Regex('/^\d{4}-\d{2}-\d{2}$/')]
+    public string $pickupDate = '';
 }
 ```
 
 ## Validating by hand
 
-A DTO with `FromArray` validates itself. `$dto->isValid` and `$dto->errors` are computed properties: each read applies the rules, so there is no validator object and nothing goes stale. `fail()` adds a failure only the application can know, such as an email that is already registered:
+A DTO with `FromArray` validates itself. `$dto->isValid` and `$dto->errors` are computed properties: each read applies the rules, so there is no validator object and nothing goes stale. `fail()` adds a failure only the application can know, such as a wrong password. The bakery's back office sign-in (from `src/Controllers/SessionController.php`):
 
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use App\Dto\Registration;
-use App\Services\Accounts;
+use Bakery\Repositories\Users;
+use Bakery\Requests\LoginForm;
 use Waypoint\Attributes\{Body, Controller, Inject, Post};
-use Waypoint\Http\{Redirect, View};
+use Waypoint\Flash\Flash;
+use Waypoint\Http\{Redirect, Response, View};
+use Waypoint\I18n\Translator;
+use Waypoint\JWT;
 
-#[Controller('/register')]
-final class RegistrationController
+#[Controller('/backoffice')]
+final class SessionController
 {
     #[Inject]
-    private Accounts $accounts;
+    private Users $users;
 
-    #[Post('')]
-    public function register(
+    #[Inject]
+    private Flash $flash;
+
+    #[Inject]
+    private Translator $translator;
+
+    /** A View with the form while it is invalid answers 422. */
+    #[Post('/login')]
+    public function login(
         #[Body(
             validate: false
         )]
-        Registration $form
+        LoginForm $form,
+        Response $res,
     ): View|Redirect {
-        if ($form->isValid && $this->accounts->exists($form->email)) {
-            $form->fail('email', 'This email is already registered.');
+        $user = $form->isValid ? $this->users->verify($form->email, $form->password) : null;
+        if ($user === null) {
+            if ($form->isValid) {
+                $form->fail('password', $this->translator->t('Wrong email or password.'));
+            }
+            return new View('Backoffice/Login', $form, layout: '_Backoffice.php');
         }
-        if (!$form->isValid) {
-            return new View('Register', ['form' => $form, 'errors' => $form->errors]);
-        }
-        $this->accounts->create($form->email, $form->password);
-        return new Redirect('/welcome', 303);
+        JWT::signIn($res, $user);
+        $this->flash->success($this->translator->t('Welcome, {name}.', ['name' => $user['name']]));
+        return new Redirect('/backoffice', 303);
     }
 }
 ```
 
-`#[Body(validate: false)]` binds the DTO without answering `422` first, so the method sees an invalid one too. This is the shape for HTML forms: the page is shown again with the messages next to the fields (see [Views](views.md#forms)). A `View` returned while the bound DTO is invalid answers with status `422`, so a test or a script sees the failed submission. The same works with `new Registration($req->body())` when the DTO is built by hand, without the `422`. `errors` maps each field to one message, the attribute rules first and `fail()` entries after them; a later `fail()` for the same field replaces the earlier one. `errors` and `isValid` never appear in the [OpenAPI](openapi.md) schemas or in [redacted logs](logging.md#redacting-sensitive-values).
+`Flash` and `Translator` come from the [Flash](https://github.com/systonia/Waypoint-Flash) and [I18n](https://github.com/systonia/Waypoint-I18n) plugins.
+
+`#[Body(validate: false)]` binds the DTO without answering `422` first, so the method sees an invalid one too. This is the shape for HTML forms: the page is shown again with the messages next to the fields (see [Views](views.md#forms)). A `View` returned while the bound DTO is invalid answers with status `422`, so a test or a script sees the failed submission. The same works with `new LoginForm($req->body())` when the DTO is built by hand, without the `422`. `errors` maps each field to one message, the attribute rules first and `fail()` entries after them; a later `fail()` for the same field replaces the earlier one. `errors` and `isValid` never appear in the [OpenAPI](openapi.md) schemas or in [redacted logs](logging.md#redacting-sensitive-values).
 
 To answer `422` yourself from anywhere, throw a [`ValidationException`](../reference/Waypoint/Exceptions/ValidationException.md):
 
 ```php
-throw new ValidationException(errors: ['email' => 'This email is already registered.']);
+throw new ValidationException(errors: ['status' => 'The order is received; its next step is baking.']);
 ```
 
 See also: [`Param`](../reference/Waypoint/Attributes/Param.md), [`Query`](../reference/Waypoint/Attributes/Query.md), [`Body`](../reference/Waypoint/Attributes/Body.md), [`FromArray`](../reference/Waypoint/FromArray.md), [`Validator`](../reference/Waypoint/Validator.md), [Errors](errors.md).

@@ -8,17 +8,21 @@ Waypoint signs users in with JSON Web Tokens. A token carries who the user is (`
 
 ## Turning it on
 
+The bakery's back office signs in with a cookie, its JSON API with bearer tokens. From `app.php`:
+
 ```php
 use Waypoint\Environment;
 use Waypoint\Options\{CsrfOptions, JWTOptions};
 
-$app->configure(function (JWTOptions $jwt, CsrfOptions $csrf, Environment $env) {
-    $jwt->secret = $env->get('JWT_SECRET');
-    $jwt->ttl = 8 * 3600;
-    $jwt->cookieName = 'session';
-    $jwt->loginRedirectUrl = '/login';
+$env = $app->get(Environment::class);
 
-    $csrf->secret = $env->get('CSRF_SECRET');
+$app->configure(function (JWTOptions $jwt, CsrfOptions $csrf) use ($env) {
+    // The back office signs in with a JWT in an HttpOnly cookie; forms and fetch() carry CSRF tokens
+    $jwt->secret = $env->string('JWT_SECRET');
+    $jwt->cookieName = 'session';
+    $jwt->ttl = 12 * 3600;
+    $jwt->loginRedirectUrl = '/backoffice/login';
+    $csrf->secret = $env->string('CSRF_SECRET');
 });
 
 $app->useJwt();
@@ -40,42 +44,53 @@ The secrets have no default. Reading an unset secret throws, and a secret shorte
 
 [`JWT::encode()`](../reference/Waypoint/JWT.md#encode) signs a payload with HS256 and sets `exp` from `JWTOptions::$ttl` (or its second argument). [`JWT::decode()`](../reference/Waypoint/JWT.md#decode) returns the payload, or `null` for a token that is malformed, wrongly signed, not HS256, expired or without `exp`.
 
-An API hands the token to the client, which sends it back as `Authorization: Bearer <token>`:
+An API hands the token to the client, which sends it back as `Authorization: Bearer <token>`. The till and the delivery app of the bakery exchange an email and a password for one (shortened from `src/Controllers/ApiController.php`):
 
 ```php
 <?php
 
-namespace App\Controllers\Api;
+namespace Bakery\Controllers;
 
-use App\Services\Accounts;
-use Waypoint\Attributes\{Authenticated, Controller, Get, Inject, Post, SkipCsrf};
+use Bakery\Repositories\{Orders, Users};
+use Bakery\Requests\Credentials;
+use Bakery\Responses\{BearerToken, OrderSummary};
+use Waypoint\Attributes\{Authenticated, Body, Controller, Get, Inject, Post, Returns, SkipCsrf, Version};
 use Waypoint\Exceptions\UnauthorizedException;
-use Waypoint\Http\Request;
 use Waypoint\JWT;
 
-#[Controller('/api')]
+#[Controller]
+#[Version('v1')]
 #[SkipCsrf]
-final class TokenController
+final class ApiController
 {
     #[Inject]
-    private Accounts $accounts;
+    private Users $users;
+
+    #[Inject]
+    private Orders $orders;
 
     #[Post('/tokens')]
-    public function issue(Request $req): array
+    public function token(#[Body] Credentials $credentials): BearerToken
     {
-        $user = $this->accounts->verify((string) $req->body('email', ''), (string) $req->body('password', ''))
+        $user = $this->users->verify($credentials->email, $credentials->password)
             ?? throw new UnauthorizedException('Wrong email or password.');
-        return ['token' => JWT::encode(['sub' => $user['id'], 'role' => $user['role']])];
+        return new BearerToken(JWT::encode($user));
     }
 
-    #[Get('/me')]
+    #[Get('/orders')]
     #[Authenticated]
-    public function me(Request $req): array
+    #[Returns(
+        type: OrderSummary::class,
+        list: true
+    )]
+    public function openOrders(): array
     {
-        return ['id' => $req->jwt['sub'], 'role' => $req->jwt['role']];
+        return array_map(OrderSummary::of(...), $this->orders->open());
     }
 }
 ```
+
+`Users::verify()` returns the claims of the person (`['sub' => 2, 'name' => 'Ben', 'role' => 'staff']`) or `null`, and `JWT::encode()` signs them as they are.
 
 `#[SkipCsrf]` is right here: these routes are called by programs with a bearer token, not by browsers with cookies.
 
@@ -86,56 +101,89 @@ A browser that navigates to a page sends no `Authorization` header, so pages use
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use App\Services\Accounts;
-use Waypoint\Attributes\{Controller, Get, Inject, Post};
-use Waypoint\Http\{Redirect, Request, Response, View};
+use Bakery\Repositories\Users;
+use Bakery\Requests\LoginForm;
+use Waypoint\Attributes\{Body, Controller, Get, Inject, Post};
+use Waypoint\Flash\Flash;
+use Waypoint\Http\{Redirect, Response, View};
 use Waypoint\JWT;
 
-#[Controller]
+#[Controller('/backoffice')]
 final class SessionController
 {
     #[Inject]
-    private Accounts $accounts;
+    private Users $users;
+
+    #[Inject]
+    private Flash $flash;
 
     #[Get('/login')]
     public function form(): View
     {
-        return new View('Login', ['error' => null]);
+        return new View('Backoffice/Login', new LoginForm(), layout: '_Backoffice.php');
     }
 
+    /** A View with the form while it is invalid answers 422. */
     #[Post('/login')]
-    public function login(Request $req, Response $res): View|Redirect
-    {
-        $user = $this->accounts->verify((string) $req->body('email', ''), (string) $req->body('password', ''));
+    public function login(
+        #[Body(
+            validate: false
+        )]
+        LoginForm $form,
+        Response $res,
+    ): View|Redirect {
+        $user = $form->isValid ? $this->users->verify($form->email, $form->password) : null;
         if ($user === null) {
-            return new View('Login', ['error' => 'Wrong email or password.']);
+            if ($form->isValid) {
+                $form->fail('password', 'Wrong email or password.');
+            }
+            return new View('Backoffice/Login', $form, layout: '_Backoffice.php');
         }
-        JWT::signIn($res, ['sub' => $user['id'], 'role' => $user['role']]);
-        return new Redirect('/dashboard', 303);
+        JWT::signIn($res, $user);
+        $this->flash->success("Welcome, {$user['name']}.");
+        return new Redirect('/backoffice', 303);
     }
 
     #[Post('/logout')]
     public function logout(Response $res): Redirect
     {
         JWT::signOut($res);
-        return new Redirect('/login', 303);
+        return new Redirect('/backoffice/login', 303);
     }
 }
 ```
 
-The template carries the CSRF field (see [below](#csrf-protection)):
+`#[Body(validate: false)]` hands the route the form even when it is invalid, so the page can show it again with its errors (see [Binding and validation](binding.md)). `Flash` comes from the Waypoint Flash plugin. The template carries the CSRF field (see [below](#csrf-protection)), shortened from `views/Backoffice/Login.php`:
 
 ```html
-{{/* views/Login.php */}}
-<form method="post" action="/login">
+@model (Bakery\Requests\LoginForm)
+
+@code
+    $errors = $this->request?->method === 'POST' ? $model->errors : []
+@endcode
+
+@section('title')
+    Sign in
+@endsection
+
+<form method="post" action="/backoffice/login">
     {{ $this->csrf->field() }}
-    @if ($model['error'] !== null)
-        <p class="error">{{ $model['error'] }}</p>
-    @endif
-    <label>Email <input type="email" name="email" required></label>
-    <label>Password <input type="password" name="password" required></label>
+    <label>
+        Email
+        <input type="email" name="email" value="{{ $model->email }}" required autocomplete="username">
+        @if (isset($errors['email']))
+            <span class="error">{{ $errors['email'] }}</span>
+        @endif
+    </label>
+    <label>
+        Password
+        <input type="password" name="password" required autocomplete="current-password">
+        @if (isset($errors['password']))
+            <span class="error">{{ $errors['password'] }}</span>
+        @endif
+    </label>
     <button>Sign in</button>
 </form>
 ```
@@ -148,36 +196,38 @@ With `JWTOptions::$loginRedirectUrl` set, a page navigation to an `#[Authenticat
 
 ## Guarding routes
 
+Everyone in the bakery sees the order board and the stock; the sales and the exports are for the owner (from `src/Controllers/BackofficeController.php`, with a permission check added):
+
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
 use Waypoint\Attributes\{Authenticated, Controller, Get, Permissions, Post, Role};
-use Waypoint\Http\{Request, View};
+use Waypoint\Http\View;
 
-#[Controller('/dashboard')]
+#[Controller('/backoffice')]
 #[Authenticated]
-final class DashboardController
+final class BackofficeController
 {
     #[Get('')]
-    public function show(Request $req): View
+    public function board(): View
     {
-        return new View('Dashboard', ['user' => $req->jwt['sub']]);
+        return new View('Backoffice/Board', layout: '_Backoffice.php');
     }
 
-    #[Get('/reports')]
-    #[Role('admin')]
-    public function reports(): array
+    #[Get('/sales')]
+    #[Role('owner')]
+    public function sales(): View
     {
-        return ['reports' => []];
+        // …
     }
 
-    #[Post('/pages/{id}/publish')]
-    #[Permissions(['pages.publish'])]
-    public function publish(int $id): array
+    #[Post('/products/{id}/price')]
+    #[Permissions(['prices.edit'])]
+    public function setPrice(int $id): array
     {
-        return ['published' => $id];
+        // …
     }
 }
 ```
@@ -185,7 +235,7 @@ final class DashboardController
 | Attribute | Requires | Fails with |
 |---|---|---|
 | `#[Authenticated]` | a valid token (`$req->jwt` is set) | `401`, or the redirect to `loginRedirectUrl` |
-| `#[Role('admin')]` | `$req->jwt['role'] === 'admin'` | `403` |
+| `#[Role('owner')]` | `$req->jwt['role'] === 'owner'` | `403` |
 | `#[Permissions(['a', 'b'])]` | every listed permission, from the permission provider | `403` |
 
 `#[Role]` and `#[Permissions]` imply `#[Authenticated]`. All three work on a class (every route, also of subclasses) and on a method; for `#[Role]` and `#[Permissions]` the method's attribute replaces the class's. The checks run before route middlewares and before arguments are bound.
@@ -197,28 +247,30 @@ final class DashboardController
 ```php
 <?php
 
-namespace App\Auth;
+namespace Bakery\Requests;
 
 use Waypoint\FromArray;
 
-final class UserClaims
+/** What Users::verify() puts into the token. */
+final class StaffClaims
 {
     use FromArray;
 
     public int $sub;
-    public string $role = 'user';
+    public string $name = '';
+    public string $role = 'staff';
 }
 ```
 
 ```php
 #[Get('/me')]
-public function me(#[Claims] UserClaims $user): array
+public function me(#[Claims] StaffClaims $staff): array
 {
-    return ['id' => $user->sub, 'role' => $user->role];
+    return ['name' => $staff->name, 'role' => $staff->role];
 }
 ```
 
-`#[Claims]` implies `#[Authenticated]`: without a valid token the route answers `401`, and so does a token whose claims don't fill the DTO (here, one without a `sub`). A nullable parameter (`#[Claims] ?UserClaims $user`) makes the user optional: it is `null` then. `$req->jwt` itself is the payload as an array, or `null`.
+`#[Claims]` implies `#[Authenticated]`: without a valid token the route answers `401`, and so does a token whose claims don't fill the DTO (here, one without a `sub`). A nullable parameter (`#[Claims] ?StaffClaims $staff`) makes the user optional: it is `null` then. `$req->jwt` itself is the payload as an array, or `null`.
 
 ### Roles and permissions
 
@@ -227,15 +279,15 @@ public function me(#[Claims] UserClaims $user): array
 ```php
 <?php
 
-namespace App\Security;
+namespace Bakery\Services;
 
 use Waypoint\PermissionProvider;
 
 final class RolePermissions implements PermissionProvider
 {
     private const GRANTS = [
-        'editor' => ['pages.edit'],
-        'admin' => ['pages.edit', 'pages.publish'],
+        'staff' => ['stock.edit'],
+        'owner' => ['stock.edit', 'prices.edit', 'sales.view'],
     ];
 
     public function hasPermission(mixed $jwt, string $permission): bool
@@ -254,7 +306,7 @@ $app->configure(fn (PermissionOptions $permissions) => $permissions->provider = 
 
 ### Further checks
 
-A requirement that doesn't fit the attributes (a verified email, an active subscription) is a [route middleware](middleware.md#route-middleware) that throws `ForbiddenException`, or, as a reusable package with its own attribute, a plugin `Guard` (see [Plugins](plugins.md)).
+A requirement that doesn't fit the attributes (only from the bakery's own network, only during opening hours) is a [route middleware](middleware.md#route-middleware) that throws `ForbiddenException`, or, as a reusable package with its own attribute, a plugin `Guard` (see [Plugins](plugins.md)).
 
 ## CSRF protection
 
@@ -264,7 +316,7 @@ It is on as soon as `CsrfOptions::$secret` is set. Then every `POST`, `PUT`, `PA
 
 - **Issued**: every response that renders a `View` sets the token cookie (`csrf_token`), or keeps a still-valid one.
 - **Forms**: `{{ $this->csrf->field() }}` in the template writes a hidden `_csrf` field.
-- **`fetch()`**: a page that loads `waypoint.js` (`<?= $this->waypointJsTag() ?>` in the layout, see [Views](views.md#waypointjs)) adds the `X-CSRF-Token` header to every same-origin `POST`, `PUT`, `PATCH` and `DELETE` on its own. Without it, read the cookie and send the header yourself.
+- **`fetch()`**: a page that loads `waypoint.js` (`{{ $this->waypointJsTag() }}` in the layout, see [Views](views.md#waypointjs)) adds the `X-CSRF-Token` header to every same-origin `POST`, `PUT`, `PATCH` and `DELETE` on its own. Without it, read the cookie and send the header yourself.
 - **Bound to the session**: with `JWTOptions::$cookieName` set, a token is signed for the session cookie it was issued with, so a token from one session doesn't work in another. A response that signs in or out gets a fresh token with it.
 
 | [`CsrfOptions`](../reference/Waypoint/Options/CsrfOptions.md) | Default | |

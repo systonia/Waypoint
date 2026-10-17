@@ -4,7 +4,7 @@ description: One part of Waypoint per page, with complete examples.
 order: 10
 ---
 
-Each guide covers one part of Waypoint and shows the way to use it, with examples taken from working code. The [reference](../reference/index.md) lists every class, attribute and method in detail.
+Each guide covers one part of Waypoint and shows the way to use it, with examples taken from working code: most come from the [Sonnenkorn bakery](https://github.com/systonia/Waypoint-Bakery), a made-up bakery with an online shop, an order board, a back office and a JSON API. The [reference](../reference/index.md) lists every class, attribute and method in detail.
 
 Building apps:
 

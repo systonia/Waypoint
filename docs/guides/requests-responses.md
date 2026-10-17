@@ -6,12 +6,17 @@ order: 30
 
 A route method gets the [`Request`](../reference/Waypoint/Http/Request.md) and the [`Response`](../reference/Waypoint/Http/Response.md) by declaring parameters of those types. Both belong to the current request only.
 
+The bakery's product page (from `src/Controllers/ShopController.php`, shortened) reads `?live` from the request and reports in a header how long it took:
+
 ```php
-#[Get('/whoami')]
-public function whoami(Request $req, Response $res): array
+#[Get('/products/{slug}')]
+public function product(string $slug, Request $req, Response $res): View
 {
-    $res->withHeader('Cache-Control', 'no-store');
-    return ['ip' => $req->ip, 'requestId' => $req->id];
+    $started = hrtime(true);
+    $live = $req->query('live') !== null;
+    // … read the product, the opening hours, the holidays and the weather
+    $res->withHeader('Server-Timing', sprintf('%s;dur=%.1f', $live ? 'live' : 'cached', (hrtime(true) - $started) / 1e6));
+    return new View('Shop/Product', $page);
 }
 ```
 
@@ -22,12 +27,13 @@ A controller or middleware can receive them as properties instead, with `#[Injec
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use Waypoint\Attributes\{Controller, Get};
+use Waypoint\Attributes\{Controller, Get, Role};
 use Waypoint\Http\Request;
 
-#[Controller('/debug')]
+#[Controller('/backoffice/debug')]
+#[Role('owner')]
 final class RequestInfoController
 {
     #[Get('/request')]
@@ -35,11 +41,11 @@ final class RequestInfoController
     {
         return [
             'method' => $req->method,                          // GET, POST, …
-            'path' => $req->path,                              // /debug/request
-            'query' => $req->query,                            // ['tab' => 'orders']
-            'tab' => $req->query('tab', 'overview'),           // one value with a default
+            'path' => $req->path,                              // /backoffice/debug/request
+            'query' => $req->query,                            // ['lang' => 'de']
+            'lang' => $req->query('lang', 'en'),               // one value with a default
             'agent' => $req->headers['User-Agent'] ?? null,
-            'theme' => $req->cookies['theme'] ?? 'light',
+            'cart' => $req->cookies['cart'] ?? null,
             'https' => $req->https,
             'ip' => $req->ip,
             'requestId' => $req->id,
@@ -69,37 +75,38 @@ Header names are normalised by turning the parts between dashes into `Title-Case
 The body is decoded only as what its `Content-Type` declares:
 
 - `application/json` or any `application/*+json`: the JSON, as arrays,
-- `application/x-www-form-urlencoded` and `multipart/form-data`: the form fields, nested like `$_POST` (`address[city]`),
+- `application/x-www-form-urlencoded` and `multipart/form-data`: the form fields, nested like `$_POST` (`lines[3][quantity]`),
 - anything else: nothing; `body` stays empty.
 
 A `text/plain` body that looks like JSON is not read as JSON, so a form on another site can't pose as a JSON request. `$req->body('email')` returns one field (`$req->input()` is the same), `$req->body()` the whole array. For anything beyond a field or two, bind a DTO with `#[Body]` instead (see [Binding and validation](binding.md)).
 
 ### Uploaded files
 
-A `multipart/form-data` request carries its files in `$req->files`, nested as the field names say. [`$req->file()`](../reference/Waypoint/Http/Request.md#file) returns one [`UploadedFile`](../reference/Waypoint/Http/UploadedFile.md), named as in the form: `'avatar'`, `'documents[contract]'`, `'photos[1]'`:
+A `multipart/form-data` request carries its files in `$req->files`, nested as the field names say. [`$req->file()`](../reference/Waypoint/Http/Request.md#file) returns one [`UploadedFile`](../reference/Waypoint/Http/UploadedFile.md), named as in the form: `'picture'`, `'documents[allergens]'`, `'photos[1]'`. A back office route that takes a new product picture:
 
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use Waypoint\Attributes\{Controller, Post};
+use Waypoint\Attributes\{Authenticated, Controller, Post};
 use Waypoint\Exceptions\ValidationException;
 use Waypoint\Http\{Redirect, Request};
 
-#[Controller('/profile')]
-final class AvatarController
+#[Controller('/backoffice/products')]
+#[Authenticated]
+final class PictureController
 {
-    #[Post('/avatar')]
-    public function upload(Request $req): Redirect
+    #[Post('/{slug}/picture')]
+    public function upload(string $slug, Request $req): Redirect
     {
-        $avatar = $req->file('avatar') ?? throw new ValidationException(errors: ['avatar' => 'Choose a picture.']);
-        $type = $avatar->isValid() ? (new \finfo(FILEINFO_MIME_TYPE))->buffer($avatar->contents()) : '';
+        $picture = $req->file('picture') ?? throw new ValidationException(errors: ['picture' => 'Choose a picture.']);
+        $type = $picture->isValid() ? (new \finfo(FILEINFO_MIME_TYPE))->buffer($picture->contents()) : '';
         $extension = ['image/png' => 'png', 'image/jpeg' => 'jpg'][$type]
-            ?? throw new ValidationException(errors: ['avatar' => 'Upload a PNG or JPEG picture.']);
+            ?? throw new ValidationException(errors: ['picture' => 'Upload a PNG or JPEG picture.']);
 
-        $avatar->moveTo(dirname(__DIR__, 2) . '/storage/avatars/' . bin2hex(random_bytes(8)) . ".$extension");
-        return new Redirect('/profile', 303);
+        $picture->moveTo(dirname(__DIR__, 2) . '/storage/pictures/' . bin2hex(random_bytes(8)) . ".$extension");
+        return new Redirect('/backoffice/stock', 303);
     }
 }
 ```
@@ -130,20 +137,22 @@ The size limit is `upload_max_filesize` and `post_max_size` under PHP-FPM and `-
 A route that returns a value still uses the response for everything but the body:
 
 ```php
-#[Post('')]
-public function create(#[Body] NewProduct $product, Response $res): array
+#[Post('/orders')]
+public function place(#[Body] NewOrder $order, Response $res): OrderSummary
 {
-    $created = $this->catalog->add($product);
-    $res->status(201)->withHeader('Location', "/products/{$created['id']}");
-    return $created;
+    $placed = $this->orders->place($order->quantities, $order->name, $order->email, $order->pickupDate, 'en');
+    $res->status(201)->withHeader('Location', "/v1/orders/{$placed->code}");
+    return OrderSummary::of($placed);
 }
 ```
 
 ### Cookies
 
+The bakery's `CartCookie` middleware gives every browser a cart id for 30 days (from `src/Services/CartCookie.php`):
+
 ```php
-$res->withCookie('theme', 'dark', maxAge: 60 * 60 * 24 * 365);
-$res->withoutCookie('theme');
+$res->withCookie(self::NAME, $req->cookies[self::NAME], maxAge: 30 * 86400);
+$res->withoutCookie('cart');
 ```
 
 [`withCookie()`](../reference/Waypoint/Http/Response.md#withcookie) defaults to `Path=/`, `HttpOnly` and `SameSite=Lax`, the right defaults for a session cookie. `maxAge: null` (the default) makes a session cookie that ends with the browser session; `Secure` (HTTPS only) is set when the request came over HTTPS (`$req->https`); `secure: true` or `false` decides it yourself. `httpOnly: false` lets JavaScript read it, and `sameSite: null` leaves the attribute out. `withoutCookie()` needs the same `path` and `domain` the cookie was set with.
@@ -155,12 +164,17 @@ A returned array, object or scalar goes out as JSON with `Content-Type: applicat
 ```php
 use Waypoint\Attributes\Ignore;
 
-final class Account
+/** From src/Models/Product.php, shortened: the API shows no database id and no file name. */
+final readonly class Product
 {
     public function __construct(
-        public string $name,
         #[Ignore]
-        public string $passwordHash = '',
+        public int $id,
+        public string $slug,
+        public int $priceCents,
+        public int $stock,
+        #[Ignore]
+        public string $picture,
     ) {
     }
 }
@@ -175,13 +189,16 @@ A value JSON can't hold, such as a string with invalid UTF-8, is not sent as `nu
 Return a [`Redirect`](../reference/Waypoint/Http/Redirect.md). It is a normal result, so `View|Redirect` on the signature says what the method does:
 
 ```php
-#[Post('/newsletter')]
-public function subscribe(#[Body] Subscription $subscription): Redirect
+#[Post('/logout')]
+public function logout(Response $res): Redirect
 {
-    $this->newsletter->add($subscription->email);
-    return new Redirect('/newsletter/thanks', 303);
+    JWT::signOut($res);
+    $this->flash->info($this->translator->t('You are signed out.'));
+    return new Redirect('/backoffice/login', 303);
 }
 ```
+
+That is the bakery's sign-out (from `src/Controllers/SessionController.php`); its sign-in answers `View|Redirect`, the form again or the back office.
 
 The status is `302` by default and may be any `3xx`: `303 See Other` after a form, `301`/`308` for a permanent move, `307` to keep the method. The response is the status and `Location`, without a body; cookies and headers set on the `Response` are kept. A location that is empty or contains a line break is refused when the `Redirect` is created. Never redirect to a URL taken from the request without checking it against your own paths.
 
@@ -192,38 +209,46 @@ The status is `302` by default and may be any `3xx`: `303 See Other` after a for
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use Waypoint\Attributes\{Controller, FileFormatter, Get};
+use Waypoint\Attributes\{Authenticated, Controller, FileFormatter, Get, Inject};
 use Waypoint\Exceptions\NotFoundException;
 
-#[Controller('/invoices')]
-final class InvoicesController
+#[Controller('/backoffice')]
+#[Authenticated]
+final class DocumentsController
 {
-    private const DIRECTORY = '/srv/invoices';
+    private const DIRECTORY = '/srv/sonnenkorn/allergens';
 
-    #[Get('/{number}.pdf')]
+    #[Inject]
+    private Products $products;
+
+    #[Get('/allergens/{slug}.pdf')]
     #[FileFormatter(
         mimetype: 'application/pdf',
         download: true
     )]
-    public function download(string $number): \SplFileInfo
+    public function allergens(string $slug): \SplFileInfo
     {
-        if (preg_match('/^\d{4}-\d{4}$/', $number) !== 1 || !is_file(self::DIRECTORY . "/$number.pdf")) {
-            throw new NotFoundException("No invoice $number.");
+        if (preg_match('/^[a-z-]+$/', $slug) !== 1 || !is_file(self::DIRECTORY . "/$slug.pdf")) {
+            throw new NotFoundException("No allergen sheet for $slug.");
         }
-        return new \SplFileInfo(self::DIRECTORY . "/$number.pdf");
+        return new \SplFileInfo(self::DIRECTORY . "/$slug.pdf");
     }
 
-    #[Get('/export.csv')]
+    #[Get('/stock.csv')]
     #[FileFormatter(
         mimetype: 'text/csv; charset=utf-8',
-        filename: 'invoices.csv',
+        filename: 'stock.csv',
         download: true
     )]
-    public function export(): string
+    public function stock(): string
     {
-        return "number,total\n2026-0001,120.00\n";
+        $csv = "slug,stock\n";
+        foreach ($this->products->all() as $product) {
+            $csv .= "$product->slug,$product->stock\n";
+        }
+        return $csv;
     }
 }
 ```
@@ -232,24 +257,24 @@ final class InvoicesController
 - `download: true` adds `Content-Disposition: attachment` with `filename`, or the file's own name for an `SplFileInfo`.
 - A returned string is always the content itself, even when it happens to name a file, so text from a user can never turn into a file read.
 
-The file is read into memory. For large files under Tenma, stream them instead (see [Tenma](tenma.md#streams-and-websockets)) or serve them from the [public directory](views.md#static-files).
+For tables the bakery uses the [Export plugin](https://github.com/systonia/Waypoint-Export) instead, which writes CSV and XLSX from rows. The file is read into memory. For large files under Tenma, stream them instead (see [Tenma](tenma.md#streams-and-websockets)) or serve them from the [public directory](views.md#static-files).
 
 ## XML
 
 `#[SimpleXmlFormatter]` sends the return value as XML under a `<root>` element, with `Content-Type: application/xml`. Nested arrays and objects become nested elements, text is escaped, booleans become `true`/`false`, and a key that is no valid element name (a list index) becomes `<item key="0">`:
 
 ```php
-#[Get('/feed.xml')]
+#[Get('/range.xml')]
 #[SimpleXmlFormatter]
-public function feed(): array
+public function range(): array
 {
-    return ['title' => 'News', 'entries' => [['id' => 1, 'title' => 'Opening hours']]];
+    return ['bakery' => 'Sonnenkorn', 'products' => [['slug' => 'pretzel', 'priceCents' => 120]]];
 }
 ```
 
 ```xml
 <?xml version="1.0"?>
-<root><title>News</title><entries><item key="0"><id>1</id><title>Opening hours</title></item></entries></root>
+<root><bakery>Sonnenkorn</bakery><products><item key="0"><slug>pretzel</slug><priceCents>120</priceCents></item></products></root>
 ```
 
 ## Streams
@@ -278,7 +303,7 @@ $app->configure(function (CompressionOptions $gzip) {
 )]
 public function backup(): \SplFileInfo
 {
-    return new \SplFileInfo('/srv/backups/latest.tar.gz');
+    return new \SplFileInfo('/srv/sonnenkorn/backups/latest.tar.gz');
 }
 ```
 
@@ -289,10 +314,10 @@ Waypoint sets no caching headers on route responses; a route sets them itself. C
 A conditional `GET` saves the body when the client already has the current version. A route that writes its response itself (declared `: void`) can answer `304 Not Modified`:
 
 ```php
-#[Get('/catalog')]
-public function catalog(Request $req, Response $res): void
+#[Get('/orders')]
+public function openOrders(Request $req, Response $res): void
 {
-    $body = json_encode($this->catalog->page(1), JSON_THROW_ON_ERROR);
+    $body = json_encode(array_map(OrderSummary::of(...), $this->orders->open()), JSON_THROW_ON_ERROR);
     $etag = '"' . hash('xxh128', $body) . '"';
     $res->withHeader('ETag', $etag)->withHeader('Cache-Control', 'private, max-age=60');
 

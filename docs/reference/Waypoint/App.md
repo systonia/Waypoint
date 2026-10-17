@@ -97,7 +97,7 @@ public function serve(?int $port = null, array|string|null $static = null): void
 
 The one line at the end of index.php, whatever runs it. Under Tenma it starts the server on $port, or on
 PORT from the Environment (8080 without one), and Tenma serves FileSystemOptions::$publicDirectory itself,
-without PHP; started with arguments (`tenma index.php users:sync`) it runs that CLI task instead, in a Tenma
+without PHP; started with arguments (`tenma index.php db:migrate`) it runs that CLI task instead, in a Tenma
 task so it can wait on Postgres or fetch(), and exits with its code. Under FPM, php -S or the CLI it is run(),
 and Waypoint serves that directory.
 

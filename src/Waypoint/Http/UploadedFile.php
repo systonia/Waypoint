@@ -7,7 +7,7 @@ use RuntimeException;
 
 /**
  * A file from a multipart/form-data request, the same under FPM, Tenma and any PSR-7 server:
- * `$req->file('avatar')?->moveTo($dir . '/' . bin2hex(random_bytes(8)))`.
+ * `$req->file('picture')?->moveTo($dir . '/' . bin2hex(random_bytes(8)))`.
  *
  * Name, type and size come from the client: never use the name unchecked as a path, and check the content
  * itself (finfo, getimagesizefromstring()) before trusting the type.

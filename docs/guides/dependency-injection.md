@@ -4,18 +4,20 @@ description: "Inject services with #[Inject], register services that need constr
 order: 50
 ---
 
-A controller declares what it needs as properties with `#[Inject]`. Waypoint creates each of those classes once and sets the property before the controller runs:
+A controller declares what it needs as properties with `#[Inject]`. Waypoint creates each of those classes once and sets the property before the controller runs. The bakery's weather service, shortened from `src/Services/Weather.php`:
 
 ```php
 <?php
 
-namespace App\Services;
+namespace Bakery\Services;
 
+use Bakery\Models\WeatherDay;
+use RuntimeException;
 use Waypoint\Attributes\Inject;
 use Waypoint\Environment;
 use Waypoint\Logger;
 
-final class Newsletter
+final class Weather
 {
     #[Inject]
     private Environment $env;
@@ -23,35 +25,49 @@ final class Newsletter
     #[Inject]
     private Logger $logger;
 
-    public function subscribe(string $email): string
+    /** @return array<string, WeatherDay>|null Y-m-d => the forecast; null when unavailable */
+    public function week(): ?array
     {
-        $list = $this->env->get('NEWSLETTER_LIST', 'main');
-        $this->logger->info('Newsletter subscription', ['list' => $list]);
-        return $list;
+        $url = rtrim($this->env->string('WEATHER_URL', 'https://api.open-meteo.com'), '/') . '/v1/forecast?…';
+        try {
+            $response = \Tenma::fetch($url, timeout: $this->env->float('API_TIMEOUT', 2.5));
+            // … one WeatherDay per day of the answer
+        } catch (RuntimeException $e) {
+            $this->logger->warning('weather: ' . $e->getMessage());
+            return null;
+        }
     }
 }
 ```
 
+The shop's controller injects it next to the repositories it reads (from `src/Controllers/ShopController.php`):
+
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use App\Services\Newsletter;
-use Waypoint\Attributes\{Controller, Inject, Post};
-use Waypoint\Http\Request;
+use Bakery\Repositories\{OpeningHours, Products};
+use Bakery\Services\Weather;
+use Waypoint\Attributes\{Controller, Get, Inject};
+use Waypoint\Http\View;
 
-#[Controller('/newsletter')]
-final class NewsletterController
+#[Controller]
+final class ShopController
 {
     #[Inject]
-    private Newsletter $newsletter;
+    private Products $products;
 
-    #[Post('/subscribe')]
-    public function subscribe(Request $req): array
+    #[Inject]
+    private OpeningHours $hours;
+
+    #[Inject]
+    private Weather $weather;
+
+    #[Get('/')]
+    public function catalog(): View
     {
-        $list = $this->newsletter->subscribe((string) $req->body('email', ''));
-        return ['list' => $list];
+        return new View('Shop/Catalog', $this->products->all());
     }
 }
 ```
@@ -71,39 +87,19 @@ There is no service attribute and no service list: a class becomes a service by 
 
 ## Services with constructor arguments
 
-A service that needs arguments, such as a database connection or an API key, is created in the front controller and registered before `attach()`:
+A service that needs arguments, such as a database connection or an API key, is created in the front controller and registered before `attach()`. The bakery opens one pool of Postgres connections in `app.php` and registers it:
 
 ```php
-<?php
-
-namespace App\Services;
-
-final class PaymentGateway
-{
-    public function __construct(private string $apiKey, private string $endpoint)
-    {
-    }
-
-    public function charge(int $cents): string
-    {
-        return "charged $cents at {$this->endpoint}";
-    }
-}
-```
-
-```php
-$app->configure(fn (EnvironmentOptions $env) => $env->load(dirname(__DIR__)));
-
+$app->configure(fn (EnvironmentOptions $env) => $env->load(__DIR__));
 $env = $app->get(Environment::class);
-$app->getContainer()->set(new PaymentGateway(
-    apiKey: $env->get('PAYMENT_API_KEY'),
-    endpoint: $env->get('PAYMENT_ENDPOINT', 'https://payments.example.com'),
-));
 
-$app->attach([CheckoutController::class]);
+// One pool of Postgres connections per worker, shared by every service that injects Postgres
+$app->getContainer()->set(Postgres::connect($env->string('DATABASE_URL', 'postgres://localhost/bakery')));
+
+$app->attach([ShopController::class, SessionController::class, BackofficeController::class, ApiController::class]);
 ```
 
-[`Container::set()`](../reference/Waypoint/Container.md#set) registers the instance under its class name; every `#[Inject] private PaymentGateway $payments` then receives it. A service that is only ever reached through `$app->get()` or the container, not through `#[Inject]`, is created on first use as well.
+[`Container::set()`](../reference/Waypoint/Container.md#set) registers the instance under its class name; every `#[Inject] private Postgres $db` in the repositories then receives it. A service that is only ever reached through `$app->get()` or the container, not through `#[Inject]`, is created on first use as well.
 
 ## Controllers per request, services per process
 
@@ -112,50 +108,51 @@ Controllers and `#[Middleware]` classes are created anew for every request; a co
 Services are the opposite: one instance per process. Under PHP-FPM a process handles one request, so this goes unnoticed. Under [Tenma](tenma.md), one process serves request after request and runs several of them interleaved while they wait for I/O. Whatever a service keeps in a property is visible to every other request. **A service must not keep per-request state in its properties:**
 
 ```php
-final class CurrentUser
+final class Cart
 {
-    private ?array $user = null;
+    private ?string $cartId = null;
 
-    public function signIn(Request $req): void { $this->user = $req->jwt; }   // wrong: shared by every request
-    public function get(): ?array { return $this->user; }                     // may return another request's user
+    public function open(Request $req): void { $this->cartId = $req->cookies['cart'] ?? null; }   // wrong: shared by every request
+    public function lines(): array { return $this->carts->load($this->cartId); }                // may show another customer's cart
 }
 ```
 
-The same goes for memoising per request (`$this->current ??= …`), switching shared state per request (`$this->locale = …`, `$this->tenant = …`), collecting per request (messages, a query counter) and objects built up across several calls.
+The same goes for memoising per request (`$this->current ??= …`), switching shared state per request (`$this->locale = …`, `$this->shop = …`), collecting per request (messages, a query counter) and objects built up across several calls.
 
 Fine in a service: configuration and dependencies that don't change after boot, caches whose content holds for everyone (compiled templates, exchange rates; nothing user-specific unless the user is part of the key), and helpers that get everything they need as arguments.
 
 Instead of per-request state in a service:
 
-- pass it as an argument: `$this->orders->forUser($req->jwt['sub'])` rather than `$this->orders->forCurrentUser()`;
-- keep it on the request, the way `useJwt()` puts the user into `$req->jwt`;
+- pass it as an argument: `$this->carts->load($req->cookies['cart'])` rather than `$this->cart->current()`;
+- keep it on the request, the way `useJwt()` puts the user into `$req->jwt` and the bakery's `CartCookie` middleware puts the cart id into `$req->cookies['cart']`;
 - or, for a value that really has to be implicitly "current", hold it in a [`FiberLocal`](../reference/Waypoint/Support/FiberLocal.md): one value per request, also when requests run interleaved.
 
 ```php
 <?php
 
-namespace App\Services;
+namespace Bakery\Services;
 
 use Waypoint\Support\FiberLocal;
 
-final class CurrentTenant
+/** The shop a request is for, when the bakery has a second one in another part of town. */
+final class CurrentShop
 {
     /** @var FiberLocal<string> */
-    private FiberLocal $tenant;
+    private FiberLocal $shop;
 
     public function __construct()
     {
-        $this->tenant = new FiberLocal();
+        $this->shop = new FiberLocal();
     }
 
-    public function set(?string $tenant): void
+    public function set(?string $shop): void
     {
-        $this->tenant->set($tenant);
+        $this->shop->set($shop);
     }
 
     public function get(): string
     {
-        return $this->tenant->get() ?? 'default';
+        return $this->shop->get() ?? 'altstadt';
     }
 }
 ```
@@ -165,28 +162,28 @@ Set the value at the start of every request, in a middleware, rather than resett
 ```php
 <?php
 
-namespace App\Middleware;
+namespace Bakery\Services;
 
-use App\Services\CurrentTenant;
 use Waypoint\Attributes\Inject;
 use Waypoint\Http\{MiddlewareBase, Request, Response};
 
-final class ResolveTenant extends MiddlewareBase
+/** wiehre.sonnenkorn.test is the shop in Wiehre, every other host the one in the old town. */
+final class ShopFromHost extends MiddlewareBase
 {
     #[Inject]
-    private CurrentTenant $tenant;
+    private CurrentShop $shop;
 
     protected function before(Request $req, Response $res): bool
     {
         $host = $req->headers['Host'] ?? '';
-        $this->tenant->set(str_ends_with($host, '.example.com') ? substr($host, 0, -strlen('.example.com')) : null);
+        $this->shop->set(str_ends_with($host, '.sonnenkorn.test') ? strstr($host, '.', true) : null);
         return true;
     }
 }
 ```
 
 ```php
-$app->use(new ResolveTenant());
+$app->use(new ShopFromHost());
 ```
 
 Waypoint can't enforce this rule. Test an app that is meant to run under Tenma under Tenma, with parallel requests.

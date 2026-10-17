@@ -6,12 +6,12 @@ order: 150
 
 [Tenma](https://github.com/systonia/Tenma) runs PHP as a long-running process with an event loop. The front controller runs once; the app it built (routes, container, services, configuration) stays in memory and answers every request, each in a fiber of its own. While one request waits for a database or an HTTP call, the process serves others.
 
-The front controller needs no changes:
+The front controller needs no changes. The Bakery runs its `index.php` like this:
 
 ```bash
-tenma public/index.php                 # port 8080, or PORT from the environment
-tenma --watch public/index.php         # restarts the PHP side whenever a loaded file changes
-tenma --workers auto public/index.php  # one worker per CPU core
+tenma index.php                 # port 8080, or PORT from the environment
+tenma --watch index.php         # restarts the PHP side whenever a loaded file changes
+tenma --workers 2 index.php     # two workers; --workers auto starts one per CPU core
 ```
 
 Under Tenma, `serve()` starts the server on `serve($port)`, else on `PORT` from the [environment](application.md#environment-and-env-files), else on 8080. [`FileSystemOptions::$publicDirectory`](../reference/Waypoint/Options/FileSystemOptions.md) is handed to Tenma, which serves those files itself, without PHP, with `ETag` and range requests. `serve(8080, ['/assets' => __DIR__ . '/assets'])` passes Tenma's own static mounts instead.
@@ -26,89 +26,76 @@ Everything in [Dependency injection](dependency-injection.md#controllers-per-req
 
 ## Waiting without blocking
 
-A controller or service can use Tenma's asynchronous APIs directly: `Tenma\Db\Postgres`, `Tenma::fetch()`, `Tenma::all()`. Each call suspends only the current request. A database connection is a service like any other; create it in the front controller and register it:
+A controller or service can use Tenma's asynchronous APIs directly: `Tenma\Db\Postgres`, `Tenma::fetch()`, `Tenma::all()`. Each call suspends only the current request. A database connection is a service like any other: the Bakery creates the pool in `app.php` and registers it, and every class that injects `Postgres` gets it:
 
 ```php
-<?php
-
-namespace App\Services;
-
 use Tenma\Db\Postgres;
 
-final class Notes
-{
-    public function __construct(private Postgres $db)
-    {
-    }
-
-    public function latest(int $limit): array
-    {
-        return $this->db->query('SELECT id, text FROM notes ORDER BY id DESC LIMIT $1', [$limit]);
-    }
-
-    public function add(string $text): array
-    {
-        return $this->db->first('INSERT INTO notes (text) VALUES ($1) RETURNING id, text', [$text]);
-    }
-}
+// One pool of Postgres connections per worker, shared by every service that injects Postgres
+$app->getContainer()->set(Postgres::connect($env->string('DATABASE_URL', 'postgres://localhost/bakery')));
 ```
 
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Repositories;
 
-use App\Services\Notes;
-use Waypoint\Attributes\{Controller, Get, Inject, Post};
-use Waypoint\Http\{Request, Response};
+use Bakery\Models\Product;
+use Tenma\Db\Postgres;
+use Waypoint\Attributes\Inject;
+use Waypoint\Support\Row;
 
-#[Controller('/notes')]
-final class NotesController
+/** The range from Postgres. Every call waits only for its own query: other requests of the worker go on meanwhile. */
+final class Products
 {
+    public const COLUMNS = 'p.id, p.slug, p.name, p.description, p.category, p.price_cents AS "priceCents", p.stock, p.picture';
+
     #[Inject]
-    private Notes $notes;
+    private Postgres $db;
 
-    #[Get('')]
-    public function index(int $limit = 20): array
+    public function bySlug(string $slug): ?Product
     {
-        return $this->notes->latest($limit);
-    }
-
-    #[Post('')]
-    public function create(Request $req, Response $res): array
-    {
-        $res->status(201);
-        return $this->notes->add((string) $req->body('text', ''));
+        $row = $this->db->first('SELECT ' . self::COLUMNS . ' FROM products p WHERE p.slug = $1', [$slug]);
+        return $row === null ? null : Product::of(new Row($row));
     }
 }
 ```
 
+`Postgres::connect()` doesn't wait; the first query opens the connection, and Tenma keeps a pool per worker. Database errors surface as exceptions and end the request with a `500` like any other.
+
+Gather everything a page needs in the controller before returning a `View`; a template that waits would hold the request in the middle of rendering. Independent sources can be asked at once with `Tenma::all()`. The Bakery's product page needs the product, the opening hours, the public holidays and the weather (shortened from `ShopController::product()`):
+
 ```php
-<?php
+#[Get('/products/{slug}')]
+public function product(string $slug): View
+{
+    $product = $holidays = $weather = null;
+    $hours = [];
+    \Tenma::all(
+        function () use (&$product, $slug): void { $product = $this->products->bySlug($slug); },
+        function () use (&$hours): void { $hours = $this->hours->week(); },
+        function () use (&$holidays): void { $holidays = $this->holidays->upcoming(); },
+        function () use (&$weather): void { $weather = $this->weather->week(); },
+    );
+    if ($product === null) {
+        throw new NotFoundException("No product $slug");
+    }
+    // …
+    return new View('Shop/Product', new ProductPage(/* … */));
+}
+```
 
-require __DIR__ . '/../vendor/autoload.php';
+The page then takes as long as the slowest of the four. What the front controller sets up stays in memory, so slow sources can also be fetched in the background: `index.php` refreshes the holidays and the weather with timers, and the page reads the last good answers without waiting:
 
-use App\Controllers\NotesController;
-use App\Services\Notes;
-use Tenma\Db\Postgres;
-use Waypoint\Environment;
-use Waypoint\Options\EnvironmentOptions;
-use Waypoint\Waypoint;
+```php
+$lastKnown = $app->get(LastKnown::class);
+Tenma::async($lastKnown->refreshWeather(...));
+Tenma::setInterval($lastKnown->refreshWeather(...), 900);
 
-$app = Waypoint::create();
-$app->configure(fn (EnvironmentOptions $env) => $env->load(dirname(__DIR__)));
-
-$db = Postgres::connect($app->get(Environment::class)->get('DATABASE_URL'));
-Tenma::async(fn () => $db->script('CREATE TABLE IF NOT EXISTS notes (id serial PRIMARY KEY, text text NOT NULL)'));
-$app->getContainer()->set(new Notes($db));
-
-$app->attach([NotesController::class]);
 $app->serve();
 ```
 
-`Postgres::connect()` doesn't wait; the first query opens the connection, and Tenma keeps a pool per worker. Startup work that waits runs in a task, as the table creation above. Database errors surface as exceptions and end the request with a `500` like any other.
-
-Gather everything a page needs in the controller before returning a `View`; a template that waits would hold the request in the middle of rendering. Two independent queries can run at once with `Tenma::all()`.
+Startup work that waits runs in a task like this, with `Tenma::async()`. Each worker runs its own timers.
 
 ## Streams and WebSockets
 
@@ -117,55 +104,67 @@ A route can hand its request over to Tenma with [`$res->upgrade()`](../reference
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
+use Bakery\Repositories\{Orders, Products};
 use Tenma\Http\{EventStream, Response as TenmaResponse, Stream, WebSocket};
-use Waypoint\Attributes\{Authenticated, Controller, Get};
+use Waypoint\Attributes\{Authenticated, Controller, Get, Inject};
 use Waypoint\Exceptions\ForbiddenException;
 use Waypoint\Http\{Request, Response};
 
-#[Controller('/live')]
-final class LiveController
+#[Controller('/backoffice/stream')]
+#[Authenticated]
+final class StreamController
 {
-    #[Get('/export.csv')]
-    public function export(Response $res): void
+    #[Inject]
+    private Orders $orders;
+
+    #[Inject]
+    private Products $products;
+
+    /** The year's orders as CSV, written while they are read. */
+    #[Get('/orders.csv')]
+    public function orders(Response $res): void
     {
         $res->upgrade(TenmaResponse::stream(function (Stream $out) {
-            $out->write("id,total\n");
-            foreach (range(1, 3) as $id) {
-                \Tenma::sleep(0.1);                     // stands for fetching the next page of rows
-                $out->write("$id," . ($id * 10) . "\n");
+            $out->write("code,pickup,total\n");
+            foreach ($this->orders->recent(365) as $order) {
+                $out->write("$order->code,$order->pickupDate," . $order->totalCents() / 100 . "\n");
             }
         }, headers: ['content-type' => 'text/csv']));
     }
 
-    #[Get('/clock')]
-    public function clock(Response $res): void
+    /** What is left of each product, every ten seconds. */
+    #[Get('/stock')]
+    public function stock(Response $res): void
     {
         $res->upgrade(TenmaResponse::events(function (EventStream $events) {
-            foreach (range(1, 3) as $tick) {
-                $events->send(json_encode(['time' => date(DATE_ATOM)]), event: 'tick');
-                \Tenma::sleep(1);
+            while (true) {   // ends when the tab closes: send() then throws ConnectionClosed
+                $left = array_map(fn ($p) => ['slug' => $p->slug, 'stock' => $p->stock], $this->products->all());
+                $events->send(json_encode($left, JSON_THROW_ON_ERROR), event: 'stock');
+                \Tenma::sleep(10);
             }
         }));
     }
 
+    /** A chat between the counter and the oven. */
     #[Get('/chat')]
-    #[Authenticated]
     public function chat(Request $req, Response $res): void
     {
-        if (($req->headers['Origin'] ?? '') !== 'https://shop.example.com') {
+        if (($req->headers['Origin'] ?? '') !== 'https://shop.sonnenkorn.test') {
             throw new ForbiddenException('Unknown origin.');
         }
-        $user = $req->jwt['sub'];
-        $res->upgrade(TenmaResponse::websocket(function (WebSocket $socket) use ($user) {
+        $name = $req->jwt['name'];
+        $res->upgrade(TenmaResponse::websocket(function (WebSocket $socket) use ($name) {
             while (($message = $socket->receive()) !== null) {
-                $socket->send("$user: $message");
+                $socket->send("$name: $message");
             }
         }));
     }
 }
 ```
+
+The Bakery itself has no such routes: its order board and order page are live components, which keep their WebSocket through Waypoint Live.
 
 - A stream keeps the headers and cookies set on the Waypoint response (CORS, security headers, `X-Request-ID`); its own headers and status win, and `Content-Type`, `Content-Length` and `Content-Encoding` come from the stream.
 - A WebSocket answers with its handshake only.

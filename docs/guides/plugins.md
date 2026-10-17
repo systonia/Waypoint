@@ -4,12 +4,28 @@ description: Add features as packages through Waypoint's hooks, with their own O
 order: 140
 ---
 
-Features beyond the core (translations, flash messages, charts, exports) are plugins: Composer packages that extend Waypoint through a fixed set of hooks. An app registers each plugin with one line before `attach()`:
+Features beyond the core (translations, flash messages, charts, exports) are plugins: Composer packages that extend Waypoint through a fixed set of hooks. An app registers each plugin with one line before `attach()`. The Bakery's `app.php` uses five of them:
 
 ```php
-$app->plugin(new \Waypoint\I18n\I18nPlugin());
-$app->configure(fn (\Waypoint\I18n\I18nOptions $i18n) => $i18n->default = 'de');
-$app->attach([PagesController::class]);
+use Waypoint\Charts\ChartsPlugin;
+use Waypoint\Export\ExportPlugin;
+use Waypoint\Flash\FlashPlugin;
+use Waypoint\I18n\{I18nOptions, I18nPlugin};
+use Waypoint\Live\LivePlugin;
+
+$app->plugin(new LivePlugin([CartBadge::class, AddToCart::class, Checkout::class, OrderBoard::class]));
+$app->plugin(new I18nPlugin());
+$app->plugin(new FlashPlugin());
+$app->plugin(new ChartsPlugin());
+$app->plugin(new ExportPlugin());
+
+$app->configure(function (I18nOptions $i18n) {
+    $i18n->directory = __DIR__ . '/lang';
+    $i18n->default = 'en';
+    $i18n->supported = ['en', 'de'];
+});
+
+$app->attach([ShopController::class, SessionController::class, BackofficeController::class, ApiController::class]);
 ```
 
 | Package | Adds |
@@ -40,7 +56,7 @@ A plugin is one class implementing [`Plugin`](../reference/Waypoint/Plugin/Plugi
 `boot()` receives what its parameters' types name: the [`Container`](../reference/Waypoint/Container.md), the plugin's own Options class, any service. It reads its options there and binds services:
 
 ```php
-public function boot(Container $container, ApiKeyOptions $options): void
+public function boot(Container $container, TillKeyOptions $options): void
 {
     // read $options, create the hook objects, register or bind services in $container
 }
@@ -67,18 +83,18 @@ An `Endpoint` or `Fallback` that changes state or shows private data checks the 
 
 ## A complete plugin
 
-`acme/api-keys` protects routes with API keys. A route declares the scope it needs with an attribute, the guard checks the key, and a controller parameter can receive the client the key belongs to:
+The Bakery's till asks for the day's orders. A small plugin, `Bakery\TillKeys`, lets it in with a key of its own instead of a staff sign-in: a route declares the scope it needs with an attribute, the guard checks the key, and a controller parameter can receive the till the key belongs to:
 
 ```php
 <?php
 
-namespace Acme\ApiKeys;
+namespace Bakery\TillKeys;
 
 use Attribute;
 
-/** The API key scope a route needs, on a controller or a route method. */
+/** The till key scope a route needs, on a controller or a route method. */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD)]
-final class RequireApiKey
+final class RequireTillKey
 {
     public function __construct(public string $scope)
     {
@@ -89,13 +105,13 @@ final class RequireApiKey
 ```php
 <?php
 
-namespace Acme\ApiKeys;
+namespace Bakery\TillKeys;
 
 use Attribute;
 
-/** Binds the name of the client whose API key the request carries. */
+/** Binds the name of the till whose key the request carries. */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-final class ApiClient
+final class Till
 {
 }
 ```
@@ -103,22 +119,22 @@ final class ApiClient
 ```php
 <?php
 
-namespace Acme\ApiKeys;
+namespace Bakery\TillKeys;
 
 /** The plugin's settings, configured by the app with $app->configure(). */
-final class ApiKeyOptions
+final class TillKeyOptions
 {
-    /** @var array<string, array{client: string, scopes: list<string>}> key => its client and scopes */
+    /** @var array<string, array{till: string, scopes: list<string>}> key => its till and scopes */
     public array $keys = [];
 
-    public string $header = 'X-Api-Key';
+    public string $header = 'X-Till-Key';
 }
 ```
 
 ```php
 <?php
 
-namespace Acme\ApiKeys;
+namespace Bakery\TillKeys;
 
 use ReflectionClass;
 use ReflectionMethod;
@@ -127,16 +143,16 @@ use Waypoint\Exceptions\{ForbiddenException, UnauthorizedException};
 use Waypoint\Http\{Request, Response};
 use Waypoint\Plugin\{ArgumentBinder, Guard, RouteAttributeCompiler};
 
-/** Reads #[RequireApiKey] at compile time, checks the key per request, and binds #[ApiClient]. */
+/** Reads #[RequireTillKey] at compile time, checks the key per request, and binds #[Till]. */
 final class KeyCheck implements RouteAttributeCompiler, Guard, ArgumentBinder
 {
-    public function __construct(private ApiKeyOptions $options)
+    public function __construct(private TillKeyOptions $options)
     {
     }
 
     public function compile(ReflectionClass $controller, ReflectionMethod $method): array
     {
-        $attribute = $method->getAttributes(RequireApiKey::class)[0] ?? $controller->getAttributes(RequireApiKey::class)[0] ?? null;
+        $attribute = $method->getAttributes(RequireTillKey::class)[0] ?? $controller->getAttributes(RequireTillKey::class)[0] ?? null;
         return $attribute === null ? [] : ['scope' => $attribute->newInstance()->scope];
     }
 
@@ -145,23 +161,23 @@ final class KeyCheck implements RouteAttributeCompiler, Guard, ArgumentBinder
         if (!isset($plan['scope'])) {
             return;
         }
-        $key = $this->keyOf($req) ?? throw new UnauthorizedException('Missing or unknown API key.');
+        $key = $this->keyOf($req) ?? throw new UnauthorizedException('Missing or unknown till key.');
         if (!in_array($plan['scope'], $key['scopes'], true)) {
-            throw new ForbiddenException("This API key lacks the scope {$plan['scope']}.");
+            throw new ForbiddenException("This till key lacks the scope {$plan['scope']}.");
         }
     }
 
     public function plan(ReflectionParameter $parameter): ?array
     {
-        return $parameter->getAttributes(ApiClient::class) !== [] ? ['client' => true] : null;
+        return $parameter->getAttributes(Till::class) !== [] ? ['till' => true] : null;
     }
 
     public function resolve(array $plan, Request $req, Response $res, array $routeParams): mixed
     {
-        return $this->keyOf($req)['client'] ?? null;
+        return $this->keyOf($req)['till'] ?? null;
     }
 
-    /** @return array{client: string, scopes: list<string>}|null */
+    /** @return array{till: string, scopes: list<string>}|null */
     private function keyOf(Request $req): ?array
     {
         foreach ($req->headers as $name => $value) {
@@ -177,21 +193,21 @@ final class KeyCheck implements RouteAttributeCompiler, Guard, ArgumentBinder
 ```php
 <?php
 
-namespace Acme\ApiKeys;
+namespace Bakery\TillKeys;
 
 use Waypoint\Plugin\PluginBase;
 
-/** API keys with scopes for routes marked #[RequireApiKey]. */
-final class ApiKeysPlugin extends PluginBase
+/** Till keys with scopes for routes marked #[RequireTillKey]. */
+final class TillKeysPlugin extends PluginBase
 {
     private KeyCheck $check;
 
     public function name(): string
     {
-        return 'api-keys';
+        return 'till-keys';
     }
 
-    public function boot(ApiKeyOptions $options): void
+    public function boot(TillKeyOptions $options): void
     {
         $this->check = new KeyCheck($options);
     }
@@ -206,15 +222,16 @@ final class ApiKeysPlugin extends PluginBase
 The app registers and configures it:
 
 ```php
-use Acme\ApiKeys\{ApiKeyOptions, ApiKeysPlugin};
+use Bakery\TillKeys\{TillKeyOptions, TillKeysPlugin};
+use Waypoint\Environment;
 
-$app->plugin(new ApiKeysPlugin());
-$app->configure(function (ApiKeyOptions $apiKeys, Environment $env) {
-    $apiKeys->keys = [
-        $env->get('PARTNER_API_KEY') => ['client' => 'partner', 'scopes' => ['orders.read']],
+$app->plugin(new TillKeysPlugin());
+$app->configure(function (TillKeyOptions $tills, Environment $env) {
+    $tills->keys = [
+        $env->string('COUNTER_TILL_KEY') => ['till' => 'counter', 'scopes' => ['orders.read']],
     ];
 });
-$app->attach([PartnerController::class]);
+$app->attach([TillController::class]);
 ```
 
 and uses it in a controller:
@@ -222,25 +239,29 @@ and uses it in a controller:
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
-use Acme\ApiKeys\{ApiClient, RequireApiKey};
-use Waypoint\Attributes\{Controller, Get, SkipCsrf};
+use Bakery\Repositories\Orders;
+use Bakery\TillKeys\{RequireTillKey, Till};
+use Waypoint\Attributes\{Controller, Get, Inject, SkipCsrf};
 
-#[Controller('/partner')]
+#[Controller('/till')]
 #[SkipCsrf]
-final class PartnerController
+final class TillController
 {
+    #[Inject]
+    private Orders $orders;
+
     #[Get('/orders')]
-    #[RequireApiKey('orders.read')]
-    public function orders(#[ApiClient] string $client): array
+    #[RequireTillKey('orders.read')]
+    public function orders(#[Till] string $till): array
     {
-        return ['client' => $client, 'orders' => []];
+        return ['till' => $till, 'orders' => $this->orders->open()];
     }
 }
 ```
 
-A request without a key answers `401`, one with a key lacking the scope `403`, and a valid one reaches the controller with `$client === 'partner'`. Because the compiler's result is part of the compiled routes, the attribute is read once, not on every request.
+A request without a key answers `401`, one with a key lacking the scope `403`, and a valid one reaches the controller with `$till === 'counter'`. Because the compiler's result is part of the compiled routes, the attribute is read once, not on every request.
 
 ## Rules for plugins
 
@@ -268,15 +289,15 @@ The [testing kit](testing.md) drives requests through an app with the plugin reg
 protected function setUp(): void
 {
     parent::setUp();
-    $this->app()->plugin(new ApiKeysPlugin());
-    $this->app()->configure(fn (ApiKeyOptions $keys) => $keys->keys = ['k1' => ['client' => 'partner', 'scopes' => ['orders.read']]]);
-    $this->app()->attach([PartnerController::class]);
+    $this->app()->plugin(new TillKeysPlugin());
+    $this->app()->configure(fn (TillKeyOptions $tills) => $tills->keys = ['k1' => ['till' => 'counter', 'scopes' => ['orders.read']]]);
+    $this->app()->attach([TillController::class]);
 }
 
 public function testTheKeyDecides(): void
 {
-    $this->get('/partner/orders')->assertStatus(401);
-    $this->get('/partner/orders', ['X-Api-Key' => 'k1'])->assertJsonPath('client', 'partner');
+    $this->get('/till/orders')->assertStatus(401);
+    $this->get('/till/orders', ['X-Till-Key' => 'k1'])->assertJsonPath('till', 'counter');
 }
 ```
 

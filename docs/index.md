@@ -4,7 +4,7 @@ description: A small PHP 8.5 framework for JSON APIs and server-rendered pages, 
 order: 1
 ---
 
-Waypoint builds a web application out of plain PHP classes and attributes. A controller method with `#[Get('/customers/{id}')]` is a route; a parameter with `#[Body]` receives the request body as a validated object; a property with `#[Inject]` receives a service. There is no route file, no service configuration and no generated code to keep in sync: what the attributes say is what the app does.
+Waypoint builds a web application out of plain PHP classes and attributes. A controller method with `#[Get('/products/{slug}')]` is a route; a parameter with `#[Body]` receives the request body as a validated object; a property with `#[Inject]` receives a service. There is no route file, no service configuration and no generated code to keep in sync: what the attributes say is what the app does.
 
 The same app answers JSON and HTML. A method that returns an array answers JSON; one that returns a `View` renders a PHP template inside a layout; one that returns a `Redirect` redirects. Errors become [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem responses, CSRF protection, security headers, JWT sign-in and an OpenAPI document are a few lines of configuration away.
 
@@ -22,40 +22,43 @@ Its only runtime dependencies are the PSR interfaces for containers, HTTP messag
 
 ## A first app
 
-A project with one controller looks like this:
+A bakery that answers what its products cost, with one controller:
 
 ```text
-my-app/
-├── composer.json        "autoload": {"psr-4": {"App\\": "src/"}}
+bakery/
+├── composer.json        "autoload": {"psr-4": {"Bakery\\": "src/"}}
 ├── public/
 │   └── index.php        the front controller
 └── src/
     └── Controllers/
-        └── GreetingController.php
+        └── ProductController.php
 ```
 
-The controller answers `GET /hello/{name}`:
+The controller answers `GET /products/{slug}`:
 
 ```php
 <?php
 
-namespace App\Controllers;
+namespace Bakery\Controllers;
 
 use Waypoint\Attributes\{Controller, Get};
+use Waypoint\Exceptions\NotFoundException;
 
-#[Controller('/hello')]
-final class GreetingController
+#[Controller('/products')]
+final class ProductController
 {
-    #[Get('/{name}')]
-    public function greet(string $name, bool $shout = false): array
+    private const PRICES = ['croissant' => 180, 'pretzel' => 120, 'sourdough-loaf' => 520];
+
+    #[Get('/{slug}')]
+    public function price(string $slug, int $quantity = 1): array
     {
-        $greeting = "Hello, $name!";
-        return ['greeting' => $shout ? strtoupper($greeting) : $greeting];
+        $cents = self::PRICES[$slug] ?? throw new NotFoundException("No product $slug");
+        return ['product' => $slug, 'quantity' => $quantity, 'totalCents' => $cents * $quantity];
     }
 }
 ```
 
-`#[Controller('/hello')]` puts every route of the class under `/hello`; `#[Get('/{name}')]` adds the method's own path. `$name` comes from the `{name}` placeholder and `$shout` from the query string (`?shout=yes`). The returned array goes out as JSON.
+`#[Controller('/products')]` puts every route of the class under `/products`; `#[Get('/{slug}')]` adds the method's own path. `$slug` comes from the `{slug}` placeholder and `$quantity` from the query string (`?quantity=6`). The returned array goes out as JSON; the `NotFoundException` answers `404`.
 
 The front controller creates the app, configures it, attaches the controllers and serves:
 
@@ -64,7 +67,7 @@ The front controller creates the app, configures it, attaches the controllers an
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use App\Controllers\GreetingController;
+use Bakery\Controllers\ProductController;
 use Waypoint\Options\FileSystemOptions;
 use Waypoint\Waypoint;
 
@@ -74,11 +77,11 @@ $app->configure(function (FileSystemOptions $fs) {
     $fs->publicDirectory = __DIR__;
 });
 
-$app->attach([GreetingController::class]);
+$app->attach([ProductController::class]);
 $app->serve();
 ```
 
-`configure()` hands the closure the app's instance of every Options class its parameters name; here it serves the files in `public/` (images, a `robots.txt`) next to the routes. `attach()` reads the attributes of the controllers and of every service they inject. `serve()` is the last line for every runtime.
+`configure()` hands the closure the app's instance of every Options class its parameters name; here it serves the files in `public/` (product pictures, a `robots.txt`) next to the routes. `attach()` reads the attributes of the controllers and of every service they inject. `serve()` is the last line for every runtime.
 
 Run it with PHP's built-in server or with Tenma:
 
@@ -88,15 +91,19 @@ tenma public/index.php          # listens on port 8080, or on PORT from the envi
 ```
 
 ```text
-$ curl localhost:8080/hello/Ada
-{"greeting":"Hello, Ada!"}
-$ curl 'localhost:8080/hello/Ada?shout=yes'
-{"greeting":"HELLO, ADA!"}
-$ curl 'localhost:8080/hello/Ada?shout=maybe'
-{"type":"about:blank","title":"Validation failed","status":422,"detail":"Validation failed","errors":{"shout":"Expected a value of type bool."}}
+$ curl localhost:8080/products/croissant
+{"product":"croissant","quantity":1,"totalCents":180}
+$ curl 'localhost:8080/products/croissant?quantity=6'
+{"product":"croissant","quantity":6,"totalCents":1080}
+$ curl 'localhost:8080/products/croissant?quantity=lots'
+{"type":"about:blank","title":"Validation failed","status":422,"detail":"Validation failed","errors":{"quantity":"Expected a value of type int."}}
+$ curl localhost:8080/products/baguette
+{"type":"about:blank","title":"Not Found","status":404,"detail":"No product baguette"}
 ```
 
-`maybe` is no boolean, so the request is answered with `422` and the field in `errors`, before the controller runs. A `POST /hello/Ada` answers `405 Method Not Allowed` with `Allow: GET, HEAD`, and an unknown path `404`.
+`lots` is no integer, so the request is answered with `422` and the field in `errors`, before the controller runs. A `POST /products/croissant` answers `405 Method Not Allowed` with `Allow: GET, HEAD`, and an unknown path `404`.
+
+The [Sonnenkorn bakery](https://github.com/systonia/Waypoint-Bakery), the example app these docs take their examples from, grows this into a whole shop: products from Postgres, a cart and a checkout, an order board for the people in the bakery, a back office with sign-in, sales charts and a JSON API with bearer tokens and an OpenAPI document.
 
 ## How these docs are organised
 

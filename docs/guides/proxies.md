@@ -25,13 +25,29 @@ For a request whose connection comes from a trusted address:
 
 Requests from anywhere else keep the connection's address and scheme, whatever headers they send. This is applied before any middleware runs, so `SecurityHeadersMiddleware` sends HSTS for HTTPS requests behind the proxy, and logs, rate limits and audit trails see the client's address.
 
+A check on the client's address therefore needs the proxy in the list. The bakery's shop sits behind a proxy on `10.0.0.2`, and a route middleware lets the stock be changed only from the bakery's own network:
+
 ```php
-#[Get('/client')]
-public function client(Request $req): array
+$app->configure(function (ProxyOptions $proxies) {
+    $proxies->trusted = ['10.0.0.2'];
+});
+```
+
+```php
+final class BakeryNetworkOnly extends MiddlewareBase
 {
-    return ['ip' => $req->ip, 'https' => $req->https];
+    protected function before(Request $req, Response $res): bool
+    {
+        // The till's address from X-Forwarded-For, not the proxy's 10.0.0.2
+        if (!str_starts_with($req->ip, '192.168.10.')) {
+            throw new ForbiddenException('The stock can only be changed in the bakery.');
+        }
+        return true;
+    }
 }
 ```
+
+Without the proxy in the list, every request would come from `10.0.0.2` and fail the check.
 
 ## Where the connection address comes from
 

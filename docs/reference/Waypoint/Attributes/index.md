@@ -8,8 +8,8 @@ generated: true
 ## Types
 
 - [`Authenticated`](Authenticated.md) · class: Requires a valid, decoded JWT (see useJwt()) for this route, on the class (every route on it, also those of subclasses) or a single method.
-- [`Body`](Body.md) · class: Binds the request body to a method parameter: a DTO class (hydrated via its array constructor, see FromArray, then validated), or, for an `array` parameter with `of: SomeDto::class`, a list of them, one per element.
-- [`Claims`](Claims.md) · class: Binds the signed-in user's JWT claims (`$req->jwt`) to a parameter typed with a FromArray DTO: `#[Claims] UserClaims $user`.
+- [`Body`](Body.md) · class: Binds the request body to a method parameter: a DTO class (hydrated via its array constructor, see FromArray, then validated), or, for an `array` parameter with `of: OrderLine::class`, a list of them, one per element.
+- [`Claims`](Claims.md) · class: Binds the signed-in user's JWT claims (`$req->jwt`) to a parameter typed with a FromArray DTO: `#[Claims] StaffClaims $staff`.
 - [`Controller`](Controller.md) · class: Marks a class as an HTTP controller, with an optional path prefix for every route on it (e.g.
 - [`Delete`](Delete.md) · class: Routes a controller method for HTTP DELETE.
 - [`Email`](Email.md) · class: Validation: a non-null property must be a syntactically valid email address.
@@ -22,7 +22,7 @@ generated: true
 - [`Length`](Length.md) · class: Validation: a string property's length (mb_strlen) must be within [$min, $max].
 - [`ListOf`](ListOf.md) · class: The element type of an `array` property: a class, an enum or a scalar keyword (int, string, float, bool), as a list, or with $map as values by string key.
 - [`Manager`](Manager.md) · class: Marks a class as a CLI task manager, with an optional name prefix ("prefix:task") for every #[Task] on it.
-- [`Middleware`](Middleware.md) · class: Attaches a MiddlewareBase subclass to a controller class (runs for every route on it, before any method-level middleware) or one route method: `#[Middleware(RequireAdmin::class)]`.
+- [`Middleware`](Middleware.md) · class: Attaches a MiddlewareBase subclass to a controller class (runs for every route on it, before any method-level middleware) or one route method: `#[Middleware(CartCookie::class)]`.
 - [`NoGzip`](NoGzip.md) · class: Opts a controller class, or one specific route method, out of gzip response compression (see Response::send()/CompressionOptions), e.g.
 - [`NotBlank`](NotBlank.md) · class: Validation: the property must not be null, an empty/whitespace-only string, or an empty array.
 - [`OneOf`](OneOf.md) · class: Validation: a non-null property value must be one of $values (strict comparison).
@@ -48,4 +48,4 @@ generated: true
 - [`Tags`](Tags.md) · class: OpenAPI tags for a controller (every route on it) or one route method; both levels are merged.
 - [`Task`](Task.md) · class: Marks a #[Manager] method as a CLI task, invoked as `php index.php [prefix:]name`.
 - [`Throws`](Throws.md) · class: Documents an error response (OpenAPI only): which exception, its HTTP status, and an optional description.
-- [`Version`](Version.md) · class: URI-prefixes a route with a version segment: #[Version('v1')] on #[Get('/users')] routes it at /v1/users.
+- [`Version`](Version.md) · class: URI-prefixes a route with a version segment: #[Version('v1')] on #[Get('/products')] routes it at /v1/products.

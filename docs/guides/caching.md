@@ -4,17 +4,17 @@ description: Compile routes, services and attributes to a cache directory, choos
 order: 110
 ---
 
-`attach()` reads the attributes of every controller with reflection and compiles them into plain route plans: which method answers which path, how each parameter is bound, which middlewares and checks apply. Without a cache directory this happens in memory at every start, which under PHP-FPM means on every request. With one, the plans are written to disk once and read back:
+`attach()` reads the attributes of every controller with reflection and compiles them into plain route plans: which method answers which path, how each parameter is bound, which middlewares and checks apply. Without a cache directory this happens in memory at every start, which under PHP-FPM means on every request. With one, the plans are written to disk once and read back. For the Bakery, whose `app.php` sits in the project's root:
 
 ```php
 use Waypoint\Options\FileSystemOptions;
 
 $app->configure(function (FileSystemOptions $fs) {
-    $fs->cacheDirectory = dirname(__DIR__) . '/var/cache';
+    $fs->cacheDirectory = __DIR__ . '/var/cache';
 });
 ```
 
-A relative path is resolved against the directory of the front controller. The directory is created when needed and must be writable by the PHP process. There is deliberately no fallback such as the system's temporary directory: the cache is loaded with `require`, and a directory other users can write to would let them plant code.
+A relative path is resolved against the directory of the front controller (`index.php`). The directory is created when needed and must be writable by the PHP process. There is deliberately no fallback such as the system's temporary directory: the cache is loaded with `require`, and a directory other users can write to would let them plant code.
 
 ## What the cache holds
 
@@ -43,7 +43,7 @@ This is the right mode during development and a safe one in production: edits ar
 
 ```php
 $app->configure(function (FileSystemOptions $fs) {
-    $fs->cacheDirectory = dirname(__DIR__) . '/var/cache';
+    $fs->cacheDirectory = __DIR__ . '/var/cache';
     $fs->cacheValidate = false;
 });
 ```

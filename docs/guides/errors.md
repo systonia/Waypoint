@@ -17,28 +17,37 @@ A route answers with an error by throwing. Waypoint catches the exception, disca
 | [`ForbiddenException`](../reference/Waypoint/Exceptions/ForbiddenException.md) | 403 | a role, permission or CSRF check fails |
 | [`NotFoundException`](../reference/Waypoint/Exceptions/NotFoundException.md) | 404 | never; thrown by the app |
 
-Each is answered as an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem with `Content-Type: application/problem+json`:
+Each is answered as an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem with `Content-Type: application/problem+json`. The bakery's API looks up an order by its code (from `src/Controllers/ApiController.php`):
 
 ```php
-#[Get('/{id}')]
-public function show(int $id): array
+#[Get('/orders/{code}')]
+#[Authenticated]
+#[Throws(NotFoundException::class)]
+public function order(string $code): OrderSummary
 {
-    return $this->catalog->find($id) ?? throw new NotFoundException("No product $id.");
+    return OrderSummary::of($this->find($code));
+}
+
+private function find(string $code): Order
+{
+    return $this->orders->byCode($code) ?? throw new NotFoundException("No order $code");
 }
 ```
 
 ```json
-{"type":"about:blank","title":"Not Found","status":404,"detail":"No product 9."}
+{"type":"about:blank","title":"Not Found","status":404,"detail":"No order X9Z9"}
 ```
+
+`#[Throws]` adds the `404` to the route's [OpenAPI](openapi.md) description; it doesn't change what is thrown.
 
 The message passed to the constructor becomes `detail`; without one, `detail` is left out. `ValidationException` adds `errors`, field ⇒ message:
 
 ```php
-throw new ValidationException(errors: ['email' => 'This email is already registered.']);
+throw new ValidationException(errors: ['status' => 'The order is received; its next step is baking.']);
 ```
 
 ```json
-{"type":"about:blank","title":"Validation failed","status":422,"detail":"Validation failed","errors":{"email":"This email is already registered."}}
+{"type":"about:blank","title":"Validation failed","status":422,"detail":"Validation failed","errors":{"status":"The order is received; its next step is baking."}}
 ```
 
 ## Your own exceptions
@@ -48,31 +57,31 @@ Domain errors extend `HttpException` with their status and title. `type` can poi
 ```php
 <?php
 
-namespace App\Exceptions;
+namespace Bakery\Exceptions;
 
 use Waypoint\Exceptions\HttpException;
 
-final class OutOfStockException extends HttpException
+final class SoldOutException extends HttpException
 {
-    public function __construct(public readonly string $sku, public readonly int $available)
+    public function __construct(public readonly string $product, public readonly int $left)
     {
         parent::__construct(
             statusCode: 409,
-            title: 'Out of stock',
-            detail: "Only $available left of $sku.",
-            type: 'https://shop.example.com/problems/out-of-stock',
+            title: 'Sold out',
+            detail: "Only $left left of $product.",
+            type: 'https://sonnenkorn.test/problems/sold-out',
         );
     }
 
     public function toProblemDetails(): array
     {
-        return [...parent::toProblemDetails(), 'sku' => $this->sku, 'available' => $this->available];
+        return [...parent::toProblemDetails(), 'product' => $this->product, 'left' => $this->left];
     }
 }
 ```
 
 ```json
-{"type":"https:\/\/shop.example.com\/problems\/out-of-stock","title":"Out of stock","status":409,"detail":"Only 2 left of LAMP-1.","sku":"LAMP-1","available":2}
+{"type":"https:\/\/sonnenkorn.test\/problems\/sold-out","title":"Sold out","status":409,"detail":"Only 2 left of croissant.","product":"croissant","left":2}
 ```
 
 [`toProblemDetails()`](../reference/Waypoint/Exceptions/HttpException.md#toproblemdetails) returns the members of the response; a subclass adds its own, as `ValidationException` adds `errors`.
@@ -95,20 +104,20 @@ Exceptions thrown in an app-level middleware go through the same handlers as tho
 
 ## Exception handlers
 
-[`useExceptionHandler()`](../reference/Waypoint/App.md#useexceptionhandler) registers a handler for an exception class, its subclasses, or an interface. The handler fills in the `Response`; it doesn't send it:
+[`useExceptionHandler()`](../reference/Waypoint/App.md#useexceptionhandler) registers a handler for an exception class, its subclasses, or an interface. The handler fills in the `Response`; it doesn't send it. The bakery's `Orders::place()` throws its own `OutOfStock`, a plain `RuntimeException`, when an order wants more than is left; a handler turns it into a `409` wherever it escapes:
 
 ```php
-use App\Exceptions\PaymentGatewayDown;
+use Bakery\Models\OutOfStock;
 use Waypoint\Http\{Request, Response};
 
-$app->useExceptionHandler(PaymentGatewayDown::class, function (PaymentGatewayDown $e, Request $req, Response $res) {
-    $res->status(503)
-        ->withHeader('Retry-After', '120')
+$app->useExceptionHandler(OutOfStock::class, function (OutOfStock $e, Request $req, Response $res) {
+    $res->status(409)
         ->withHeader('Content-Type', 'application/problem+json')
         ->write(json_encode([
             'type' => 'about:blank',
-            'title' => 'Payments are unavailable',
-            'status' => 503,
+            'title' => 'Sold out',
+            'status' => 409,
+            'detail' => "Not enough {$e->product} left.",
         ]));
 });
 ```
