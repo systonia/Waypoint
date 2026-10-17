@@ -3,24 +3,22 @@
 namespace Waypoint\View;
 
 use ReflectionClass;
-use ReflectionMethod;
-use ReflectionNamedType;
-use ReflectionProperty;
-use Tenma\Lsp\{Imports, Provider, Tokens};
+use Tenma\Lsp\{Imports, Provider, Tokens, Variables};
 use Waypoint\Http\View;
 
 /**
  * @internal Views in the editor, through `tenma lsp` (composer.json names it under extra.tenma.lsp): `$this` in a
- * view is the View, `$model->` completes the members of the class `@model` names and F12 leads to them, as it
- * does from a class name in `@model (...)` or `@use (...)`. The problems the check finds without PHPStan show
- * while the view is typed, and directives get their colours: the editor's PHP grammar sees them as text.
+ * view is the View and `$model` the class `@model` names, so tenma completes their members, shows them on hover
+ * and leads F12 to them; F12 on a class name in `@model (...)` or `@use (...)` leads to the class. The problems
+ * the check finds without PHPStan show while the view is typed, and directives get their colours: the editor's PHP
+ * grammar sees them as text.
  *
  * The views are the files below Check::directories(): the editor runs no app.
  *
  * @phpstan-type TokenType 'keyword'|'comment'|'variable'|'property'|'method'|'function'|'class'|'string'|'number'|'operator'
  * @phpstan-type Token array{line: int, column: int, length: int, type: TokenType}
  */
-final class Editor implements Provider, Tokens, Imports
+final class Editor implements Provider, Tokens, Imports, Variables
 {
     /** @var list<string>|null The views directories, each with a / at the end */
     private ?array $directories = null;
@@ -36,25 +34,7 @@ final class Editor implements Provider, Tokens, Imports
 
     public function completions(string $file, string $text, int $offset): array
     {
-        if (!$this->isView($file) || preg_match('/\$model((?:->\w+)*)->\w*$/', substr($text, 0, $offset), $m) !== 1) {
-            return [];
-        }
-        $class = self::follow(self::model($text), $m[1]);
-        if ($class === null) {
-            return [];
-        }
-        $items = [];
-        foreach ($class->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
-            if (!$property->isStatic()) {
-                $items[] = ['label' => $property->getName(), 'kind' => 'property', 'detail' => trim("{$property->getType()} \${$property->getName()}")];
-            }
-        }
-        foreach ($class->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-            if (!$method->isStatic() && !str_starts_with($method->getName(), '__')) {
-                $items[] = ['label' => $method->getName(), 'kind' => 'method', 'detail' => $class->getShortName() . '::' . $method->getName() . '()'];
-            }
-        }
-        return $items;
+        return [];
     }
 
     public function definition(string $file, string $text, int $offset): ?array
@@ -76,34 +56,18 @@ final class Editor implements Provider, Tokens, Imports
                 }
             }
         }
-        // A member of $model
-        preg_match('/^\w*/', substr($text, $offset), $rest);
-        if (preg_match('/\$model((?:->\w+)*)->(\w+)$/', substr($text, 0, $offset) . ($rest[0] ?? ''), $m) !== 1) {
-            return null;
-        }
-        $class = self::follow(self::model($text), $m[1]);
-        $member = match (true) {
-            $class === null => null,
-            $class->hasMethod($m[2]) => $class->getMethod($m[2]),
-            $class->hasProperty($m[2]) => $class->getProperty($m[2]),
-            default => null,
-        };
-        if ($member instanceof ReflectionMethod) {
-            return ['file' => (string) $member->getFileName(), 'line' => (int) $member->getStartLine()];
-        }
-        if ($member instanceof ReflectionProperty) {
-            $owner = $member->getDeclaringClass();
-            $source = (string) @file_get_contents((string) $owner->getFileName());
-            // Reflection knows no line of a property: where its name is declared
-            $at = preg_match('/\$' . $member->getName() . '\b/', $source, $found, PREG_OFFSET_CAPTURE, (int) strpos($source, 'class ' . $owner->getShortName())) === 1 ? $found[0][1] : 0;
-            return ['file' => (string) $owner->getFileName(), 'line' => substr_count($source, "\n", 0, $at) + 1];
-        }
         return null;
     }
 
     public function diagnostics(string $file, string $text): array
     {
         return $this->isView($file) ? Check::inView($text, $file) : [];
+    }
+
+    public function variables(string $file, string $text): array
+    {
+        $model = $this->isView($file) ? self::model($text) : null;
+        return $model !== null ? ['model' => $model] : [];
     }
 
     public function imports(string $file, string $text): array
@@ -227,12 +191,11 @@ final class Editor implements Provider, Tokens, Imports
         }
     }
 
-    /** @return ReflectionClass<object>|null The class `@model` names, when it names one */
-    private static function model(string $text): ?ReflectionClass
+    /** @return class-string|null The class `@model` names, when it names one */
+    private static function model(string $text): ?string
     {
         $compiler = new Compiler($text);
-        $class = $compiler->model !== null ? self::resolve(ltrim($compiler->model, '?'), $compiler->uses) : null;
-        return $class !== null ? new ReflectionClass($class) : null;
+        return $compiler->model !== null ? self::resolve(ltrim($compiler->model, '?'), $compiler->uses) : null;
     }
 
     /**
@@ -254,26 +217,6 @@ final class Editor implements Provider, Tokens, Imports
             }
         }
         return class_exists($name) || interface_exists($name) ? $name : null;
-    }
-
-    /**
-     * The class at the end of `->a->b` (or `->a()`): the declared types of properties and of methods' returns.
-     *
-     * @param ReflectionClass<object>|null $class
-     * @return ReflectionClass<object>|null
-     */
-    private static function follow(?ReflectionClass $class, string $chain): ?ReflectionClass
-    {
-        foreach (array_filter(explode('->', $chain)) as $name) {
-            $type = match (true) {
-                $class === null => null,
-                $class->hasProperty($name) => $class->getProperty($name)->getType(),
-                $class->hasMethod($name) => $class->getMethod($name)->getReturnType(),
-                default => null,
-            };
-            $class = $type instanceof ReflectionNamedType && !$type->isBuiltin() && class_exists($type->getName()) ? new ReflectionClass($type->getName()) : null;
-        }
-        return $class;
     }
 
     private function isView(string $file): bool

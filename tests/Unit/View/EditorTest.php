@@ -3,6 +3,7 @@
 namespace Waypoint\Tests\Unit\View;
 
 use PHPUnit\Framework\TestCase;
+use Waypoint\Environment;
 use Waypoint\Html;
 use Waypoint\Http\View;
 use Waypoint\View\Editor;
@@ -39,16 +40,14 @@ final class EditorTest extends TestCase
         $this->assertSame([], $editor->diagnostics(self::$root . '/src/Page.php', '@if ('));
     }
 
-    public function testModelCompletesTheMembersOfItsClass(): void
+    public function testModelIsTheClassModelNames(): void
     {
-        $text = "@use (Waypoint\\Environment as Env)\n@model (Env)\n{{ \$model->";
-        $labels = array_column((new Editor(self::$root))->completions($this->view(), $text, strlen($text)), 'label');
-        $this->assertContains('isDev', $labels);
-        $this->assertNotContains('__construct', $labels);
-        $definition = (new Editor(self::$root))->definition($this->view(), "@model (Waypoint\\Html)\n{{ \$model->__toString() }}", 35);
-        $this->assertSame((string) (new \ReflectionClass(Html::class))->getFileName(), $definition['file'] ?? null);
+        $editor = new Editor(self::$root);
+        $this->assertSame(['model' => Environment::class], $editor->variables($this->view(), "@use (Waypoint\\Environment as Env)\n@model (?Env)\n{{ \$model-> }}"));
+        $this->assertSame([], $editor->variables($this->view(), "@model (Nope)\n{{ \$model-> }}"));
+        $this->assertSame([], $editor->variables(self::$root . '/src/Page.php', '@model (Waypoint\\Html)'));
         // F12 on the class @model names
-        $this->assertSame((new \ReflectionClass(Html::class))->getStartLine(), (new Editor(self::$root))->definition($this->view(), '@model (Waypoint\\Html)', 18)['line'] ?? null);
+        $this->assertSame((new \ReflectionClass(Html::class))->getStartLine(), $editor->definition($this->view(), '@model (Waypoint\\Html)', 18)['line'] ?? null);
     }
 
     public function testProblemsTokensAndImports(): void

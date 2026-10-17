@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "78a04e4ee69b13fc609962b6dbe5dbb5",
+    "content-hash": "2e627da26f3ec61664b0f1a5c48af737",
     "packages": [
         {
             "name": "psr/container",
@@ -2436,16 +2436,16 @@
         },
         {
             "name": "tenma/stubs",
-            "version": "0.1.16",
+            "version": "0.1.17",
             "source": {
                 "type": "git",
                 "url": "https://github.com/systonia/Tenma-Stubs.git",
-                "reference": "5ceb97ffe9f190b2dbffa9807c97153c18c2bfda"
+                "reference": "e351bd92dd3f483ce4f9356cfbb4fa3cfe48e439"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/systonia/Tenma-Stubs/zipball/5ceb97ffe9f190b2dbffa9807c97153c18c2bfda",
-                "reference": "5ceb97ffe9f190b2dbffa9807c97153c18c2bfda",
+                "url": "https://api.github.com/repos/systonia/Tenma-Stubs/zipball/e351bd92dd3f483ce4f9356cfbb4fa3cfe48e439",
+                "reference": "e351bd92dd3f483ce4f9356cfbb4fa3cfe48e439",
                 "shasum": ""
             },
             "require": {
@@ -2484,7 +2484,7 @@
                 "issues": "https://github.com/systonia/Tenma-Stubs/issues",
                 "source": "https://github.com/systonia/Tenma-Stubs"
             },
-            "time": "2026-10-17T01:21:57+00:00"
+            "time": "2026-10-17T16:32:42+00:00"
         },
         {
             "name": "theseer/tokenizer",

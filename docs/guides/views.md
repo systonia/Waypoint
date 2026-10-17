@@ -208,7 +208,7 @@ new Tenma\Hook(
 
 ## In the editor
 
-With `tenma lsp`, the language server of [Tenma](tenma.md), Waypoint knows the views too: `$this->` completes the `View`'s members, `$model->` those of the class `@model` names, F12 leads from them and from a class in `@model` or `@use` to its declaration, the mistakes above show while you type, and the directives get their colours.
+With `tenma lsp`, the language server of [Tenma](tenma.md), Waypoint knows the views too: `$this->` completes the `View`'s members, `$model->` those of the class `@model` names (also along chains such as `$model->customer->` and in `@foreach ($model->items as $item)` for `$item->`), hover shows their types, F12 leads from them and from a class in `@model` or `@use` to its declaration, the mistakes above show while you type, and the directives get their colours.
 
 ## CSS and JavaScript per view
 
