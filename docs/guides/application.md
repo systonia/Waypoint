@@ -150,7 +150,7 @@ Without a default, a missing key throws a `RuntimeException` naming it (`Environ
 
 ### APP_ENV
 
-`APP_ENV` names the environment and picks the `.env.<APP_ENV>` and `config.<APP_ENV>.json` files. `Environment::isDev()` is true when it is `development`. Without an `APP_ENV` anywhere, Waypoint decides by how PHP runs: `development` on the command line (`php -S`, CLI tasks) and under `tenma --watch`, `production` under every other server, Tenma without `--watch` included. The request never decides it. A local FPM setup therefore sets `APP_ENV=development` itself, in `.env` or the pool configuration.
+`APP_ENV` names the environment and picks the `.env.<APP_ENV>` and `config.<APP_ENV>.json` files. `Environment::isDev()` is true when it is `development`. Without an `APP_ENV` anywhere, Waypoint decides by how PHP runs: `development` under PHP's own command line (`php -S`, `php index.php <task>`) and under `tenma --watch`, `production` under every other server and under Tenma without `--watch`, which includes CLI tasks run as `tenma index.php <task>`. That is what a deployment wants: its migrations and cron jobs run as `production`. The request never decides it. A local setup that wants `development` for Tenma's CLI tasks or under FPM sets `APP_ENV=development` itself, in `.env` (or the pool configuration).
 
 `APP_ENV` changes no behaviour of the framework on its own. In particular, an unexpected exception's message never reaches the client, not even in development; it goes to the [log](logging.md).
 

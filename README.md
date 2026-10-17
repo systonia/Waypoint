@@ -1441,7 +1441,7 @@ class AuthController
 ```
 
 `APP_ENV` defaults to `development` under the `cli`/`cli-server` SAPI and under `tenma --watch` when unset
-anywhere. Every other server, Tenma without `--watch` included, defaults to `production`: the request never decides it, since Apache and Caddy fill `SERVER_NAME`
+anywhere. Every other server, and Tenma without `--watch` (CLI tasks run as `tenma index.php <task>` included), defaults to `production`: the request never decides it, since Apache and Caddy fill `SERVER_NAME`
 from the client's `Host` header. A local FPM setup sets `APP_ENV=development` itself. Request headers
 (`HTTP_*`, which FPM puts into `$_SERVER` and `$_ENV`, and CGI into the process environment) are never read as
 environment: no source's `HTTP_*` keys are.
