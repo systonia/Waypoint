@@ -8,8 +8,9 @@ use ReflectionProperty;
 
 /**
  * @internal The element type of an `array` property or return type, read from its docblock: `@var list<Item>`,
- * `@var Item[]`, `@var array<string, Item>`, `@return list<Item>`. A class name is resolved the way PHP would
- * resolve it in that file: fully qualified, through its `use` imports, or relative to its namespace.
+ * `@var Item[]`, `@var array<string, Item>`, `@return list<Item>`, and for a promoted property the constructor's
+ * `@param list<Item> $items`. A class name is resolved the way PHP would resolve it in that file: fully qualified,
+ * through its `use` imports, or relative to its namespace.
  */
 final class DocType
 {
@@ -25,12 +26,19 @@ final class DocType
      */
     public static function element(ReflectionProperty|ReflectionMethod $member): ?array
     {
-        $doc = $member->getDocComment();
+        $doc = (string) $member->getDocComment();
         $tag = $member instanceof ReflectionProperty ? 'var' : 'return';
-        if ($doc === false || preg_match('/@' . $tag . '\s+([^\n*]+)/', $doc, $match) !== 1) {
+        if (preg_match('/@' . $tag . '\s+([^\n*]+)/', $doc, $match) === 1) {
+            $type = $match[1];
+        } elseif (
+            $member instanceof ReflectionProperty && $member->isPromoted()
+            && preg_match('/@param\s+([^\n*]+?)\s+\$' . $member->getName() . '\b/', (string) $member->getDeclaringClass()->getConstructor()?->getDocComment(), $match) === 1
+        ) {
+            // A promoted property: the constructor's `@param list<Item> $items`
+            $type = $match[1];
+        } else {
             return null;
         }
-        $type = $match[1];
         if (preg_match('/^\??(?:non-empty-)?(?:list|array|iterable)<\s*(?:(int|string|array-key)\s*,\s*)?(\\\\?[\w\\\\]+)\s*>/', $type, $generic) === 1) {
             $kind = $generic[1] === 'string' ? 'map' : 'list';
             $name = $generic[2];

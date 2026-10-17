@@ -36,6 +36,14 @@ final class OpenAPISchemaShapesTest extends IntegrationTestCase
         $this->assertSame(['type' => 'object', 'additionalProperties' => ['type' => 'integer']], $properties['weights']);
     }
 
+    public function testPromotedPropertiesTakeTheirElementsFromTheConstructorsParamTags(): void
+    {
+        $properties = $this->generate()['components']['schemas']['ManifestDTO']['properties'];
+
+        $this->assertSame(['type' => 'array', 'items' => ['$ref' => '#/components/schemas/CityDTO']], $properties['stops']);
+        $this->assertSame(['type' => 'object', 'additionalProperties' => ['type' => 'string']], $properties['labels']);
+    }
+
     public function testNullableRequiredAndReadOnlyFollowWhatHydrationDoes(): void
     {
         $schema = $this->generate()['components']['schemas']['ShipmentDTO'];

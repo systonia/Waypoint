@@ -4,7 +4,7 @@ namespace Waypoint\Tests\Fixtures\Controllers;
 
 use Waypoint\Attributes\{Authenticated, Body, Controller, Delete, Get, Permissions, Post, Query, Role};
 use Waypoint\Http\{Redirect, View};
-use Waypoint\Tests\Fixtures\DTO\{CityDTO, ShipmentDTO};
+use Waypoint\Tests\Fixtures\DTO\{CityDTO, ManifestDTO, ShipmentDTO};
 use Waypoint\Tests\Fixtures\Enums\OrderStatus;
 
 /** What the OpenAPI document says about enums, nested DTOs, lists and nullable values */
@@ -55,6 +55,12 @@ class ShipmentsController
     public function cities(): array
     {
         return [];
+    }
+
+    #[Get('/manifest')]
+    public function manifest(): ManifestDTO
+    {
+        return new ManifestDTO();
     }
 
     #[Get('/status')]
