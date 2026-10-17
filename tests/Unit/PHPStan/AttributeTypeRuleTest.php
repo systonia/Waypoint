@@ -34,6 +34,7 @@ final class AttributeTypeRuleTest extends TestCase
         $this->assertStringContainsString(":65:Property $fixture::\$children takes list<$fixture>", $output);
         $this->assertStringContainsString(':67:Parameter $counts', $output);
         $this->assertStringContainsString(':68:Parameter $tags', $output);
-        $this->assertSame(4, substr_count($output, '[identifier=waypoint.'));
+        // Nothing else: every reported line besides the dumps is one of the four above
+        $this->assertSame(4, preg_match_all('/AttributeChecked\.php:\d+:(?!Dumped type)/', $output));
     }
 }
