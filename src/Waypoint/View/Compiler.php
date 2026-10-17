@@ -61,12 +61,16 @@ class Compiler
     /** The type `@model` names, as written; null without one */
     public ?string $model = null;
 
+    /** @var list<array{int, int}> The HTML between PHP tags, by byte offsets */
+    private array $html = [];
+
     public function __construct(protected readonly string $source)
     {
         $offset = 0;
         foreach (token_get_all($source) as $token) {
             $text = is_array($token) ? $token[1] : $token;
             if (is_array($token) && $token[0] === T_INLINE_HTML) {
+                $this->html[] = [$offset, $offset + strlen($text)];
                 $this->scan($offset, $offset + strlen($text));
             }
             $offset += strlen($text);
@@ -96,21 +100,72 @@ class Compiler
         return ($namespace !== '' ? "namespace $namespace; " : '') . implode(' ', $statements) . ' ';
     }
 
-    /** The file as plain PHP, line for line. */
+    /**
+     * The file as plain PHP, line for line. Whitespace with a line break next to a block directive (its own line's
+     * indentation and line break, blank lines, the edges of a block's content) moves into the directive's PHP tag,
+     * where it prints nothing; whitespace without one stays as written.
+     */
     public function compile(): string
     {
+        $found = $this->found;
+        $trims = [];
+        $at = 0;
+        foreach ($found as $i => $item) {
+            $trims[$i] = $this->trims($item, $at, $found[$i + 1] ?? null);
+            $at = $item['end'] + strlen($trims[$i][1]);
+        }
         $code = '';
         $at = 0;
-        foreach ($this->found as $found) {
-            $from = $found['from'] ?? $found['start'];
-            $code .= substr($this->source, $at, $from - $at) . $this->php($found);
-            $at = $found['end'];
+        foreach ($found as $i => $item) {
+            [$before, $after] = $trims[$i];
+            // The line break after an echo may go into the next directive's tag: then the echo prints none
+            $taken = ($trims[$i + 1][0] ?? '') !== '' && $found[$i + 1]['start'] - strlen($trims[$i + 1][0]) === $item['end'];
+            $php = $this->php($item, !$taken);
+            if ($before !== '' || $after !== '') {
+                $php = '<?php' . $before . substr($php, 5, -2) . $after . '?>';
+            }
+            $code .= substr($this->source, $at, ($item['from'] ?? $item['start']) - strlen($before) - $at) . $php;
+            $at = $item['end'] + strlen($after);
         }
         return $code . substr($this->source, $at);
     }
 
+    /**
+     * The whitespace before and after a block directive that goes into its tag: a run of it in the HTML next to
+     * the directive, back to $at and up to the next construct, when it holds a line break; '' otherwise.
+     *
+     * @param Found $found
+     * @param Found|null $next
+     * @return array{string, string}
+     */
+    private function trims(array $found, int $at, ?array $next): array
+    {
+        $kind = $found['kind'];
+        if (!in_array($kind, ['use', 'model', 'code'], true) && !($kind === 'directive' && ($found['name'] ?? '') !== 'yield')) {
+            return ['', ''];
+        }
+        $before = '';
+        $after = '';
+        $broken = false;
+        foreach ($this->html as [$from, $to]) {
+            if ($found['start'] >= $from && $found['start'] <= $to) {
+                $html = $from;
+                $from = max($from, $at);
+                $length = strspn(strrev(substr($this->source, $from, $found['start'] - $from)), " \t\r\n");
+                $before = substr($this->source, $found['start'] - $length, $length);
+                // A closing PHP tag takes the line break after it: the indentation that follows starts a line too
+                $broken = $from === $html && $from > 0 && $found['start'] - $length === $from && in_array($this->source[$from - 1], ["\n", "\r"], true);
+            }
+            if ($found['end'] >= $from && $found['end'] <= $to) {
+                $to = min($to, $next['start'] ?? $to);
+                $after = substr($this->source, $found['end'], strspn($this->source, " \t\r\n", $found['end'], $to - $found['end']));
+            }
+        }
+        return [$broken || strpbrk($before, "\r\n") !== false ? $before : '', strpbrk($after, "\r\n") !== false ? $after : ''];
+    }
+
     /** @param Found $found */
-    private function php(array $found): string
+    private function php(array $found, bool $newline = true): string
     {
         if (isset($found['code'])) {
             return $found['code'];
@@ -118,7 +173,7 @@ class Compiler
         [$from, $to] = $found['expression'] ?? [0, 0];
         $expression = substr($this->source, $from, $to - $from);
         // PHP swallows the newline after a closing tag (\n, \r\n or \r): an echo at the end of a line prints it, as text would
-        $newline = preg_match('/\G(\r\n|\n|\r)/', $this->source, $m, 0, $found['end']) === 1 ? ', ' . json_encode($m[1]) : '';
+        $newline = $newline && preg_match('/\G(\r\n|\n|\r)/', $this->source, $m, 0, $found['end']) === 1 ? ', ' . json_encode($m[1]) : '';
         return match (true) {
             $found['kind'] === 'echo' => "<?= $expression$newline ?>",
             // A section is Html: it prints as it is

@@ -19,7 +19,7 @@ final class CompilerTest extends TestCase
         $source = "@foreach (\$items as \$item)\n  {{ \$item }}\n  @if (\$a === ')')\n  @elseif (\$b)\n  @else\n  @endif\n@endforeach\n{{/* one\ntwo */}}";
         $php = (new Compiler($source))->compile();
         $this->assertSame(
-            "<?php foreach (\$items as \$item): ?>\n  <?=  \$item , \"\\n\" ?>\n  <?php if (\$a === ')'): ?>\n  <?php elseif (\$b): ?>\n  <?php else: ?>\n  <?php endif ?>\n<?php endforeach ?>\n<?php /* one\ntwo */ ?>",
+            "<?php foreach (\$items as \$item): \n  ?><?=  \$item  ?><?php\n   if (\$a === ')'): \n  ?><?php elseif (\$b): \n  ?><?php else: \n  ?><?php endif \n?><?php endforeach \n?><?php /* one\ntwo */ ?>",
             $php,
         );
         $this->assertSame(substr_count($source, "\n"), substr_count($php, "\n"));
@@ -42,7 +42,7 @@ final class CompilerTest extends TestCase
     public function testSectionsAndYield(): void
     {
         $this->assertSame(
-            "<?php \$this->startSection('title') ?>\nShop\n<?php \$this->endSection() ?>\n<title><?= \$this->section('title') ?></title>",
+            "<?php \$this->startSection('title') \n?>Shop<?php\n \$this->endSection() \n?><title><?= \$this->section('title') ?></title>",
             (new Compiler("@section('title')\nShop\n@endsection\n<title>@yield('title')</title>"))->compile(),
         );
         $this->assertSame(['1: @section has no @endsection'], self::problems("@section('a')\n"));
@@ -54,7 +54,7 @@ final class CompilerTest extends TestCase
     {
         $compiler = new Compiler("@use (Waypoint\\Html as Markup)\n@model (?Markup)\n<p>");
         $this->assertSame('?Markup', $compiler->model);
-        $this->assertSame("<?php ?>\n<?php \$this->assertModel(static fn (?Markup \$model) => null, '?Markup') ?>\n<p>", $compiler->compile());
+        $this->assertSame("<?php \n?><?php \$this->assertModel(static fn (?Markup \$model) => null, '?Markup') \n?><p>", $compiler->compile());
         // A PHPDoc type is for PHPStan and the editor only
         $this->assertSame('<?php ?>', (new Compiler('@model (list<Waypoint\\Html>)'))->compile());
         $this->assertSame('<?php ?>', (new Compiler('@model (array{id: int})'))->compile());
@@ -95,7 +95,7 @@ final class CompilerTest extends TestCase
     public function testACompiledViewImportsItsUseAndClassesOnItsFirstLine(): void
     {
         $php = View::compile("@use (Waypoint\\Html)\n<p>{{ classes('a', ['b' => true]) }} {{ new Html('<i>') }}</p>", '/v.php');
-        $this->assertStringStartsWith('<?php use function Waypoint\\classes; use Waypoint\\Html; ?><?php ?>', $php);
+        $this->assertStringStartsWith("<?php use function Waypoint\\classes; use Waypoint\\Html; ?><?php \n?><p>", $php);
         ob_start();
         eval('?>' . $php);
         $this->assertSame('<p>a b <i></p>', ob_get_clean());
@@ -105,5 +105,81 @@ final class CompilerTest extends TestCase
     {
         $this->assertSame('use Waypoint\\Html as Markup; ', Compiler::header('', [['class', 'DateTime', 'DateTime'], ['class', 'Waypoint\\Html', 'Markup']]));
         $this->assertSame('namespace App; use DateTime; use function strlen as size; ', Compiler::header('App', [['class', 'DateTime', 'DateTime'], ['function', 'strlen', 'size']]));
+    }
+
+    public function testADirectiveOnItsOwnLineLeavesNoWhitespaceBehind(): void
+    {
+        $cases = [
+            // A section's content without its indentation and line breaks
+            ["@section('title')\n    {{ 'Orders' }}\n@endsection\n<title><?= \$this->sections['title'] ?></title>", '<title>Orders</title>'],
+            ["<p>\n    @if (\$x)\n        <b>yes</b>\n    @elseif (\$x === 0)\n        zero\n    @else\n        <i>no</i>\n    @endif\n</p>", '<p><i>no</i></p>'],
+            ["<ul>\n    @foreach ([1, 2] as \$i)\n        <li>{{ \$i }}</li>\n    @endforeach\n</ul>\n", "<ul><li>1</li><li>2</li></ul>\n"],
+            ["<p>\n    @code\n        \$a = 'A';\n    @endcode\n    {{ \$a }}\n</p>", "<p>A\n</p>"],
+            // Blank lines between directives go too
+            ["@if (true)\n\n    @if (true)\n\n        x\n\n    @endif\n\n@endif\n\nend", 'xend'],
+            // Without a line break the spaces stay as written
+            ['Hello @if ($x === null) world @endif!', 'Hello  world !'],
+            ['Hello @if ($x) world @endif!', 'Hello !'],
+            ["a  \t@if (true)\t b @endif\t  c", "a  \t\t b \t  c"],
+            // An echo keeps its line break when no directive takes it
+            ["@if (true)\n    {{ 'a' }}\n    {{ 'b' }}\n@endif", "a\n    b"],
+            ["a\r\n  @if (true)\r\n    b\r\n  @endif\r\nc", 'abc'],
+            ["@use (Waypoint\\Html)\n@model (mixed)\n\n<p>", '<p>'],
+            // Plain PHP tags stay as they are
+            ["<?php \$y = 1 ?>\n  @if (true)\n<?= \$y ?>\n@endif", '1'],
+        ];
+        foreach ($cases as [$source, $expected]) {
+            $compiled = (new Compiler($source))->compile();
+            $this->assertSame(substr_count($source, "\n"), substr_count($compiled, "\n"), $source);
+            $this->assertSame(substr_count($source, "\r"), substr_count($compiled, "\r"), $source);
+            $this->sections = [];
+            ob_start();
+            $x = null;
+            eval('?>' . $compiled);
+            $this->assertSame($expected, (string) ob_get_clean(), $source);
+        }
+    }
+
+    public function testTheWhitespaceGoesIntoTheDirectivesTag(): void
+    {
+        $this->assertSame(
+            "<p><?php\n     if (\$x): \n        ?><b>yes</b><?php\n     endif \n?></p>",
+            (new Compiler("<p>\n    @if (\$x)\n        <b>yes</b>\n    @endif\n</p>"))->compile(),
+        );
+    }
+
+    public function testAnErrorInsideABlockKeepsItsLine(): void
+    {
+        $compiled = (new Compiler("<main>\n    @if (true)\n\n        <p>\n            {{ \$missing->name() }}\n        </p>\n    @endif\n</main>"))->compile();
+        try {
+            $missing = null;
+            ob_start();
+            eval('?>' . $compiled);
+            $this->fail('No error');
+        } catch (\Error $e) {
+            $this->assertSame(5, $e->getLine());
+        } finally {
+            ob_end_clean();
+        }
+    }
+
+    /** @var array<string, string> For the sections of the cases: what startSection() and endSection() take */
+    private array $sections = [];
+
+    private ?string $section = null;
+
+    public function startSection(string $name): void
+    {
+        $this->section = $name;
+        ob_start();
+    }
+
+    public function endSection(): void
+    {
+        $this->sections[(string) $this->section] = (string) ob_get_clean();
+    }
+
+    public function assertModel(\Closure $check, string $type): void
+    {
     }
 }

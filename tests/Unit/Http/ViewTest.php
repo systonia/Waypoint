@@ -334,7 +334,7 @@ final class ViewTest extends TestCase
         $view = new View('Directives', ['title' => 'A & B', 'items' => ['a', '<b>'], 'html' => '<hr>']);
 
         $this->assertSame(
-            "<title>A &amp; B</title>\n<main><ul>\n    <li class=\"first\">a</li>\n    <li class=\"\">&lt;b&gt;</li>\n</ul>\n<hr>\n</main>\n",
+            "<title>A &amp; B</title>\n<main><ul><li class=\"first\">a</li><li class=\"\">&lt;b&gt;</li></ul><hr></main>\n",
             $view->render()
         );
     }
