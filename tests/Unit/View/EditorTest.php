@@ -4,6 +4,8 @@ namespace Waypoint\Tests\Unit\View;
 
 use PHPUnit\Framework\TestCase;
 use Waypoint\Environment;
+use Waypoint\Tests\Fixtures\DTO\BasketDTO;
+use Waypoint\Tests\Fixtures\DTO\CityDTO;
 use Waypoint\Html;
 use Waypoint\Http\View;
 use Waypoint\View\Editor;
@@ -48,6 +50,15 @@ final class EditorTest extends TestCase
         $this->assertSame([], $editor->variables(self::$root . '/src/Page.php', '@model (Waypoint\\Html)'));
         // F12 on the class @model names
         $this->assertSame((new \ReflectionClass(Html::class))->getStartLine(), $editor->definition($this->view(), '@model (Waypoint\\Html)', 18)['line'] ?? null);
+    }
+
+    public function testElementsComeFromListOfAndReturnsInAnyClass(): void
+    {
+        $this->assertSame(
+            ['cities' => CityDTO::class, 'byName' => CityDTO::class, 'stops()' => CityDTO::class],
+            (new Editor(self::$root))->elements(BasketDTO::class)
+        );
+        $this->assertSame([], (new Editor(self::$root))->elements('Waypoint\\Nope'));
     }
 
     public function testProblemsTokensAndImports(): void

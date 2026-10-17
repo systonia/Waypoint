@@ -3,7 +3,9 @@
 namespace Waypoint\View;
 
 use ReflectionClass;
-use Tenma\Lsp\{Imports, Provider, Tokens, Variables};
+use Tenma\Lsp\{Elements, Imports, Provider, Tokens, Variables};
+use Waypoint\Attributes\ListOf;
+use Waypoint\Attributes\Returns;
 use Waypoint\Http\View;
 
 /**
@@ -13,12 +15,16 @@ use Waypoint\Http\View;
  * the check finds without PHPStan show while the view is typed, and directives get their colours: the editor's PHP
  * grammar sees them as text.
  *
+ * For every class, not only in views: the element class `#[ListOf]` names for an array property (also a promoted
+ * one) and `#[Returns(list: true)]` or `map: true` for a method, so tenma types `@foreach ($model->items as $item)`
+ * and `foreach ($this->items() as $item)` wherever it types variables.
+ *
  * The views are the files below Check::directories(): the editor runs no app.
  *
  * @phpstan-type TokenType 'keyword'|'comment'|'variable'|'property'|'method'|'function'|'class'|'string'|'number'|'operator'
  * @phpstan-type Token array{line: int, column: int, length: int, type: TokenType}
  */
-final class Editor implements Provider, Tokens, Imports, Variables
+final class Editor implements Provider, Tokens, Imports, Variables, Elements
 {
     /** @var list<string>|null The views directories, each with a / at the end */
     private ?array $directories = null;
@@ -68,6 +74,30 @@ final class Editor implements Provider, Tokens, Imports, Variables
     {
         $model = $this->isView($file) ? self::model($text) : null;
         return $model !== null ? ['model' => $model] : [];
+    }
+
+    public function elements(string $class): array
+    {
+        if (!class_exists($class) && !interface_exists($class) && !trait_exists($class)) {
+            return [];
+        }
+        $reflection = new ReflectionClass($class);
+        $elements = [];
+        foreach ($reflection->getProperties() as $property) {
+            foreach ($property->getAttributes(ListOf::class) as $attribute) {
+                $elements[$property->getName()] = $attribute->newInstance()->type;
+            }
+        }
+        foreach ($reflection->getMethods() as $method) {
+            foreach ($method->getAttributes(Returns::class) as $attribute) {
+                $returns = $attribute->newInstance();
+                if ($returns->list || $returns->map) {
+                    $elements[$method->getName() . '()'] = $returns->type;
+                }
+            }
+        }
+        // int, string, ...: no class to complete
+        return array_filter($elements, static fn (string $type) => class_exists($type) || interface_exists($type));
     }
 
     public function imports(string $file, string $text): array

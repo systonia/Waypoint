@@ -938,7 +938,8 @@ With a cache directory the compiled templates are files under `{cacheDirectory}/
 `vendor/bin/waypoint-check` checks every view without running the app: the compiler's mistakes, and PHPStan's
 findings with `$this` as the `View` and `$model` of its `@model` type, at the view's lines. Under `tenma lsp`
 the editor knows the views too (completion of `$this->` and `$model->` and their chains, hover, F12, the
-mistakes while typing). See
+mistakes while typing). The variable of a loop over a `#[ListOf]` property or a `#[Returns(list: true)]` method
+gets the element class there, in views, Live templates and plain PHP files alike. See
 [Views](docs/guides/views.md) for the full syntax.
 
 
