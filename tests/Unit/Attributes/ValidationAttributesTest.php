@@ -5,30 +5,7 @@ namespace Waypoint\Tests\Unit\Attributes;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Waypoint\Attributes\{NotBlank, Email, Length, Regex, OneOf, SameAs};
-
-class ValidationAttributes_Fixture
-{
-    #[NotBlank]
-    public $blank;
-
-    #[Email]
-    public $email;
-
-    #[Length]
-    public $defaultLength;
-
-    #[Length(min: 3, max: 5)]
-    public $boundedLength;
-
-    #[Regex(pattern: '/^\d+$/')]
-    public $digitsOnly;
-
-    #[OneOf(['a', 'b'])]
-    public $choice;
-
-    #[SameAs('choice')]
-    public $confirm;
-}
+use Waypoint\Tests\Fixtures\Attributes\ValidationFixture;
 
 /**
  * These attributes only carry data; Waypoint\Validator is what applies the
@@ -39,7 +16,7 @@ final class ValidationAttributesTest extends TestCase
 {
     private function attributeOn(string $property, string $attributeClass): object
     {
-        return (new ReflectionClass(ValidationAttributes_Fixture::class))
+        return (new ReflectionClass(ValidationFixture::class))
             ->getProperty($property)
             ->getAttributes($attributeClass)[0]
             ->newInstance();

@@ -5,19 +5,7 @@ namespace Waypoint\Tests\Unit\Attributes;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Waypoint\Attributes\{Param, Query, Body};
-
-class ParameterBindingAttributes_Fixture
-{
-    public function handle(
-        #[Param] string $customerId,
-        #[Param('uuid')] string $userId,
-        #[Query] ?string $search,
-        #[Query('q')] ?string $term,
-        #[Body('payload')] array $body,
-        #[Body(of: 'Some\\DTO')] array $items
-    ) {
-    }
-}
+use Waypoint\Tests\Fixtures\Attributes\ParameterBindingFixture;
 
 /**
  * #[Param]/#[Query]/#[Body] bind a controller-method parameter to a route
@@ -29,7 +17,7 @@ final class ParameterBindingAttributesTest extends TestCase
 {
     private function attributeOn(string $param, string $attributeClass): object
     {
-        $method = (new ReflectionClass(ParameterBindingAttributes_Fixture::class))->getMethod('handle');
+        $method = (new ReflectionClass(ParameterBindingFixture::class))->getMethod('handle');
         foreach ($method->getParameters() as $p) {
             if ($p->getName() === $param) {
                 return $p->getAttributes($attributeClass)[0]->newInstance();

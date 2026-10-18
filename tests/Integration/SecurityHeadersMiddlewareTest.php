@@ -3,10 +3,11 @@
 namespace Waypoint\Tests\Integration;
 
 use Waypoint\Waypoint;
-use Waypoint\Http\{MiddlewareBase, Request, Response, SecurityHeadersMiddleware};
+use Waypoint\Http\SecurityHeadersMiddleware;
 use Waypoint\Options\SecurityHeaderOptions;
 use Waypoint\Tests\Fixtures\Controllers\SecurityHeaderController;
 use Waypoint\Tests\Fixtures\Support\CallTracker;
+use Waypoint\Tests\Fixtures\Middlewares\RecordingMiddleware;
 
 final class SecurityHeadersMiddlewareTest extends IntegrationTestCase
 {
@@ -162,23 +163,4 @@ final class SecurityHeadersMiddlewareTest extends IntegrationTestCase
         );
     }
 
-}
-
-/** Records before()/after() order without touching response headers, so it can't be confused with SecurityHeadersMiddleware's own effects in the ordering test above. */
-final class RecordingMiddleware extends MiddlewareBase
-{
-    public function __construct(private string $label)
-    {
-    }
-
-    protected function before(Request $req, Response $res): bool
-    {
-        CallTracker::record("{$this->label}:before");
-        return true;
-    }
-
-    protected function after(Request $req, Response $res): void
-    {
-        CallTracker::record("{$this->label}:after");
-    }
 }

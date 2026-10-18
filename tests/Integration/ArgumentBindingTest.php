@@ -5,6 +5,7 @@ namespace Waypoint\Tests\Integration;
 use Waypoint\Waypoint;
 use Waypoint\Tests\Fixtures\Controllers\ArgBindingController;
 use Waypoint\Tests\Fixtures\Controllers\DocumentedController;
+use Waypoint\Tests\Fixtures\Controllers\UnbindableController;
 
 final class ArgumentBindingTest extends IntegrationTestCase
 {
@@ -99,8 +100,8 @@ final class ArgumentBindingTest extends IntegrationTestCase
     {
         Waypoint::reset();
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Cannot bind $when of ' . ArgumentBindingTest_Unbindable::class . '::show()');
-        Waypoint::create()->attach([ArgumentBindingTest_Unbindable::class]);
+        $this->expectExceptionMessage('Cannot bind $when of ' . UnbindableController::class . '::show()');
+        Waypoint::create()->attach([UnbindableController::class]);
     }
 
     public function testRouteParametersArriveUrlDecoded(): void
@@ -184,15 +185,5 @@ final class ArgumentBindingTest extends IntegrationTestCase
         $decoded = json_decode($output, true);
         $this->assertSame('Validation failed', $decoded['title']);
         $this->assertArrayHasKey($errorKey, $decoded['errors']);
-    }
-}
-
-#[\Waypoint\Attributes\Controller('/unbindable')]
-final class ArgumentBindingTest_Unbindable
-{
-    #[\Waypoint\Attributes\Get('')]
-    public function show(\DateTimeImmutable $when): array
-    {
-        return [];
     }
 }

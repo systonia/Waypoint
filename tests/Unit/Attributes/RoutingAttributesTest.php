@@ -6,46 +6,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Waypoint\Attributes\{Controller, Manager, Get, Post, Put, Patch, Delete, Task};
-
-#[Controller('/api')]
-class RoutingAttributes_ControllerFixture
-{
-}
-
-#[Controller]
-class RoutingAttributes_DefaultPathFixture
-{
-}
-
-#[Manager('/maintenance/')]
-class RoutingAttributes_ManagerFixture
-{
-}
-
-#[Manager]
-class RoutingAttributes_DefaultManagerFixture
-{
-}
-
-class RoutingAttributes_VerbFixture
-{
-    #[Get('/users/{id}')]
-    public function get() {}
-    #[Post('/users')]
-    public function post() {}
-    #[Put('/users/{id}')]
-    public function put() {}
-    #[Patch('/users/{id}')]
-    public function patch() {}
-    #[Delete('/users/{id}')]
-    public function delete() {}
-    #[Task('cleanup')]
-    public function cleanup() {}
-    #[Task('/padded/')]
-    public function padded() {}
-    #[Task]
-    public function unnamed() {}
-}
+use Waypoint\Tests\Fixtures\Attributes\{RoutingControllerFixture, RoutingDefaultPathFixture, RoutingManagerFixture, RoutingDefaultManagerFixture, RoutingVerbFixture};
 
 /**
  * #[Controller]/#[Manager] name a route/task prefix; #[Get]/#[Post]/... declare
@@ -55,7 +16,7 @@ final class RoutingAttributesTest extends TestCase
 {
     public function testControllerNormalizesPathWithLeadingSlashAndNoTrailingSlash(): void
     {
-        $attr = (new ReflectionClass(RoutingAttributes_ControllerFixture::class))
+        $attr = (new ReflectionClass(RoutingControllerFixture::class))
             ->getAttributes(Controller::class)[0]->newInstance();
 
         $this->assertSame('/api', $attr->getPath());
@@ -63,7 +24,7 @@ final class RoutingAttributesTest extends TestCase
 
     public function testControllerDefaultsToEmptyPath(): void
     {
-        $attr = (new ReflectionClass(RoutingAttributes_DefaultPathFixture::class))
+        $attr = (new ReflectionClass(RoutingDefaultPathFixture::class))
             ->getAttributes(Controller::class)[0]->newInstance();
 
         $this->assertSame('', $attr->getPath());
@@ -71,7 +32,7 @@ final class RoutingAttributesTest extends TestCase
 
     public function testManagerNormalizesNameWithoutAddingSlashes(): void
     {
-        $attr = (new ReflectionClass(RoutingAttributes_ManagerFixture::class))
+        $attr = (new ReflectionClass(RoutingManagerFixture::class))
             ->getAttributes(Manager::class)[0]->newInstance();
 
         $this->assertSame('maintenance', $attr->getName());
@@ -79,7 +40,7 @@ final class RoutingAttributesTest extends TestCase
 
     public function testManagerDefaultsToEmptyName(): void
     {
-        $attr = (new ReflectionClass(RoutingAttributes_DefaultManagerFixture::class))
+        $attr = (new ReflectionClass(RoutingDefaultManagerFixture::class))
             ->getAttributes(Manager::class)[0]->newInstance();
 
         $this->assertSame('', $attr->getName());
@@ -88,7 +49,7 @@ final class RoutingAttributesTest extends TestCase
     #[DataProvider('verbProvider')]
     public function testHttpVerbAttributeReportsMethodAndPath(string $attributeClass, string $method, string $httpMethod, string $expectedPath): void
     {
-        $refMethod = (new ReflectionClass(RoutingAttributes_VerbFixture::class))->getMethod($method);
+        $refMethod = (new ReflectionClass(RoutingVerbFixture::class))->getMethod($method);
         $instance = $refMethod->getAttributes($attributeClass)[0]->newInstance();
 
         $this->assertSame($httpMethod, $instance->getHttpMethod());
@@ -108,7 +69,7 @@ final class RoutingAttributesTest extends TestCase
 
     public function testTaskNamePassesThroughUnchanged(): void
     {
-        $refMethod = (new ReflectionClass(RoutingAttributes_VerbFixture::class))->getMethod('cleanup');
+        $refMethod = (new ReflectionClass(RoutingVerbFixture::class))->getMethod('cleanup');
         $instance = $refMethod->getAttributes(Task::class)[0]->newInstance();
 
         $this->assertSame('cleanup', $instance->getName());
@@ -116,7 +77,7 @@ final class RoutingAttributesTest extends TestCase
 
     public function testTaskNameTrimsSurroundingSlashes(): void
     {
-        $refMethod = (new ReflectionClass(RoutingAttributes_VerbFixture::class))->getMethod('padded');
+        $refMethod = (new ReflectionClass(RoutingVerbFixture::class))->getMethod('padded');
         $instance = $refMethod->getAttributes(Task::class)[0]->newInstance();
 
         $this->assertSame('padded', $instance->getName());
@@ -124,7 +85,7 @@ final class RoutingAttributesTest extends TestCase
 
     public function testTaskWithNoNameDefaultsToEmptyString(): void
     {
-        $refMethod = (new ReflectionClass(RoutingAttributes_VerbFixture::class))->getMethod('unnamed');
+        $refMethod = (new ReflectionClass(RoutingVerbFixture::class))->getMethod('unnamed');
         $instance = $refMethod->getAttributes(Task::class)[0]->newInstance();
 
         $this->assertSame('', $instance->getName());

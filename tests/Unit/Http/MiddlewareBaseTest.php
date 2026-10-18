@@ -4,20 +4,7 @@ namespace Waypoint\Tests\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
 use Waypoint\Http\{MiddlewareBase, Request, Response};
-
-final class PlainMiddleware extends MiddlewareBase
-{
-    // No before()/after() overrides: exercises MiddlewareBase's own
-    // default pass-through implementations directly.
-}
-
-final class VetoingMiddleware extends MiddlewareBase
-{
-    protected function before(Request $req, Response $res): bool
-    {
-        return false;
-    }
-}
+use Waypoint\Tests\Fixtures\Middlewares\{PlainMiddleware, VetoingMiddleware};
 
 final class MiddlewareBaseTest extends TestCase
 {

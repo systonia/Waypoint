@@ -4,54 +4,8 @@ namespace Waypoint\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Waypoint\Validator;
-use Waypoint\Attributes\{NotBlank, Email, Length, Regex, OneOf, SameAs};
-
-class ValidatorTest_ContactDTO
-{
-    #[NotBlank]
-    public $name;
-
-    #[Email]
-    public $email;
-}
-
-class ValidatorTest_AccountDTO
-{
-    #[Length(min: 3, max: 5)]
-    public $username;
-
-    #[Regex(pattern: '/^\d{4}$/')]
-    public $pin;
-}
-
-class ValidatorTest_MultiRuleDTO
-{
-    #[NotBlank]
-    #[Length(min: 3, max: 5)]
-    public $code;
-}
-
-class ValidatorTest_ChoiceDTO
-{
-    #[OneOf(['guest', 'user', 'admin'])]
-    public $role;
-
-    #[OneOf([1, 2])]
-    public $level;
-
-    public $password;
-
-    #[SameAs('password')]
-    public $passwordConfirm;
-}
-
-class ValidatorTest_UninitializedTypedPropertyDTO
-{
-    // Typed, no default: PHP leaves this genuinely uninitialized until
-    // assigned, unlike untyped/nullable properties which default to null.
-    #[NotBlank]
-    public string $name;
-}
+use Waypoint\Attributes\{NotBlank, Email, Length, Regex};
+use Waypoint\Tests\Fixtures\DTO\Validation\{ContactDTO, AccountDTO, MultiRuleDTO, ChoiceDTO, UninitializedTypedPropertyDTO};
 
 final class ValidatorTest extends TestCase
 {
@@ -65,7 +19,7 @@ final class ValidatorTest extends TestCase
     public function testNotBlankRejectsNullEmptyAndWhitespaceOnly(): void
     {
         foreach ([null, '', '   '] as $value) {
-            $dto = new ValidatorTest_ContactDTO();
+            $dto = new ContactDTO();
             $dto->name = $value;
             $errors = $this->validator->validate($dto);
             $this->assertArrayHasKey('name', $errors, 'Expected blank rejection for ' . var_export($value, true));
@@ -74,7 +28,7 @@ final class ValidatorTest extends TestCase
 
     public function testNotBlankAcceptsANonEmptyValue(): void
     {
-        $dto = new ValidatorTest_ContactDTO();
+        $dto = new ContactDTO();
         $dto->name = 'value';
         $errors = $this->validator->validate($dto);
         $this->assertArrayNotHasKey('name', $errors);
@@ -82,7 +36,7 @@ final class ValidatorTest extends TestCase
 
     public function testEmailRejectsInvalidAddresses(): void
     {
-        $dto = new ValidatorTest_ContactDTO();
+        $dto = new ContactDTO();
         $dto->email = 'not-an-email';
         $errors = $this->validator->validate($dto);
         $this->assertEquals('This value is not a valid email address.', $errors['email']);
@@ -90,7 +44,7 @@ final class ValidatorTest extends TestCase
 
     public function testEmailAcceptsAValidAddress(): void
     {
-        $dto = new ValidatorTest_ContactDTO();
+        $dto = new ContactDTO();
         $dto->email = 'user@example.com';
         $errors = $this->validator->validate($dto);
         $this->assertArrayNotHasKey('email', $errors);
@@ -98,7 +52,7 @@ final class ValidatorTest extends TestCase
 
     public function testEmailSkipsValidationWhenNull(): void
     {
-        $dto = new ValidatorTest_ContactDTO();
+        $dto = new ContactDTO();
         $dto->email = null;
         $errors = $this->validator->validate($dto);
         $this->assertArrayNotHasKey('email', $errors);
@@ -106,7 +60,7 @@ final class ValidatorTest extends TestCase
 
     public function testLengthRejectsTooShort(): void
     {
-        $dto = new ValidatorTest_AccountDTO();
+        $dto = new AccountDTO();
         $dto->username = 'ab';
         $errors = $this->validator->validate($dto);
         $this->assertStringContainsString('too short', $errors['username']);
@@ -114,7 +68,7 @@ final class ValidatorTest extends TestCase
 
     public function testLengthRejectsTooLong(): void
     {
-        $dto = new ValidatorTest_AccountDTO();
+        $dto = new AccountDTO();
         $dto->username = 'abcdef';
         $errors = $this->validator->validate($dto);
         $this->assertStringContainsString('too long', $errors['username']);
@@ -122,7 +76,7 @@ final class ValidatorTest extends TestCase
 
     public function testLengthSkipsNullSoAnOptionalFieldCanHaveAMinimum(): void
     {
-        $dto = new ValidatorTest_AccountDTO();
+        $dto = new AccountDTO();
         $dto->username = null;
         $errors = $this->validator->validate($dto);
         $this->assertArrayNotHasKey('username', $errors);
@@ -130,7 +84,7 @@ final class ValidatorTest extends TestCase
 
     public function testLengthAcceptsWithinBounds(): void
     {
-        $dto = new ValidatorTest_AccountDTO();
+        $dto = new AccountDTO();
         $dto->username = 'abcd';
         $errors = $this->validator->validate($dto);
         $this->assertArrayNotHasKey('username', $errors);
@@ -138,7 +92,7 @@ final class ValidatorTest extends TestCase
 
     public function testRegexRejectsNonMatchingValue(): void
     {
-        $dto = new ValidatorTest_AccountDTO();
+        $dto = new AccountDTO();
         $dto->pin = '123';
         $errors = $this->validator->validate($dto);
         $this->assertStringContainsString('does not match', $errors['pin']);
@@ -146,7 +100,7 @@ final class ValidatorTest extends TestCase
 
     public function testRegexAcceptsMatchingValue(): void
     {
-        $dto = new ValidatorTest_AccountDTO();
+        $dto = new AccountDTO();
         $dto->pin = '1234';
         $errors = $this->validator->validate($dto);
         $this->assertArrayNotHasKey('pin', $errors);
@@ -156,7 +110,7 @@ final class ValidatorTest extends TestCase
     {
         // Untyped properties take whatever the request body carried
         foreach ([['1234'], new \stdClass(), true] as $value) {
-            $dto = new ValidatorTest_AccountDTO();
+            $dto = new AccountDTO();
             $dto->pin = $value;
             $this->assertArrayHasKey('pin', $this->validator->validate($dto), get_debug_type($value));
         }
@@ -164,7 +118,7 @@ final class ValidatorTest extends TestCase
 
     public function testRegexChecksANumberByItsTextAndSkipsAMissingValue(): void
     {
-        $dto = new ValidatorTest_AccountDTO();
+        $dto = new AccountDTO();
         $dto->pin = 1234;
         $this->assertArrayNotHasKey('pin', $this->validator->validate($dto));
         $dto->pin = 12;
@@ -175,7 +129,7 @@ final class ValidatorTest extends TestCase
 
     public function testValidateCollectsOneErrorPerInvalidField(): void
     {
-        $dto = new ValidatorTest_ContactDTO();
+        $dto = new ContactDTO();
         $dto->name = '';
         $dto->email = 'invalid';
 
@@ -187,7 +141,7 @@ final class ValidatorTest extends TestCase
 
     public function testValidateReturnsEmptyArrayWhenEverythingIsValid(): void
     {
-        $dto = new ValidatorTest_ContactDTO();
+        $dto = new ContactDTO();
         $dto->name = 'not blank';
         $dto->email = 'me@a.com';
 
@@ -196,7 +150,7 @@ final class ValidatorTest extends TestCase
 
     public function testOneOfRejectsAValueOutsideTheListAndSkipsNull(): void
     {
-        $dto = new ValidatorTest_ChoiceDTO();
+        $dto = new ChoiceDTO();
         $dto->role = 'root';
         $dto->level = '1'; // strict: the string '1' is not the int 1
 
@@ -213,7 +167,7 @@ final class ValidatorTest extends TestCase
 
     public function testSameAsComparesAgainstTheNamedProperty(): void
     {
-        $dto = new ValidatorTest_ChoiceDTO();
+        $dto = new ChoiceDTO();
         $dto->password = 'secret';
         $dto->passwordConfirm = 'secrets';
 
@@ -225,7 +179,7 @@ final class ValidatorTest extends TestCase
 
     public function testUninitializedTypedPropertyIsTreatedAsBlank(): void
     {
-        $dto = new ValidatorTest_UninitializedTypedPropertyDTO();
+        $dto = new UninitializedTypedPropertyDTO();
 
         $errors = $this->validator->validate($dto);
 
@@ -239,7 +193,7 @@ final class ValidatorTest extends TestCase
         // then Regex, in that fixed order, so when several rules on the
         // same property fail, whichever is checked last overwrites earlier
         // messages. Here Length (checked after NotBlank) wins.
-        $dto = new ValidatorTest_MultiRuleDTO();
+        $dto = new MultiRuleDTO();
         $dto->code = ''; // fails both #[NotBlank] and #[Length(min:3)]
 
         $errors = $this->validator->validate($dto);
