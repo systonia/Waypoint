@@ -28,6 +28,6 @@ final class NeedsEchoPlugin extends PluginBase implements ViewHelper
 
     public function helpers(): array
     {
-        return $this->clashingHelper ? ['shout' => fn(): string => ''] : ['whisper' => fn(string $t): string => strtolower($t)];
+        return $this->clashingHelper ? ['shout' => fn (): string => ''] : ['whisper' => fn (string $t): string => strtolower($t)];
     }
 }

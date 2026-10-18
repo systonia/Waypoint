@@ -39,7 +39,7 @@ final class ResponseTest extends TestCase
     private function sentHeaderNames(): array
     {
         return array_map(
-            fn(string $h) => strtolower(explode(':', $h, 2)[0]),
+            fn (string $h) => strtolower(explode(':', $h, 2)[0]),
             $this->sentHeaderLines()
         );
     }

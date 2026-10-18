@@ -73,14 +73,14 @@ class App
 
         $cachedServices = $cachedData['services'] ?? null;
         $allClasses = is_array($cachedServices)
-            ? array_values(array_filter($cachedServices, static fn(mixed $v): bool => is_string($v) && class_exists($v)))
+            ? array_values(array_filter($cachedServices, static fn (mixed $v): bool => is_string($v) && class_exists($v)))
             : ServiceDiscovery::discover($controllers);
 
         // Controllers are created per request (Router::perRequest()): as container singletons one instance would
         // carry its state from request to request. One the app registered itself stays, and is cloned per request
         $this->initDependencyInjection(array_values(array_filter(
             $allClasses,
-            fn(string $class): bool => !in_array($class, $controllers, true) || $this->container->isRegistered($class),
+            fn (string $class): bool => !in_array($class, $controllers, true) || $this->container->isRegistered($class),
         )));
         $this->router = new Router($controllers, $allClasses, $this->container, $cachedData, $fileSystemOptions, $this->plugins);
     }
@@ -258,8 +258,8 @@ class App
         try {
             $handler = array_reduce(
                 array_reverse($this->middlewares),
-                fn(callable $next, callable $mw): callable => fn(Request $req, Response $res): mixed => $mw($req, $res, $next),
-                fn(Request $req, Response $res): Response => $this->dispatch($req, $res)
+                fn (callable $next, callable $mw): callable => fn (Request $req, Response $res): mixed => $mw($req, $res, $next),
+                fn (Request $req, Response $res): Response => $this->dispatch($req, $res)
             );
             try {
                 $handler($req, $res);

@@ -31,6 +31,6 @@ class CorsOptions
             'Access-Control-Expose-Headers' => $this->exposeHeaders,
             'Access-Control-Max-Age' => $this->maxAge !== null ? (string) $this->maxAge : null,
             'Access-Control-Allow-Credentials' => $this->allowCredentials ? 'true' : null,
-        ], fn(?string $value): bool => $value !== null);
+        ], fn (?string $value): bool => $value !== null);
     }
 }

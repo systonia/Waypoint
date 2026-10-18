@@ -32,7 +32,7 @@ final class ArgumentBindingTest extends IntegrationTestCase
         $this->assertSame(['ok' => true], json_decode($output, true));
         $headers = $this->sentHeaderLines();
         $this->assertTrue(
-            (bool) array_filter($headers, fn($h) => str_starts_with(strtolower($h), 'x-from-param:'))
+            (bool) array_filter($headers, fn ($h) => str_starts_with(strtolower($h), 'x-from-param:'))
         );
     }
 

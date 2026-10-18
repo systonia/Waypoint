@@ -185,8 +185,8 @@ class Router
         }
         if (!$this->fileSystemOptions->isCacheEnabled()) {
             // No cache directory: the compiled assets stay in memory, nothing touches the disk.
-            $this->viewAssetFiles = array_map(fn(array $asset): string => $asset['mime'], $assets['files']);
-            $this->viewAssetContents = array_map(fn(array $asset): string => $asset['content'], $assets['files']);
+            $this->viewAssetFiles = array_map(fn (array $asset): string => $asset['mime'], $assets['files']);
+            $this->viewAssetContents = array_map(fn (array $asset): string => $asset['content'], $assets['files']);
             return;
         }
         $assets['meta'] += $this->pluginMeta();
@@ -433,7 +433,7 @@ class Router
 
         return array_reduce(
             array_reverse(Arr::listOfStringKeyed($route['middlewares'] ?? null)),
-            fn(callable $next, array $mw): callable => function (Request $req, Response $res) use ($mw, $next): mixed {
+            fn (callable $next, array $mw): callable => function (Request $req, Response $res) use ($mw, $next): mixed {
                 $class = $mw['class'] ?? null;
                 $method = $mw['method'] ?? null;
                 if (!is_string($class) || !class_exists($class) || !is_string($method)) {
@@ -584,7 +584,7 @@ class Router
         $view->setRequest($req);
         $view->setHelpers($this->viewHelpers);
         $view->setAssetsPath($this->fileSystemOptions->assetsPath);
-        $view->setPluginAssetUrls(array_map(fn(string $file): string => "{$this->fileSystemOptions->assetsPath}/$file", $this->pluginAssetFiles));
+        $view->setPluginAssetUrls(array_map(fn (string $file): string => "{$this->fileSystemOptions->assetsPath}/$file", $this->pluginAssetFiles));
         $view->setWaypointJsPath(
             $this->waypointJsFile !== null ? "{$this->fileSystemOptions->assetsPath}/{$this->waypointJsFile}" : null,
             $this->waypointJsAttributes()
@@ -614,7 +614,7 @@ class Router
         return array_filter([
             'data-csrf-cookie' => $csrf->cookieName !== $defaults->cookieName ? $csrf->cookieName : null,
             'data-csrf-header' => $csrf->headerName !== $defaults->headerName ? $csrf->headerName : null,
-        ], fn(?string $v): bool => $v !== null);
+        ], fn (?string $v): bool => $v !== null);
     }
 
     /**

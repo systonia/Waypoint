@@ -71,7 +71,7 @@ class DocumentedController
     #[Post('/bulk-products')]
     public function bulkCreate(#[Body(of: CreateProductDTO::class)] array $products): array
     {
-        return ['count' => count($products), 'skus' => array_map(fn($p) => $p->sku, $products)];
+        return ['count' => count($products), 'skus' => array_map(fn ($p) => $p->sku, $products)];
     }
 
     #[Post('/bulk-ghosts')]

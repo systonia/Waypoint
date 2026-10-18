@@ -47,6 +47,6 @@ class OpenAPIOptions
             'components' => $this->securitySchemes ? ['securitySchemes' => $this->securitySchemes] : null,
             'security' => $this->security ?: null,
             'externalDocs' => $this->externalDocs,
-        ], fn($v) => $v !== null);
+        ], fn ($v) => $v !== null);
     }
 }

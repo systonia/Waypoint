@@ -171,7 +171,7 @@ final class OpenAPIGeneratorTest extends IntegrationTestCase
         );
         $this->assertCount(1, array_filter(
             array_keys($spec['components']['schemas']),
-            fn(string $name) => $name === 'ProblemDetails'
+            fn (string $name) => $name === 'ProblemDetails'
         ));
     }
 

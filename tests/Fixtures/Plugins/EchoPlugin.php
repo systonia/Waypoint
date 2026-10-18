@@ -100,7 +100,7 @@ final class EchoPlugin extends PluginBase implements Endpoint, RouteAttributeCom
 
     public function helpers(): array
     {
-        return ['shout' => fn(string $text): string => strtoupper($text)];
+        return ['shout' => fn (string $text): string => strtoupper($text)];
     }
 
     public function describeParameter(array $parameter): ?array

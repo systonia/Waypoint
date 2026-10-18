@@ -80,7 +80,7 @@ class OpenAPIGenerator
             'security' => $options['security'] ?? null,
             'tags' => $options['tags'] ?? null,
             'externalDocs' => $options['externalDocs'] ?? null,
-        ], fn($value) => $value !== null);
+        ], fn ($value) => $value !== null);
     }
 
     /** True if any compiled route carries #[Version($version)], so a spec.vX.json for an unknown version can 404. */
@@ -137,7 +137,7 @@ class OpenAPIGenerator
         ksort($paths);
         $order = array_flip(['get', 'post', 'put', 'patch', 'delete']);
         foreach ($paths as &$operations) {
-            uksort($operations, fn(string $a, string $b): int => ($order[$a] ?? PHP_INT_MAX) <=> ($order[$b] ?? PHP_INT_MAX));
+            uksort($operations, fn (string $a, string $b): int => ($order[$a] ?? PHP_INT_MAX) <=> ($order[$b] ?? PHP_INT_MAX));
         }
         return $paths;
     }
@@ -150,7 +150,7 @@ class OpenAPIGenerator
     protected function selectEligibleRoutes(array $routes, ?string $version): array
     {
         if ($version !== null) {
-            return array_values(array_filter($routes, fn($route) => self::routeField($route, 'version') === $version));
+            return array_values(array_filter($routes, fn ($route) => self::routeField($route, 'version') === $version));
         }
 
         $unversioned = [];
@@ -335,7 +335,7 @@ class OpenAPIGenerator
             'responses' => $responses,
             'security' => $security,
             'deprecated' => self::findAttr([...$classAttrs, ...$methodAttrs], Deprecated::class) !== null,
-        ], fn($v) => $v !== null);
+        ], fn ($v) => $v !== null);
     }
 
     /**

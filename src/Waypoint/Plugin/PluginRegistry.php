@@ -59,19 +59,19 @@ final class PluginRegistry
     /** @return list<class-string> */
     public function classes(): array
     {
-        return array_merge([], ...array_map(fn(Plugin $p): array => $p->classes(), $this->all()));
+        return array_merge([], ...array_map(fn (Plugin $p): array => $p->classes(), $this->all()));
     }
 
     /** @return list<callable> */
     public function middlewares(): array
     {
-        return array_merge([], ...array_map(fn(Plugin $p): array => $p->middlewares(), $this->all()));
+        return array_merge([], ...array_map(fn (Plugin $p): array => $p->middlewares(), $this->all()));
     }
 
     /** @return array<string, int> */
     public function cacheInputs(): array
     {
-        return array_merge([], ...array_map(fn(Plugin $p): array => $p->cacheInputs(), $this->all()));
+        return array_merge([], ...array_map(fn (Plugin $p): array => $p->cacheInputs(), $this->all()));
     }
 
     /**

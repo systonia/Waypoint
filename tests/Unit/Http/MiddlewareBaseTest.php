@@ -67,7 +67,7 @@ final class MiddlewareBaseTest extends TestCase
 
         $req = Request::capture();
         $res = new Response();
-        $result = $middleware($req, $res, fn(Request $r, Response $s): string => 'next-ran');
+        $result = $middleware($req, $res, fn (Request $r, Response $s): string => 'next-ran');
 
         $this->assertSame('next-ran', $result);
     }

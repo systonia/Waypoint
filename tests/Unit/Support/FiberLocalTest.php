@@ -23,7 +23,7 @@ final class FiberLocalTest extends TestCase
         $local = new FiberLocal();
         $local->set('main');
         $seen = [];
-        // A closure, not fn(): fn() would capture $seen by value
+        // A closure, not fn (): fn () would capture $seen by value
         $fiber = function (string $value) use ($local, &$seen): Fiber {
             return new Fiber(function () use ($local, $value, &$seen): void {
                 $seen[] = $local->get();

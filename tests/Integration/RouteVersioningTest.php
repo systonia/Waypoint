@@ -137,7 +137,7 @@ final class RouteVersioningTest extends IntegrationTestCase
         $app->attach([CustomersController::class]);
 
         $messages = array_column($dummy->logs, 1);
-        $this->assertNotEmpty(array_filter($messages, fn($m) => str_contains($m, 'GET /customers')));
+        $this->assertNotEmpty(array_filter($messages, fn ($m) => str_contains($m, 'GET /customers')));
     }
 
     public function testCompilingAFullyVersionedRouteLogsNoWarningForIt(): void
@@ -150,8 +150,8 @@ final class RouteVersioningTest extends IntegrationTestCase
         $app->attach([VersionedWidgetsController::class]);
 
         $messages = array_column($dummy->logs, 1);
-        $this->assertEmpty(array_filter($messages, fn($m) => str_contains($m, '/v1/widgets/list')));
-        $this->assertEmpty(array_filter($messages, fn($m) => str_contains($m, '/v2/widgets/override')));
+        $this->assertEmpty(array_filter($messages, fn ($m) => str_contains($m, '/v1/widgets/list')));
+        $this->assertEmpty(array_filter($messages, fn ($m) => str_contains($m, '/v2/widgets/override')));
     }
 
     public function testCompilingWithoutAnyAppNeverThrowsEvenThoughItWouldNormallyLog(): void

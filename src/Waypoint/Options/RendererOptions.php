@@ -29,6 +29,6 @@ class RendererOptions
     /** @return array<string, string> */
     public function toArray(): array
     {
-        return array_filter(['directory' => $this->directory, 'layout' => $this->layout], fn(?string $v): bool => !empty($v));
+        return array_filter(['directory' => $this->directory, 'layout' => $this->layout], fn (?string $v): bool => !empty($v));
     }
 }

@@ -17,7 +17,7 @@ final class RouteTypeEnumTest extends TestCase
 
     public function testAllCasesArePresent(): void
     {
-        $names = array_map(fn(RouteType $c) => $c->name, RouteType::cases());
+        $names = array_map(fn (RouteType $c) => $c->name, RouteType::cases());
         $this->assertEqualsCanonicalizing(['Unset', 'Static', 'Dynamic', 'Task'], $names);
     }
 }

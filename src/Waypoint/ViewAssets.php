@@ -143,7 +143,7 @@ final class ViewAssets
     private static function indent(string $text, int $spaces): string
     {
         $prefix = str_repeat(' ', $spaces);
-        $lines = array_map(fn(string $line): string => $line === '' ? '' : $prefix . $line, explode("\n", rtrim($text, "\n")));
+        $lines = array_map(fn (string $line): string => $line === '' ? '' : $prefix . $line, explode("\n", rtrim($text, "\n")));
         return implode("\n", $lines) . "\n";
     }
 
