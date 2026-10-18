@@ -1,0 +1,77 @@
+# Waypoint
+
+> Waypoint is a small PHP 8.5 framework for JSON APIs and server-rendered UIs, driven by attributes on your own classes: routing, dependency injection, validation and the OpenAPI spec come from `#[...]` on controllers and DTOs, with nothing else to wire up. It runs under FPM and `php -S`, as a handler under Tenma (a PHP app server with fibers), and as a PSR-15 handler on any PSR-7 server. Install with `composer require systonia/waypoint`.
+
+```php
+use Waypoint\Waypoint;
+use Waypoint\Attributes\{Controller, Get, Post, Body, Inject};
+
+#[Controller('/customers')]
+final class CustomersController
+{
+    #[Inject]
+    private CustomerService $customers;
+
+    #[Get('/{id}')]
+    public function show(int $id): array { return $this->customers->find($id); }
+
+    #[Post('')]
+    public function create(#[Body] NewCustomer $customer): array { return $this->customers->add($customer); }
+}
+
+$app = Waypoint::create();
+$app->attach([CustomersController::class]);
+$app->serve();   // Tenma: starts the server on PORT; FPM / php -S / CLI: handles the request or task
+```
+
+Rules for writing code with Waypoint:
+
+- A route is the method attribute itself: `#[Get('/path/{id}')]`, `#[Post]`, `#[Put]`, `#[Patch]`, `#[Delete]`. `#[Controller('/prefix')]` prefixes a class. There is no separate route file or `#[Route]`.
+- Parameters bind with `#[Param]` (path), `#[Query]` and `#[Body]` (a DTO from JSON or form fields). An unattributed scalar comes from the path, then the query; a bad value answers 422. `Request` and `Response` parameters are injected.
+- Return an array or object for JSON, `new View('Name', $model)` for HTML, `new Redirect('/path', 303)`, or an `SplFileInfo` with `#[FileFormatter]`. Throw `NotFoundException`, `ForbiddenException`, `UnauthorizedException` or `ValidationException` for RFC 9457 error responses.
+- Dependency injection works by reachability. `#[Inject]` on a property makes the class a service, created once and shared; there is no service attribute or config. Controllers and `#[Middleware]` classes are created per request.
+- Services are shared by every request of a long-lived worker (Tenma, RoadRunner, FrankenPHP), so a service must not keep per-request state in properties. Per-request state belongs in a `Waypoint\Support\FiberLocal`.
+- Configuration is Options classes set through `$app->configure(function (CsrfOptions $csrf, JWTOptions $jwt) { ... })`. Values come from `Waypoint\Environment` (env vars, `.env`, `config.json`, `config.$APP_ENV.json`, `config.local.json`), never `getenv()`. App code reaches services with `$app->get(Service::class)`.
+- Validation attributes sit on DTO properties (`#[NotBlank]`, `#[Email]`, `#[Length]`, `#[Regex]`, `#[OneOf]`, `#[SameAs]`), with `$dto->isValid` and `$dto->errors`. The `FromArray` trait hydrates a DTO.
+- Types live in one place each. Native types first: an array shape becomes a small readonly class. Arrays Waypoint sees carry an attribute only: `#[ListOf(OrderLine::class)]` on a DTO property, `#[Returns(type: Product::class, list: true)]` on a route. Waypoint's PHPStan extension reads both, so no `@var` or `@return` repeats them. `#[Ignore]` on a property hides it from JSON, XML, OpenAPI and binding. Waypoint never reads docblocks; PHPDoc is for everything else.
+- Data from outside (a decoded API response, a database row) goes through `Waypoint\Support\Row` and its typed getters (`Row::of($json)->int('id')`, `Row::each($json)`), not through casts.
+- Security: `#[Authenticated]`, `#[Role('admin')]` and `#[Permissions('pages.edit')]` guard routes. `$req->jwt` holds whoever is logged in. CSRF covers non-GET routes once `CsrfOptions::$secret` is set (`#[SkipCsrf]` opts out). `$req->ip` and `$req->https` trust `X-Forwarded-*` only from proxies listed in `ProxyOptions`.
+- Middleware is a class extending `MiddlewareBase` with `before()` (return false to stop) and `after()`. Register it app-wide with `$app->use()` or per route with `#[Middleware(X::class)]`.
+- Views are files in `RendererOptions::$directory`, rendered inside a layout. `{{ expr }}` and `<?= ?>` both escape; only a `Waypoint\Html` value prints as it is. Directives: `@if`/`@elseif`/`@else`/`@endif`, `@foreach`/`@endforeach`, `@code`/`@endcode`, `@use (Class)`, `@model (Type)`, `@section('name')`/`@endsection` and `@yield('name')` in the layout, `@class.late="$cond"` in a start tag, `@@` for a literal `@`. A directive on its own line leaves no whitespace behind. `$this->csrf->field()`, `classes()`, and a view's own scoped CSS/JS next to it.
+- `vendor/bin/waypoint-check` checks every view and Live template with PHPStan without running the app.
+- Uploads: `$req->file('avatar')` or `$req->files`, nested as the form names say; `UploadedFile::moveTo()`. The behaviour is the same under FPM, Tenma, PSR-7 and the testing kit.
+- Plugins (`$app->plugin(new XPlugin())`) extend Waypoint only through its hooks: `Endpoint`, `Fallback`, `RouteAttributeCompiler`, `Guard`, `ResponseHook`, `ArgumentBinder`, `Renderer`, `OpenApiExtension`, `ViewHelper`, `ClientAsset`.
+  - A plugin's optional `boot()` gets its parameters injected by type: `boot(Container $container, XOptions $options)`.
+  - A plugin reads its own Options and never sets the core's or another plugin's. It extends another plugin through that plugin's registry service, and offers an interface implementation with `$container->bind()`.
+- Errors go to PHP's `error_log` until a PSR-3 logger is added with `LoggerOptions::add()`.
+- Tests use `Waypoint\Testing\TestCase`: `$this->post('/login', [...])->assertOk()`, or `$this->request('POST', '/x')->withJson([...])->withCsrf()->send()` (also `withFile()`, `withJwt()`, `withCookie()`). Requests go through `App::handle()` without superglobals.
+- CLI tasks are `#[Manager('users')]` classes with `#[Task('sync')]` methods, run by `php index.php users:sync`.
+
+## Docs
+
+- [Guides](https://github.com/systonia/Waypoint/blob/main/docs/guides/index.md): one part of Waypoint per page, with examples from the Sonnenkorn bakery ([Waypoint-Bakery](https://github.com/systonia/Waypoint-Bakery))
+- [Types and PHPStan](https://github.com/systonia/Waypoint/blob/main/docs/guides/types.md): `#[ListOf]`, `#[Returns]`, `Row` and the PHPStan extension
+- [Views](https://github.com/systonia/Waypoint/blob/main/docs/guides/views.md): the view syntax, layouts, sections and `waypoint-check`
+- [Reference](https://github.com/systonia/Waypoint/blob/main/docs/reference/index.md): every class, attribute and method
+- [README](https://github.com/systonia/Waypoint/blob/main/README.md): the complete guide to routing, binding, uploads, validation, DTOs, DI, middleware, CSRF, CORS, security headers, exceptions, views, static files, gzip, file and XML responses, JWT, OpenAPI, request ids, logging, CLI tasks, plugins, testing, environment, caching and the options reference
+- [Plugins](https://github.com/systonia/Waypoint/blob/main/README.md#plugins): the plugin contract and every hook
+- [Testing](https://github.com/systonia/Waypoint/blob/main/README.md#testing): the testing kit
+
+## Runtimes
+
+- [Tenma](https://github.com/systonia/Tenma): `$app->serve()` runs the app in fiber mode. Tenma serves `FileSystemOptions::$publicDirectory` itself, and `Response::upgrade()` hands a route over to a WebSocket or stream. Its own llms.txt covers the rules for async code.
+- [tenma/psr](https://github.com/systonia/Tenma-PSR): `Waypoint\Psr\Handler` makes the app a PSR-15 handler. It works on RoadRunner, FrankenPHP (with nyholm/psr7-server) or Tenma.
+
+## Plugins
+
+- [systonia/waypoint-live](https://github.com/systonia/Waypoint-Live): server-side components over one WebSocket, under Tenma. A component is a class with `#[Component]` plus a template in the view syntax next to it; actions, timers, uploads, broadcasts and reconnect.
+- [systonia/waypoint-i18n](https://github.com/systonia/Waypoint-I18n): `$this->t('Source text')`, JSON catalogs, a locale per request
+- [systonia/waypoint-flash](https://github.com/systonia/Waypoint-Flash): flash messages across a redirect
+- [systonia/waypoint-charts](https://github.com/systonia/Waypoint-Charts): bar and line charts as server-rendered SVG
+- [systonia/waypoint-export](https://github.com/systonia/Waypoint-Export): table downloads as CSV, JSON Lines, HTML, XML, XLSX or ODS
+- [systonia/waypoint-export-fixed](https://github.com/systonia/Waypoint-Export-Fixed): fixed-width record files (Windows-1252, EBCDIC)
+
+## Optional
+
+- [Production caching](https://github.com/systonia/Waypoint/blob/main/README.md#routedi-compilation-caching--production-performance): the compiled route and DI cache, and trust mode
+- [Options reference](https://github.com/systonia/Waypoint/blob/main/README.md#options-reference): every Options class and its defaults
