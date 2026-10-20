@@ -219,6 +219,26 @@ The layout of a render comes from the first of these that is set:
 
 `#[Layout(null)]` renders the route's views without a layout, and so does `partial: true` on a single `View`, for an HTML fragment.
 
+`#[Layout]` belongs to the route the request reached, not to the method that built the `View`. A route that returns the `View` of another method gets its own layout, even if that other method is a route with a different `#[Layout]`:
+
+```php
+#[Get('/report')]
+#[Layout('_Print.php')]
+public function report(): View
+{
+    return $this->board();   // _Print.php: the request reached /report
+}
+
+#[Get('/board')]
+#[Layout('_Backoffice.php')]
+public function board(): View
+{
+    return new View('Backoffice/Board');   // _Backoffice.php, for a request to /board
+}
+```
+
+A layout passed to the `View` itself stays in either case: `new View('Backoffice/Board', layout: '_Wide.php')` renders in `_Wide.php` from both routes.
+
 Fetch everything a page shows in the controller, before returning the `View`. Under Tenma, a template that waits for I/O would hold the request in the middle of rendering.
 
 ## When views compile

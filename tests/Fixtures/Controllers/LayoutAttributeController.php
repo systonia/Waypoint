@@ -22,6 +22,13 @@ class LayoutAttributeController extends LayoutAttributeBase
         return new View('HomePage');
     }
 
+    #[Get('/delegated')]
+    #[Layout('_Layout.php')]
+    public function delegated(): View
+    {
+        return $this->inherited();
+    }
+
     #[Get('/none')]
     #[Layout(null)]
     public function none(): View

@@ -39,6 +39,15 @@ final class LayoutAttributeTest extends IntegrationTestCase
         $this->assertStringNotContainsString('alt-layout', $output);
     }
 
+    public function testTheLayoutIsTheOneOfTheRouteTheRequestReached(): void
+    {
+        // delegated() returns the View of inherited(), a route that would render in AltLayout.php
+        $output = $this->dispatch('GET', '/layout-attribute/delegated');
+
+        $this->assertStringContainsString('<title>Bakery 1</title>', $output);
+        $this->assertStringNotContainsString('alt-layout', $output);
+    }
+
     public function testLayoutNullRendersWithoutLayout(): void
     {
         $output = $this->dispatch('GET', '/layout-attribute/none');
