@@ -192,7 +192,32 @@ A view fills the sections, as `views/Shop/Product.php` does for the title:
 | `$this->request` | the [`Request`](../reference/Waypoint/Http/Request.md) being answered, read-only: `$this->request->path`, `$this->request->jwt` |
 | `$this->t(…)` and other names | view helpers that plugins provide (see [Plugins](plugins.md)) |
 
-`new View('Backoffice/Board', layout: '_Backoffice.php')` uses another layout for one render (the bakery's back office has its own), and `partial: true` renders the view alone, without a layout, for an HTML fragment.
+### Another layout for some routes
+
+The bakery's back office has a layout of its own. `#[Layout]` on the controller gives it to every route there, so no `View` has to name it:
+
+```php
+#[Controller('/backoffice')]
+#[Authenticated]
+#[Layout('_Backoffice.php')]
+final class BackofficeController
+{
+    #[Get('')]
+    public function board(): View
+    {
+        return new View('Backoffice/Board');
+    }
+}
+```
+
+The layout of a render comes from the first of these that is set:
+
+1. the View itself: `new View('Backoffice/Board', layout: '_Print.php')`, for a layout only known at runtime;
+2. `#[Layout]` on the route method;
+3. `#[Layout]` on the controller class, or on a class it extends;
+4. `RendererOptions::$layout`.
+
+`#[Layout(null)]` renders the route's views without a layout, and so does `partial: true` on a single `View`, for an HTML fragment.
 
 Fetch everything a page shows in the controller, before returning the `View`. Under Tenma, a template that waits for I/O would hold the request in the middle of rendering.
 
@@ -265,11 +290,12 @@ namespace Bakery\Controllers;
 
 use Bakery\Repositories\Users;
 use Bakery\Requests\LoginForm;
-use Waypoint\Attributes\{Body, Controller, Get, Inject, Post};
+use Waypoint\Attributes\{Body, Controller, Get, Inject, Layout, Post};
 use Waypoint\Http\{Redirect, Response, View};
 use Waypoint\JWT;
 
 #[Controller('/backoffice')]
+#[Layout('_Backoffice.php')]
 final class SessionController
 {
     #[Inject]
@@ -278,7 +304,7 @@ final class SessionController
     #[Get('/login')]
     public function form(): View
     {
-        return new View('Backoffice/Login', new LoginForm(), layout: '_Backoffice.php');
+        return new View('Backoffice/Login', new LoginForm());
     }
 
     #[Post('/login')]
@@ -294,7 +320,7 @@ final class SessionController
             if ($form->isValid) {
                 $form->fail('password', 'Wrong email or password.');
             }
-            return new View('Backoffice/Login', $form, layout: '_Backoffice.php');
+            return new View('Backoffice/Login', $form);
         }
         JWT::signIn($res, $user);
         return new Redirect('/backoffice', 303);

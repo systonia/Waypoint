@@ -71,6 +71,14 @@ protected ?string $layout = null;
 
 Explicit layout file basename (e.g. "_Layout.php"), or null for RendererOptions::$layout.
 
+### $withoutLayout
+
+```php
+protected bool $withoutLayout = false;
+```
+
+#[Layout(null)] on the route: no layout, unless the View names one.
+
 ### $directory
 
 ```php

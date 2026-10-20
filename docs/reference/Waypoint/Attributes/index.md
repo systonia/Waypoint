@@ -19,6 +19,7 @@ generated: true
 - [`Ignore`](Ignore.md) · class: On a controller or a route method: excluded from the generated OpenAPI spec.
 - [`Inject`](Inject.md) · class: Marks a property (or constructor parameter, for discovery) to be resolved from the container: Request/Response/Router per request, everything else as a shared service.
 - [`JSONFormatter`](JSONFormatter.md) · class: Sends the route's return value as JSON.
+- [`Layout`](Layout.md) · class: The layout every View of a controller class, or of one route method, renders in: a file name under RendererOptions::$directory, such as `_Backoffice.php`.
 - [`Length`](Length.md) · class: Validation: a string property's length (mb_strlen) must be within [$min, $max].
 - [`ListOf`](ListOf.md) · class: The element type of an `array` property: a class, an enum or a scalar keyword (int, string, float, bool), as a list, or with $map as values by string key.
 - [`Manager`](Manager.md) · class: Marks a class as a CLI task manager, with an optional name prefix ("prefix:task") for every #[Task] on it.

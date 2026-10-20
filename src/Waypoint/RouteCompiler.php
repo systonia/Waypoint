@@ -16,7 +16,7 @@ use Waypoint\Http\{MiddlewareBase, Redirect, Request, Response, View};
 use Waypoint\Plugin\{ArgumentBinder, RouteAttributeCompiler};
 use Waypoint\Routing\PropertyInjector;
 use Waypoint\Attributes\{
-    Authenticated, Body, Claims, Controller, FileFormatter, Inject, JSONFormatter, Manager, Middleware, NoGzip,
+    Authenticated, Body, Claims, Controller, FileFormatter, Inject, JSONFormatter, Layout, Manager, Middleware, NoGzip,
     Param, Permissions, Query, Role, RouteAttribute, SimpleXmlFormatter, SkipCsrf, Sunset, Task, Version
 };
 
@@ -100,6 +100,7 @@ final class RouteCompiler
             $permissions = self::inherited($rc, $method, Permissions::class)?->permissions;
             $permissions = $permissions !== null ? array_values(array_filter($permissions, 'is_string')) : null;
             $sunsetDate = self::inherited($rc, $method, Sunset::class)?->date;
+            $layout = self::inherited($rc, $method, Layout::class);
 
             $plan = [
                 'httpMethod' => $httpMethod,
@@ -120,6 +121,8 @@ final class RouteCompiler
                 // PHP's native #[\Deprecated]; presence at either level is the whole signal.
                 'deprecated' => self::hasEither($rc, $method, Deprecated::class),
                 'sunsetHeader' => $sunsetDate !== null ? $this->formatSunsetHeader($sunsetDate, $httpMethod, $path) : null,
+                // #[Layout]: false when none is set, null for #[Layout(null)], else the file
+                'layout' => $layout === null ? false : $layout->file,
                 // #[Role]/#[Permissions] imply #[Authenticated].
                 'authenticated' => self::hasEither($rc, $method, Authenticated::class) || $role !== null || $permissions !== null || self::requiresClaims($method),
                 'role' => $role,

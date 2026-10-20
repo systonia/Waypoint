@@ -105,12 +105,13 @@ namespace Bakery\Controllers;
 
 use Bakery\Repositories\Users;
 use Bakery\Requests\LoginForm;
-use Waypoint\Attributes\{Body, Controller, Get, Inject, Post};
+use Waypoint\Attributes\{Body, Controller, Get, Inject, Layout, Post};
 use Waypoint\Flash\Flash;
 use Waypoint\Http\{Redirect, Response, View};
 use Waypoint\JWT;
 
 #[Controller('/backoffice')]
+#[Layout('_Backoffice.php')]
 final class SessionController
 {
     #[Inject]
@@ -122,7 +123,7 @@ final class SessionController
     #[Get('/login')]
     public function form(): View
     {
-        return new View('Backoffice/Login', new LoginForm(), layout: '_Backoffice.php');
+        return new View('Backoffice/Login', new LoginForm());
     }
 
     /** A View with the form while it is invalid answers 422. */
@@ -139,7 +140,7 @@ final class SessionController
             if ($form->isValid) {
                 $form->fail('password', 'Wrong email or password.');
             }
-            return new View('Backoffice/Login', $form, layout: '_Backoffice.php');
+            return new View('Backoffice/Login', $form);
         }
         JWT::signIn($res, $user);
         $this->flash->success("Welcome, {$user['name']}.");
@@ -203,17 +204,18 @@ Everyone in the bakery sees the order board and the stock; the sales and the exp
 
 namespace Bakery\Controllers;
 
-use Waypoint\Attributes\{Authenticated, Controller, Get, Permissions, Post, Role};
+use Waypoint\Attributes\{Authenticated, Controller, Get, Layout, Permissions, Post, Role};
 use Waypoint\Http\View;
 
 #[Controller('/backoffice')]
 #[Authenticated]
+#[Layout('_Backoffice.php')]
 final class BackofficeController
 {
     #[Get('')]
     public function board(): View
     {
-        return new View('Backoffice/Board', layout: '_Backoffice.php');
+        return new View('Backoffice/Board');
     }
 
     #[Get('/sales')]

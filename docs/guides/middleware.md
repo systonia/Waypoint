@@ -141,25 +141,26 @@ final class BakeryNetworkOnly extends MiddlewareBase
 namespace Bakery\Controllers;
 
 use Bakery\Services\{BakeryNetworkOnly, ServerTiming};
-use Waypoint\Attributes\{Authenticated, Controller, Get, Middleware};
+use Waypoint\Attributes\{Authenticated, Controller, Get, Layout, Middleware};
 use Waypoint\Http\View;
 
 #[Controller('/backoffice')]
 #[Authenticated]
 #[Middleware(ServerTiming::class)]
+#[Layout('_Backoffice.php')]
 final class BackofficeController
 {
     #[Get('')]
     public function board(): View
     {
-        return new View('Backoffice/Board', layout: '_Backoffice.php');
+        return new View('Backoffice/Board');
     }
 
     #[Get('/stock')]
     #[Middleware(BakeryNetworkOnly::class)]
     public function stock(): View
     {
-        return new View('Backoffice/Stock', layout: '_Backoffice.php');
+        return new View('Backoffice/Stock');
     }
 }
 ```

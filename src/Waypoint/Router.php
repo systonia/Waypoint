@@ -427,7 +427,9 @@ class Router
             $result = $controller->{$method}(...$args);
             // Missing in an older cache: rendered as before
             if (!($route['void'] ?? false)) {
-                $this->renderResult($result, $req, $res, $route['formatter'] ?? null);
+                // array_key_exists, not ??: null is #[Layout(null)]; missing in an older cache means none set
+                $layout = array_key_exists('layout', $route) ? $route['layout'] : false;
+                $this->renderResult($result, $req, $res, $route['formatter'] ?? null, $layout);
             }
         };
 
@@ -546,9 +548,13 @@ class Router
     // Results
 
     /** A View renders here (it needs this Router's asset lookups and injection); a Redirect is just status + Location; anything else goes through ResultRenderer. */
-    private function renderResult(mixed $result, Request $req, Response $res, mixed $formatter): void
+    private function renderResult(mixed $result, Request $req, Response $res, mixed $formatter, mixed $layout = false): void
     {
         if ($result instanceof View) {
+            // #[Layout] of the route, unless the View names its own
+            if ($layout === null || is_string($layout)) {
+                $result->useRouteLayout($layout);
+            }
             // The form shown again for an invalid #[Body(validate: false)] DTO: the page, but no 200
             if ($req->bodyDto !== null && $res->getStatus() === 200 && ArgumentResolver::errors($req->bodyDto) !== []) {
                 $res->status(422);

@@ -517,7 +517,7 @@ public function login(
         if ($form->isValid) {
             $form->fail('password', 'Wrong email or password.');
         }
-        return new View('Backoffice/Login', $form, layout: '_Backoffice.php');   // 422 with $form->errors
+        return new View('Backoffice/Login', $form);   // 422 with $form->errors
     }
     JWT::signIn($res, $user);
     return new Redirect('/backoffice', 303);
@@ -971,7 +971,7 @@ use Waypoint\Options\RendererOptions;
 
 $app->configure(function (RendererOptions $opts) {
     $opts->directory = __DIR__ . '/views';
-    $opts->layout = '_Layout.php'; // default layout, per-View override via the 4th constructor argument
+    $opts->layout = '_Layout.php'; // default layout; #[Layout] on a controller or method, or View's layout argument, override it
 });
 ```
 
@@ -979,8 +979,8 @@ $app->configure(function (RendererOptions $opts) {
 explicit `.php` name, or no layout is applied and every render falls back to the bare view content.
 
 Inside a view/layout `.php` file, `$model` is whatever was passed to `View`'s constructor (here the
-`ProductPage`), and `$this` is the `View` instance itself. The bakery's back office passes its own layout:
-`new View('Backoffice/Board', layout: '_Backoffice.php')`.
+`ProductPage`), and `$this` is the `View` instance itself. The bakery's back office has a layout of its own,
+`#[Layout('_Backoffice.php')]` on its controllers; `new View(..., layout: ...)` sets one for a single render.
 
 A view is PHP with a few directives on top:
 
@@ -1091,7 +1091,7 @@ public function login(
 ): View|Redirect {
     $user = $form->isValid ? $this->users->verify($form->email, $form->password) : null;
     if ($user === null) {
-        return new View('Backoffice/Login', $form, layout: '_Backoffice.php');
+        return new View('Backoffice/Login', $form);
     }
     JWT::signIn($res, $user);
     return new Redirect('/backoffice', 303);

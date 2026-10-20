@@ -44,6 +44,9 @@ class View
     /** Explicit layout file basename (e.g. "_Layout.php"), or null for RendererOptions::$layout. */
     protected ?string $layout = null;
 
+    /** #[Layout(null)] on the route: no layout, unless the View names one. */
+    protected bool $withoutLayout = false;
+
     /** A directory of its own for view and layout, e.g. a plugin's views; null for RendererOptions::$directory. */
     protected ?string $directory = null;
 
@@ -99,6 +102,23 @@ class View
         $this->partial = $partial;
         $this->layout = $layout;
         $this->directory = $directory;
+    }
+
+    /**
+     * The route's #[Layout]: its file, or null for none. A layout passed to the constructor stays.
+     *
+     * @internal Router calls it before render()
+     */
+    public function useRouteLayout(?string $file): void
+    {
+        if ($this->layout !== null) {
+            return;
+        }
+        if ($file === null) {
+            $this->withoutLayout = true;
+            return;
+        }
+        $this->layout = $file;
     }
 
     public function getDirectory(): ?string
@@ -306,7 +326,7 @@ class View
         $content = $this->renderFile($viewFile, $this->model);
 
         $layoutFile = "{$directory}/" . ($this->layout ?? $options->layout);
-        if ($this->partial || !file_exists($layoutFile)) {
+        if ($this->partial || $this->withoutLayout || !file_exists($layoutFile)) {
             return $content;
         }
 

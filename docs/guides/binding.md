@@ -315,13 +315,14 @@ namespace Bakery\Controllers;
 
 use Bakery\Repositories\Users;
 use Bakery\Requests\LoginForm;
-use Waypoint\Attributes\{Body, Controller, Inject, Post};
+use Waypoint\Attributes\{Body, Controller, Inject, Layout, Post};
 use Waypoint\Flash\Flash;
 use Waypoint\Http\{Redirect, Response, View};
 use Waypoint\I18n\Translator;
 use Waypoint\JWT;
 
 #[Controller('/backoffice')]
+#[Layout('_Backoffice.php')]
 final class SessionController
 {
     #[Inject]
@@ -347,7 +348,7 @@ final class SessionController
             if ($form->isValid) {
                 $form->fail('password', $this->translator->t('Wrong email or password.'));
             }
-            return new View('Backoffice/Login', $form, layout: '_Backoffice.php');
+            return new View('Backoffice/Login', $form);
         }
         JWT::signIn($res, $user);
         $this->flash->success($this->translator->t('Welcome, {name}.', ['name' => $user['name']]));
