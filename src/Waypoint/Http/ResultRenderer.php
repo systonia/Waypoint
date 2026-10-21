@@ -94,7 +94,35 @@ final class ResultRenderer
     /** Throws for what JSON can't hold (invalid UTF-8, say): a logged 500 instead of a 200 with "null". */
     private static function json(mixed $value): string
     {
-        return json_encode(self::visible($value), JSON_THROW_ON_ERROR);
+        // Rows from a database are arrays of scalars: nothing to hide, so they skip the walk
+        $plain = is_array($value) && !self::hasObjects($value);
+        return json_encode($plain ? $value : self::visible($value), JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * Whether an object sits anywhere in $value. A loop over a stack instead of recursion: a function call
+     * per nested array would cost as much as the walk it saves. Deeper than visible() goes (an array that
+     * holds itself by reference) counts as yes, so visible() stops there as before.
+     * @param array<array-key, mixed> $value
+     */
+    private static function hasObjects(array $value): bool
+    {
+        $pending = [[$value, 0]];
+        while ($pending !== []) {
+            [$array, $depth] = array_pop($pending);
+            foreach ($array as $item) {
+                if (is_object($item)) {
+                    return true;
+                }
+                if (is_array($item)) {
+                    if ($depth >= 512) {
+                        return true;
+                    }
+                    $pending[] = [$item, $depth + 1];
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -107,14 +135,20 @@ final class ResultRenderer
             return $value; // json_encode() reports the depth (a cycle, say) as before
         }
         if (is_array($value)) {
-            return array_map(static fn (mixed $item): mixed => self::visible($item, $depth + 1), $value);
+            // Only arrays and objects can hold an #[Ignore]: scalars are skipped, so a list of plain rows costs a loop, no calls
+            foreach ($value as $key => $item) {
+                if (is_array($item) || is_object($item)) {
+                    $value[$key] = self::visible($item, $depth + 1);
+                }
+            }
+            return $value;
         }
         if (!is_object($value) || $value instanceof \JsonSerializable || $value instanceof \UnitEnum || $value instanceof \DateTimeInterface) {
             return $value;
         }
         $ignored = self::$ignored[$value::class] ??= self::ignoredOf($value);
         $properties = array_diff_key(get_object_vars($value), $ignored);
-        return (object) array_map(static fn (mixed $item): mixed => self::visible($item, $depth + 1), $properties);
+        return (object) self::visible($properties, $depth);
     }
 
     /** @return array<string, true> */

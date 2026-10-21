@@ -43,6 +43,13 @@ final class ResultRendererTest extends TestCase
         $this->assertSame(json_encode($value), self::json($value));
     }
 
+    public function testJsonFindsAnObjectDeepInPlainRows(): void
+    {
+        $json = self::json([['id' => 1], ['nested' => ['deeper' => [new BadgeDTO(2, 'gold')]]]]);
+
+        $this->assertSame('[{"id":1},{"nested":{"deeper":[{"label":"gold"}]}}]', $json);
+    }
+
     public function testXmlLeavesIgnoredPropertiesOut(): void
     {
         $document = simplexml_load_string(self::xml(self::profile()));
