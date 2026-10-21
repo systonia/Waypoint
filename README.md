@@ -169,7 +169,7 @@ right there. Assign the whole list; appending with `[]` is not possible.
 
 Under Tenma (PHP with an event loop) the app itself is the request handler:
 one process serves every request, each in a Fiber of its own, interleaved while they wait on I/O. The
-request id and the CSRF token follow a request into the tasks it starts (`Tenma::async()`); files under the
+request id and the CSRF token follow a request into the tasks it starts (`Threading\Task::run()`); files under the
 `static` prefixes are served by Tenma itself, without PHP:
 
 ```php
@@ -184,12 +184,12 @@ $app->serve();
 (8080 without one, or `serve(3000)`) and hands `FileSystemOptions::$publicDirectory` to Tenma, which serves it
 without PHP (ETag, ranges); under FPM, `php -S` or the CLI it is `run()`, and Waypoint serves the directory.
 
-A controller may then wait on Tenma's async I/O (`Tenma\Db`, `Tenma::fetch()`, `Tenma::all()`) while the
+A controller may then wait on Tenma's async I/O (`Data\Postgres`, `Http\Client`, `Threading\Task::all()`) while the
 process serves other requests. Read [Controllers per request, services shared](#controllers-per-request-services-shared)
 first. In a template, don't wait: fetch the data in the controller before `render()`.
 
 A route can hand the request over to Tenma with `Response::upgrade()`: a WebSocket
-(`Tenma\Http\Response::websocket()`), a stream or server-sent events (`stream()`, `events()`). The route's
+(`Http\Response::websocket()`), a stream or server-sent events (`stream()`, `events()`). The route's
 guards, `#[Authenticated]` and middlewares run first as for any other route; Tenma's response then replaces
 Waypoint's. A stream keeps the headers and cookies set on `$res` (CORS, security headers, the request id), its
 own headers and status win; a WebSocket answers with its handshake only. If an exception handler writes
@@ -204,7 +204,7 @@ request itself, such as the JWT claims, go in through `use`:
 public function notes(Request $req, Response $res): void
 {
     $name = $req->jwt['name'];   // "Ben", from the claims Users::verify() returned at sign-in
-    $res->upgrade(\Tenma\Http\Response::websocket(function (\Tenma\Http\WebSocket $socket) use ($name) {
+    $res->upgrade(Http\Response::websocket(function (Http\WebSocket $socket) use ($name) {
         while (($note = $socket->receive()) !== null) {
             $socket->send("$name: $note");   // "Ben: two more rye loaves for the market"
         }
@@ -223,10 +223,10 @@ PSR-17 factory:
 $factory = new \Nyholm\Psr7\Factory\Psr17Factory();
 $handler = new \Waypoint\Psr\Handler($app, $factory);
 
-Tenma::serve(8080, \Tenma\Psr\Psr::handler($handler, $factory));   // or hand $handler to your server
+new Http\Server(8080, \Tenma\Psr\Psr::handler($handler, $factory))->start();   // or hand $handler to your server
 ```
 
-Each request is translated in and out, so the direct `Tenma::serve(8080, $app)` stays the faster way under
+Each request is translated in and out, so the direct `new Http\Server(8080, $app)->start()` stays the faster way under
 Tenma. PSR-15 middlewares run around the whole app, not per route, and see neither guards nor
 `#[Authenticated]`. `Response::upgrade()` works through the handler only under Tenma with `tenma/psr`.
 
@@ -1420,7 +1420,7 @@ final class Holidays
     public function upcoming(): ?array
     {
         try {
-            $response = \Tenma::fetch('https://date.nager.at/api/v3/NextPublicHolidays/DE', timeout: 2.5);
+            $response = new Http\Client(2.5)->get('https://date.nager.at/api/v3/NextPublicHolidays/DE');
             // ...
         } catch (RuntimeException|JsonException $e) {
             $this->logger->warning('holidays: ' . $e->getMessage());
@@ -1438,10 +1438,10 @@ The same front controller can serve HTTP *and* run background/maintenance jobs: 
 `$app->serve()` (or `$app->runCli()`, which returns an exit code instead of calling `exit()`) reads the
 process's own `$argv` and dispatches to a `#[Task]`-attributed method instead of routing an HTTP
 request. Under Tenma, `serve()` with arguments (`tenma index.php db:migrate`) runs the task too, inside the
-event loop, so a task can wait on Postgres or `Tenma::fetch()`; without arguments it starts the server.
+event loop, so a task can wait on Postgres or `Http\Client`; without arguments it starts the server.
 
 ```php
-use Tenma\Db\Postgres;
+use Data\Postgres;
 use Waypoint\Attributes\{Inject, Manager, Task};
 
 // shortened from src/Tasks/DatabaseTasks.php
@@ -1464,7 +1464,7 @@ final class DatabaseTasks
     public function seed(): string
     {
         $this->migrate();
-        $this->db->script(\Tenma\Fs::readFile(__DIR__ . '/../../database/seed.sql'));
+        $this->db->script(new FileSystem\FileInfo(__DIR__ . '/../../database/seed.sql')->read());
         return "Seeded the demo data.\n";
     }
 }
@@ -1690,7 +1690,7 @@ final class Holidays
     {
         $url = rtrim($this->env->string('HOLIDAYS_URL', 'https://date.nager.at'), '/') . '/api/v3/NextPublicHolidays/'
             . rawurlencode($this->env->string('HOLIDAY_COUNTRY', 'DE'));
-        $response = \Tenma::fetch($url, timeout: $this->env->float('API_TIMEOUT', 2.5));
+        $response = new Http\Client($this->env->float('API_TIMEOUT', 2.5))->get($url);
         // ...
     }
 }

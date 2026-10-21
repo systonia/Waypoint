@@ -30,7 +30,7 @@ final class Weather
     {
         $url = rtrim($this->env->string('WEATHER_URL', 'https://api.open-meteo.com'), '/') . '/v1/forecast?…';
         try {
-            $response = \Tenma::fetch($url, timeout: $this->env->float('API_TIMEOUT', 2.5));
+            $response = new \Http\Client($this->env->float('API_TIMEOUT', 2.5))->get($url);
             // … one WeatherDay per day of the answer
         } catch (RuntimeException $e) {
             $this->logger->warning('weather: ' . $e->getMessage());
@@ -157,7 +157,7 @@ final class CurrentShop
 }
 ```
 
-Set the value at the start of every request, in a middleware, rather than resetting it afterwards: a WebSocket or stream handler runs after the request's middlewares have finished. Waypoint's own request id and CSRF token are kept this way, and under Tenma a `FiberLocal` value also follows the request into the tasks it starts (`Tenma::async()`).
+Set the value at the start of every request, in a middleware, rather than resetting it afterwards: a WebSocket or stream handler runs after the request's middlewares have finished. Waypoint's own request id and CSRF token are kept this way, and under Tenma a `FiberLocal` value also follows the request into the tasks it starts (`Threading\Task::run()`).
 
 ```php
 <?php

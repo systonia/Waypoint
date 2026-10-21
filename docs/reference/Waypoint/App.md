@@ -138,16 +138,16 @@ Public so tests and unusual SAPIs can drive it directly.
 ### __invoke()
 
 ```php
-public function __invoke(\Tenma\Http\Request $request): \Tenma\Http\Response|\Tenma\Http\WebSocketResponse|\Tenma\Http\StreamedResponse
+public function __invoke(\Http\Request $request): \Http\Response|\Http\WebSocketResponse|\Http\StreamedResponse
 ```
 
-Makes the app a request handler for Tenma: `Tenma::serve(3000, $app)`. See Tenma\Bridge.
+Makes the app a request handler for Tenma: `new \Http\Server(3000, $app)->start()`. See Tenma\Bridge.
 
 **Parameters**
 
-- `$request` `\Tenma\Http\Request`
+- `$request` `\Http\Request`
 
-**Returns** `\Tenma\Http\Response|\Tenma\Http\WebSocketResponse|\Tenma\Http\StreamedResponse`
+**Returns** `\Http\Response|\Http\WebSocketResponse|\Http\StreamedResponse`
 
 ### handle()
 

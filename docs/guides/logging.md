@@ -27,7 +27,7 @@ final class Weather
     {
         $url = 'https://api.open-meteo.com/v1/forecast?latitude=47.99&longitude=7.85&daily=weather_code';
         try {
-            $response = \Tenma::fetch($url, timeout: 2.5);
+            $response = new \Http\Client(2.5)->get($url);
             // …
         } catch (RuntimeException|JsonException $e) {
             $this->logger->warning('weather: ' . $e->getMessage());

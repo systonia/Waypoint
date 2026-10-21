@@ -19,11 +19,11 @@ class TenmaController
     {
         $context = Waypoint::getConfig(RequestContext::class);
         // The child reads the request id later, from a Fiber of its own
-        $child = \Tenma::async(function () use ($context) {
-            \Tenma::sleep(0.1);
+        $child = \Threading\Task::run(function () use ($context) {
+            \Threading\Task::delay(0.1);
             return $context->getRequestId();
         });
-        \Tenma::sleep(0.2);
+        \Threading\Task::delay(0.2);
         return [
             'name' => $this->request->query('name'),
             'requestId' => $context->getRequestId(),
@@ -35,7 +35,7 @@ class TenmaController
     #[Get('/echo')]
     public function echo(Response $res): void
     {
-        $res->upgrade(\Tenma\Http\Response::websocket(function (\Tenma\Http\WebSocket $socket) {
+        $res->upgrade(\Http\Response::websocket(function (\Http\WebSocket $socket) {
             $context = Waypoint::getConfig(RequestContext::class);
             while (($message = $socket->receive()) !== null) {
                 $socket->send($context->getRequestId() . ": $message");
@@ -47,7 +47,7 @@ class TenmaController
     #[Get('/events')]
     public function events(Response $res): void
     {
-        $res->withCookie('seen', '1')->upgrade(\Tenma\Http\Response::events(function (\Tenma\Http\EventStream $events) {
+        $res->withCookie('seen', '1')->upgrade(\Http\Response::events(function (\Http\EventStream $events) {
             $events->send('hello');
         }));
     }

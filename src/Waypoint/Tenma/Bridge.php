@@ -2,14 +2,14 @@
 
 namespace Waypoint\Tenma;
 
-use Tenma\Http\{Request as TenmaRequest, Response as TenmaResponse, Stream, StreamedResponse, UploadedFile as TenmaUploadedFile, WebSocket, WebSocketResponse};
+use Http\{Request as TenmaRequest, Response as TenmaResponse, Stream, StreamedResponse, UploadedFile as TenmaUploadedFile, WebSocket, WebSocketResponse};
 use Waypoint\App;
 use Waypoint\Http\{Request, Response, UploadedFile};
 use Waypoint\Support\FiberLocal;
 
 /**
  * Translates between Tenma (PHP with an event loop) and Waypoint for App::__invoke(), which makes
- * an app Tenma's request handler: `Tenma::serve(3000, $app)`. One process then serves many requests,
+ * an app Tenma's request handler: `new \Http\Server(3000, $app)->start()`. One process then serves many requests,
  * each in a Fiber of its own, interleaved while they wait on I/O. Only used under Tenma; Waypoint has no
  * dependency on it.
  */

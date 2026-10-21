@@ -16,20 +16,20 @@ tenma --workers 2 index.php     # two workers; --workers auto starts one per CPU
 
 Under Tenma, `serve()` starts the server on `serve($port)`, else on `PORT` from the [environment](application.md#environment-and-env-files), else on 8080. [`FileSystemOptions::$publicDirectory`](../reference/Waypoint/Options/FileSystemOptions.md) is handed to Tenma, which serves those files itself, without PHP, with `ETag` and range requests. `serve(8080, ['/assets' => __DIR__ . '/assets'])` passes Tenma's own static mounts instead.
 
-`serve()` is the same as `Tenma::serve($port, $app, $static)`: an [`App`](../reference/Waypoint/App.md) is a Tenma request handler, translated by [`Waypoint\Tenma\Bridge`](../reference/Waypoint/Tenma/Bridge.md).
+`serve()` is the same as `new Http\Server($port, $app, $static)->start()`: an [`App`](../reference/Waypoint/App.md) is a Tenma request handler, translated by [`Waypoint\Tenma\Bridge`](../reference/Waypoint/Tenma/Bridge.md).
 
 Each worker runs the front controller on its own and has its own app. Requests of one worker share its services.
 
 ## Shared services, separate requests
 
-Everything in [Dependency injection](dependency-injection.md#controllers-per-request-services-per-process) about per-request state applies here in full: controllers and route middlewares are created per request, services live as long as the worker, and a value that belongs to one request lives on the request, is passed as an argument, or sits in a [`FiberLocal`](../reference/Waypoint/Support/FiberLocal.md). Waypoint's own per-request values (the request id on log lines, the CSRF token) are kept that way, and under Tenma they follow the request into the tasks it starts with `Tenma::async()`.
+Everything in [Dependency injection](dependency-injection.md#controllers-per-request-services-per-process) about per-request state applies here in full: controllers and route middlewares are created per request, services live as long as the worker, and a value that belongs to one request lives on the request, is passed as an argument, or sits in a [`FiberLocal`](../reference/Waypoint/Support/FiberLocal.md). Waypoint's own per-request values (the request id on log lines, the CSRF token) are kept that way, and under Tenma they follow the request into the tasks it starts with `Threading\Task::run()`.
 
 ## Waiting without blocking
 
-A controller or service can use Tenma's asynchronous APIs directly: `Tenma\Db\Postgres`, `Tenma::fetch()`, `Tenma::all()`. Each call suspends only the current request. A database connection is a service like any other: the Bakery creates the pool in `app.php` and registers it, and every class that injects `Postgres` gets it:
+A controller or service can use Tenma's asynchronous APIs directly: `Data\Postgres`, `Http\Client`, `Threading\Task::all()`. Each call suspends only the current request. A database connection is a service like any other: the Bakery creates the pool in `app.php` and registers it, and every class that injects `Postgres` gets it:
 
 ```php
-use Tenma\Db\Postgres;
+use Data\Postgres;
 
 // One pool of Postgres connections per worker, shared by every service that injects Postgres
 $app->getContainer()->set(Postgres::connect($env->string('DATABASE_URL', 'postgres://localhost/bakery')));
@@ -41,7 +41,7 @@ $app->getContainer()->set(Postgres::connect($env->string('DATABASE_URL', 'postgr
 namespace Bakery\Repositories;
 
 use Bakery\Models\Product;
-use Tenma\Db\Postgres;
+use Data\Postgres;
 use Waypoint\Attributes\Inject;
 use Waypoint\Support\Row;
 
@@ -63,7 +63,7 @@ final class Products
 
 `Postgres::connect()` doesn't wait; the first query opens the connection, and Tenma keeps a pool per worker. Database errors surface as exceptions and end the request with a `500` like any other.
 
-Gather everything a page needs in the controller before returning a `View`; a template that waits would hold the request in the middle of rendering. Independent sources can be asked at once with `Tenma::all()`. The Bakery's product page needs the product, the opening hours, the public holidays and the weather (shortened from `ShopController::product()`):
+Gather everything a page needs in the controller before returning a `View`; a template that waits would hold the request in the middle of rendering. Independent sources can be asked at once with `Threading\Task::all()`. The Bakery's product page needs the product, the opening hours, the public holidays and the weather (shortened from `ShopController::product()`):
 
 ```php
 #[Get('/products/{slug}')]
@@ -71,7 +71,7 @@ public function product(string $slug): View
 {
     $product = $holidays = $weather = null;
     $hours = [];
-    \Tenma::all(
+    Threading\Task::all(
         function () use (&$product, $slug): void { $product = $this->products->bySlug($slug); },
         function () use (&$hours): void { $hours = $this->hours->week(); },
         function () use (&$holidays): void { $holidays = $this->holidays->upcoming(); },
@@ -89,13 +89,13 @@ The page then takes as long as the slowest of the four. What the front controlle
 
 ```php
 $lastKnown = $app->get(LastKnown::class);
-Tenma::async($lastKnown->refreshWeather(...));
-Tenma::setInterval($lastKnown->refreshWeather(...), 900);
+Threading\Task::run($lastKnown->refreshWeather(...));
+Threading\Timer::every(900, $lastKnown->refreshWeather(...));
 
 $app->serve();
 ```
 
-Startup work that waits runs in a task like this, with `Tenma::async()`. Each worker runs its own timers.
+Startup work that waits runs in a task like this, with `Threading\Task::run()`. Each worker runs its own timers.
 
 ## Streams and WebSockets
 
@@ -107,7 +107,7 @@ A route can hand its request over to Tenma with [`$res->upgrade()`](../reference
 namespace Bakery\Controllers;
 
 use Bakery\Repositories\{Orders, Products};
-use Tenma\Http\{EventStream, Response as TenmaResponse, Stream, WebSocket};
+use Http\{EventStream, Response as TenmaResponse, Stream, WebSocket};
 use Waypoint\Attributes\{Authenticated, Controller, Get, Inject};
 use Waypoint\Exceptions\ForbiddenException;
 use Waypoint\Http\{Request, Response};
@@ -142,7 +142,7 @@ final class StreamController
             while (true) {   // ends when the tab closes: send() then throws ConnectionClosed
                 $left = array_map(fn ($p) => ['slug' => $p->slug, 'stock' => $p->stock], $this->products->all());
                 $events->send(json_encode($left, JSON_THROW_ON_ERROR), event: 'stock');
-                \Tenma::sleep(10);
+                \Threading\Task::delay(10);
             }
         }));
     }

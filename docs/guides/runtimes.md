@@ -54,7 +54,7 @@ Every request is translated from PSR-7 to Waypoint's `Request` and back, with he
 Under Tenma, the handler works through `tenma/psr`:
 
 ```php
-Tenma::serve(8080, \Tenma\Psr\Psr::handler($handler, $factory));
+new Http\Server(8080, \Tenma\Psr\Psr::handler($handler, $factory))->start();
 ```
 
 This is the way to combine Waypoint with PSR-15 middlewares under Tenma; without them, `$app->serve()` is the direct and faster way. `Response::upgrade()` (streams, WebSockets) works through the handler only under Tenma with `tenma/psr`.

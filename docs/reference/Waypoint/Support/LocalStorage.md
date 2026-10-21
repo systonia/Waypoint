@@ -12,7 +12,7 @@ interface LocalStorage
 ```
 
 Where a FiberLocal keeps its value, see FiberLocal::useStorage(). A runtime with async context (such as
-Tenma\AsyncLocal) lets the value follow a request into the tasks it starts.
+Threading\AsyncLocal) lets the value follow a request into the tasks it starts.
 
 ## Methods
 

@@ -4,7 +4,7 @@ namespace Waypoint\Psr;
 
 use Psr\Http\Message\{ResponseFactoryInterface, ResponseInterface, ServerRequestInterface, StreamFactoryInterface, UploadedFileInterface};
 use Psr\Http\Server\RequestHandlerInterface;
-use Tenma\Http\{StreamedResponse, WebSocketResponse};
+use Http\{StreamedResponse, WebSocketResponse};
 use Tenma\Psr\Upgrade;
 use Waypoint\App;
 use Waypoint\Http\{Request, Response, UploadedFile};
@@ -14,7 +14,7 @@ use Waypoint\Tenma\Bridge;
 /**
  * The app as a PSR-15 handler, for any server that speaks PSR-7: `new Handler($app, new Psr17Factory())`.
  * Under Tenma through tenma/psr, under any other PSR-7 server, or
- * behind PSR-15 middlewares of other packages. `Tenma::serve(3000, $app)` stays the direct way under Tenma.
+ * behind PSR-15 middlewares of other packages. `new \Http\Server(3000, $app)->start()` stays the direct way under Tenma.
  *
  * Response::upgrade() needs Tenma and tenma/psr: it goes out as Tenma\Psr\Upgrade.
  */
@@ -26,7 +26,7 @@ final class Handler implements RequestHandlerInterface
 
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        if (class_exists(\Tenma::class, false)) {
+        if (class_exists(\Http\Server::class, false)) {
             Bridge::installStorage();
         }
         $response = $this->app->handle(self::toWaypoint($request));

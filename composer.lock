@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "495bcc79483d1965278f2241fd915fff",
+    "content-hash": "bfd5857838daefa9ffa5732277074616",
     "packages": [
         {
             "name": "psr/container",
@@ -2392,16 +2392,16 @@
         },
         {
             "name": "tenma/psr",
-            "version": "v0.1.1",
+            "version": "v0.1.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/systonia/Tenma-PSR.git",
-                "reference": "6133f638b5de70f545b5755532041e276993d9ea"
+                "reference": "f49d300cbe875b97afca435dfc9d8a275a7a8bf9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/systonia/Tenma-PSR/zipball/6133f638b5de70f545b5755532041e276993d9ea",
-                "reference": "6133f638b5de70f545b5755532041e276993d9ea",
+                "url": "https://api.github.com/repos/systonia/Tenma-PSR/zipball/f49d300cbe875b97afca435dfc9d8a275a7a8bf9",
+                "reference": "f49d300cbe875b97afca435dfc9d8a275a7a8bf9",
                 "shasum": ""
             },
             "require": {
@@ -2414,7 +2414,7 @@
                 "nyholm/psr7": "^1.8",
                 "phpstan/phpstan": "^2.2",
                 "phpunit/phpunit": "^13.3",
-                "tenma/stubs": "^0.1.1"
+                "tenma/stubs": "^0.2.0"
             },
             "type": "library",
             "autoload": {
@@ -2430,22 +2430,22 @@
             "description": "Runs any PSR-15 app under Tenma: PSR-7 requests in, Tenma responses out, WebSockets and streams included.",
             "support": {
                 "issues": "https://github.com/systonia/Tenma-PSR/issues",
-                "source": "https://github.com/systonia/Tenma-PSR/tree/v0.1.1"
+                "source": "https://github.com/systonia/Tenma-PSR/tree/v0.1.2"
             },
-            "time": "2026-10-11T17:25:50+00:00"
+            "time": "2026-10-21T12:34:35+00:00"
         },
         {
             "name": "tenma/stubs",
-            "version": "0.1.19",
+            "version": "0.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/systonia/Tenma-Stubs.git",
-                "reference": "e12c21b1c591530015c058a9794faac1cf70c694"
+                "reference": "b1f11691cb2f6d30cae6ae7659f2dad1881fe032"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/systonia/Tenma-Stubs/zipball/e12c21b1c591530015c058a9794faac1cf70c694",
-                "reference": "e12c21b1c591530015c058a9794faac1cf70c694",
+                "url": "https://api.github.com/repos/systonia/Tenma-Stubs/zipball/b1f11691cb2f6d30cae6ae7659f2dad1881fe032",
+                "reference": "b1f11691cb2f6d30cae6ae7659f2dad1881fe032",
                 "shasum": ""
             },
             "require": {
@@ -2484,7 +2484,7 @@
                 "issues": "https://github.com/systonia/Tenma-Stubs/issues",
                 "source": "https://github.com/systonia/Tenma-Stubs"
             },
-            "time": "2026-10-19T05:47:35+00:00"
+            "time": "2026-10-21T12:18:02+00:00"
         },
         {
             "name": "theseer/tokenizer",

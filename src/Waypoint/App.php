@@ -178,17 +178,17 @@ class App
      */
     public function serve(?int $port = null, string|array|null $static = null): void
     {
-        if (!class_exists(\Tenma::class, false)) {
+        if (!class_exists(\Http\Server::class, false)) {
             $this->run();
             return;
         }
         global $argc;
         if ($argc >= 2) {
-            \Tenma::async(fn () => exit($this->runCli()));
+            \Threading\Task::run(fn () => exit($this->runCli()));
             return;
         }
         $configured = $this->container->get(Environment::class)->get('PORT');
-        \Tenma::serve($port ?? (is_numeric($configured) ? (int) $configured : 8080), $this, $static ?? $this->container->get(FileSystemOptions::class)->publicDirectory);
+        new \Http\Server($port ?? (is_numeric($configured) ? (int) $configured : 8080), $this, $static ?? $this->container->get(FileSystemOptions::class)->publicDirectory)->start();
     }
 
     /** @codeCoverageIgnore exit()s with runCli()'s code. */
@@ -237,9 +237,9 @@ class App
     }
 
     /**
-     * Makes the app a request handler for Tenma: `Tenma::serve(3000, $app)`. See Tenma\Bridge.
+     * Makes the app a request handler for Tenma: `new \Http\Server(3000, $app)->start()`. See Tenma\Bridge.
      */
-    public function __invoke(\Tenma\Http\Request $request): \Tenma\Http\Response|\Tenma\Http\WebSocketResponse|\Tenma\Http\StreamedResponse
+    public function __invoke(\Http\Request $request): \Http\Response|\Http\WebSocketResponse|\Http\StreamedResponse
     {
         return Tenma\Bridge::respond($this, $request);
     }

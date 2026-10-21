@@ -2,7 +2,7 @@
 
 namespace Waypoint\Tenma;
 
-use Tenma\AsyncLocal;
+use Threading\AsyncLocal;
 use Waypoint\Support\LocalStorage;
 
 /** A FiberLocal's value in Tenma's async context: a task a request starts gets a copy of it. */

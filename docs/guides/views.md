@@ -271,7 +271,7 @@ waypoint-check: 1 errors, 0 warnings
 In a `tenma.dev.php` hook, [`Check::publish()`](../reference/Waypoint/View/Check.md#publish) sends PHPStan's findings to the editor whenever a view is saved:
 
 ```php
-new Tenma\Hook(
+new Development\Hook(
     name: 'waypoint-check',
     inputs: ['views/**', 'src/**'],
     run: fn () => Waypoint\View\Check::publish(__DIR__),

@@ -19,7 +19,7 @@ with the wrong arguments, at the view's line.
 The views are the `.php` files below `views/`, or below the directories the project's composer.json names
 under `extra.waypoint.views`. In a `tenma.dev.php` hook, publish() shows PHPStan's findings in the editor:
 
-    new Tenma\Hook(
+    new Development\Hook(
         name: 'waypoint-check',
         inputs: ['views/**', 'src/**'],
         run: fn () => Waypoint\View\Check::publish(__DIR__),
@@ -80,7 +80,7 @@ at most (VIEW_LEVEL).
 public static function publish(string $root): void
 ```
 
-For a tenma.dev.php hook: PHPStan's findings go to the editor, through Tenma::diagnostics().
+For a tenma.dev.php hook: PHPStan's findings go to the editor, through Development\Problems::report().
 
 **Parameters**
 

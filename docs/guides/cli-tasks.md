@@ -11,7 +11,7 @@ The front controller that serves HTTP also runs command-line tasks: migrations, 
 
 namespace Bakery\Tasks;
 
-use Tenma\Db\Postgres;
+use Data\Postgres;
 use Waypoint\Attributes\{Inject, Manager, Task};
 
 /** The schema and the demo data: `tenma index.php db:migrate`, `db:seed`, `db:reset`. */
@@ -38,7 +38,7 @@ final class DatabaseTasks
     public function seed(): string
     {
         $this->migrate();
-        $this->db->script(\Tenma\Fs::readFile(self::DIRECTORY . '/seed.sql'));
+        $this->db->script(new \FileSystem\FileInfo(self::DIRECTORY . '/seed.sql')->read());
         return "Seeded the demo data.\n";
     }
 
@@ -104,6 +104,6 @@ final class StockTasks
 - An exception prints its message to stderr and exits with `1`.
 - The manager gets its `#[Inject]` properties like a controller, except `Request` and `Response`. It shares the configured services, Options and loggers with the HTTP side; there is no request id.
 
-`serve()` runs the task when PHP runs on the command line. Under Tenma it does too when the script gets arguments: `tenma index.php db:reset` runs the task in a Tenma task of its own, so it can use what only Tenma offers (its Postgres pool, `Tenma::fetch()`), and exits with the task's code; without arguments it starts the server. The Bakery's database tasks run this way because Tenma's Postgres client needs its event loop. A task under Tenma runs as `production` unless `APP_ENV` says otherwise (see [APP_ENV](application.md#app_env)); `APP_ENV=development` in a local `.env` makes it `development`. [`$app->runCli()`](../reference/Waypoint/App.md#runcli) runs the task named in `$argv` and returns the exit code without exiting.
+`serve()` runs the task when PHP runs on the command line. Under Tenma it does too when the script gets arguments: `tenma index.php db:reset` runs the task in a Tenma task of its own, so it can use what only Tenma offers (its Postgres pool, `Http\Client`), and exits with the task's code; without arguments it starts the server. The Bakery's database tasks run this way because Tenma's Postgres client needs its event loop. A task under Tenma runs as `production` unless `APP_ENV` says otherwise (see [APP_ENV](application.md#app_env)); `APP_ENV=development` in a local `.env` makes it `development`. [`$app->runCli()`](../reference/Waypoint/App.md#runcli) runs the task named in `$argv` and returns the exit code without exiting.
 
 See also: [`Manager`](../reference/Waypoint/Attributes/Manager.md), [`Task`](../reference/Waypoint/Attributes/Task.md), [Deployment](deployment.md#scheduled-tasks).

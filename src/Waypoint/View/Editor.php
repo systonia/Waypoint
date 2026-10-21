@@ -3,7 +3,7 @@
 namespace Waypoint\View;
 
 use ReflectionClass;
-use Tenma\Lsp\{Elements, Imports, Provider, Tokens, Variables};
+use Lsp\{Elements, Imports, Provider, Tokens, Variables};
 use Waypoint\Attributes\ListOf;
 use Waypoint\Attributes\Returns;
 use Waypoint\Http\View;

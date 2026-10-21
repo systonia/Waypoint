@@ -113,7 +113,7 @@ The cache directory must be writable by the PHP-FPM user and by no one else.
 */5 * * * * cd /srv/bakery/current && tenma index.php orders:expire >> /var/log/bakery/tasks.log 2>&1
 ```
 
-Under Tenma such a job can also be a timer in the front controller: the bakery's `index.php` runs `Orders::expireUnconfirmed()` and the sales report with `Tenma::setInterval()` in every worker, each as one SQL statement that is safe to run in several workers at once.
+Under Tenma such a job can also be a timer in the front controller: the bakery's `index.php` runs `Orders::expireUnconfirmed()` and the sales report with `Threading\Timer::every()` in every worker, each as one SQL statement that is safe to run in several workers at once.
 
 A task exits with `1` and its message on stderr when it fails, which cron and systemd timers report.
 

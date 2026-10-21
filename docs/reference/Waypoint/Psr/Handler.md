@@ -15,7 +15,7 @@ Implements `Psr\Http\Server\RequestHandlerInterface`
 
 The app as a PSR-15 handler, for any server that speaks PSR-7: `new Handler($app, new Psr17Factory())`.
 Under Tenma through tenma/psr, under any other PSR-7 server, or
-behind PSR-15 middlewares of other packages. `Tenma::serve(3000, $app)` stays the direct way under Tenma.
+behind PSR-15 middlewares of other packages. `new \Http\Server(3000, $app)->start()` stays the direct way under Tenma.
 
 Response::upgrade() needs Tenma and tenma/psr: it goes out as Tenma\Psr\Upgrade.
 

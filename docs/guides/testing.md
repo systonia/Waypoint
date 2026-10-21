@@ -144,6 +144,6 @@ Testing with a cache directory also exercises the cached route plans, which is w
 vendor/bin/phpunit
 ```
 
-The requests run in the test process. An app that waits with Tenma's own functions (its Postgres client, `Tenma::fetch()`) needs Tenma's event loop in the test run as well: the bakery's `tests/Support/bootstrap.php` hands the whole PHPUnit run to `tenma` for that. For an app meant for Tenma, also run it under Tenma with parallel requests, which shows state shared between requests that a sequential test can't (see [Dependency injection](dependency-injection.md#controllers-per-request-services-per-process)).
+The requests run in the test process. An app that waits with Tenma's own functions (its Postgres client, `Http\Client`) needs Tenma's event loop in the test run as well: the bakery's `tests/Support/bootstrap.php` hands the whole PHPUnit run to `tenma` for that. For an app meant for Tenma, also run it under Tenma with parallel requests, which shows state shared between requests that a sequential test can't (see [Dependency injection](dependency-injection.md#controllers-per-request-services-per-process)).
 
 See also: [`TestCase`](../reference/Waypoint/Testing/TestCase.md), [`TestRequest`](../reference/Waypoint/Testing/TestRequest.md), [`TestResponse`](../reference/Waypoint/Testing/TestResponse.md), [Plugins](plugins.md#testing-a-plugin).

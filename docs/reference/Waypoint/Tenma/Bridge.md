@@ -1,6 +1,6 @@
 ---
 title: "Bridge"
-description: "Translates between Tenma (PHP with an event loop) and Waypoint for App::__invoke(), which makes an app Tenma's request handler: `Tenma::serve(3000, $app)`."
+description: "Translates between Tenma (PHP with an event loop) and Waypoint for App::__invoke(), which makes an app Tenma's request handler: `new \\Http\\Server(3000, $app)->start()`."
 order: 100
 generated: true
 ---
@@ -12,7 +12,7 @@ final class Bridge
 ```
 
 Translates between Tenma (PHP with an event loop) and Waypoint for App::__invoke(), which makes
-an app Tenma's request handler: `Tenma::serve(3000, $app)`. One process then serves many requests,
+an app Tenma's request handler: `new \Http\Server(3000, $app)->start()`. One process then serves many requests,
 each in a Fiber of its own, interleaved while they wait on I/O. Only used under Tenma; Waypoint has no
 dependency on it.
 
@@ -21,7 +21,7 @@ dependency on it.
 ### respond()
 
 ```php
-public static function respond(\Waypoint\App $app, \Tenma\Http\Request $request): \Tenma\Http\Response|\Tenma\Http\WebSocketResponse|\Tenma\Http\StreamedResponse
+public static function respond(\Waypoint\App $app, \Http\Request $request): \Http\Response|\Http\WebSocketResponse|\Http\StreamedResponse
 ```
 
 One request: Tenma's Request in, through App::handle(), Tenma's Response out.
@@ -29,9 +29,9 @@ One request: Tenma's Request in, through App::handle(), Tenma's Response out.
 **Parameters**
 
 - `$app` [`App`](../App.md)
-- `$request` `\Tenma\Http\Request`
+- `$request` `\Http\Request`
 
-**Returns** `\Tenma\Http\Response|\Tenma\Http\WebSocketResponse|\Tenma\Http\StreamedResponse`
+**Returns** `\Http\Response|\Http\WebSocketResponse|\Http\StreamedResponse`
 
 ### installStorage()
 
@@ -44,19 +44,19 @@ Request id and CSRF token follow a request into the tasks it starts. Once per pr
 ### toWaypoint()
 
 ```php
-public static function toWaypoint(\Tenma\Http\Request $request): \Waypoint\Http\Request
+public static function toWaypoint(\Http\Request $request): \Waypoint\Http\Request
 ```
 
 **Parameters**
 
-- `$request` `\Tenma\Http\Request`
+- `$request` `\Http\Request`
 
 **Returns** [`Request`](../Http/Request.md)
 
 ### toTenma()
 
 ```php
-public static function toTenma(\Waypoint\Http\Response $response): \Tenma\Http\Response|\Tenma\Http\WebSocketResponse|\Tenma\Http\StreamedResponse
+public static function toTenma(\Waypoint\Http\Response $response): \Http\Response|\Http\WebSocketResponse|\Http\StreamedResponse
 ```
 
 A response handed over with Response::upgrade() goes to Tenma with the request's context; anything else is Tenma's plain Response.
@@ -65,4 +65,4 @@ A response handed over with Response::upgrade() goes to Tenma with the request's
 
 - `$response` [`Response`](../Http/Response.md)
 
-**Returns** `\Tenma\Http\Response|\Tenma\Http\WebSocketResponse|\Tenma\Http\StreamedResponse`
+**Returns** `\Http\Response|\Http\WebSocketResponse|\Http\StreamedResponse`

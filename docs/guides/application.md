@@ -144,7 +144,7 @@ final class Holidays
     {
         $url = rtrim($this->env->string('HOLIDAYS_URL', 'https://date.nager.at'), '/')
             . '/api/v3/NextPublicHolidays/' . rawurlencode($this->env->string('HOLIDAY_COUNTRY', 'DE'));
-        $response = \Tenma::fetch($url, timeout: $this->env->float('API_TIMEOUT', 2.5));
+        $response = new \Http\Client($this->env->float('API_TIMEOUT', 2.5))->get($url);
         // …
     }
 }
@@ -205,9 +205,9 @@ $app = require __DIR__ . '/app.php';
 $env = $app->get(Environment::class);
 $orders = $app->get(Orders::class);
 
-Tenma::setInterval(function () use ($orders, $env) {
+Threading\Timer::every(30, function () use ($orders, $env) {
     $orders->expireUnconfirmed($env->int('UNCONFIRMED_MINUTES', 15));
-}, 30);
+});
 
 $app->serve();
 ```
