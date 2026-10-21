@@ -237,7 +237,7 @@ class App
     }
 
     /**
-     * Makes the app a request handler for Tenma: `new \Http\Server(3000, $app)->start()`. See Tenma\Bridge.
+     * Makes the app a request handler for Tenma: `new Http\Server(3000, $app)->start()`. See Tenma\Bridge.
      */
     public function __invoke(\Http\Request $request): \Http\Response|\Http\WebSocketResponse|\Http\StreamedResponse
     {
