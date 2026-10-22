@@ -232,34 +232,28 @@ class Router
     // Plans
 
     /** @param RoutePlan|TaskPlan $plan */
-    public function addCompiledRoute(array $plan, RouteType $type = RouteType::Unset): void
+    public function addCompiledRoute(array $plan, RouteType $type): void
     {
-        switch ($type) {
-            case RouteType::Task:
-                if (!isset($plan['fullName'])) {
-                    // @codeCoverageIgnoreStart
-                    // RouteCompiler always sets it; this also narrows $plan to TaskPlan.
-                    throw new RuntimeException("addCompiledRoute(): a Task plan requires a 'fullName' key.");
-                    // @codeCoverageIgnoreEnd
-                }
-                $this->tasks[$plan['fullName']] = $plan;
-                return;
-            case RouteType::Static:
-            case RouteType::Dynamic:
-                if (!isset($plan['httpMethod'])) {
-                    // @codeCoverageIgnoreStart
-                    // same narrowing trick, to RoutePlan.
-                    throw new RuntimeException("addCompiledRoute(): a route plan requires an 'httpMethod' key.");
-                    // @codeCoverageIgnoreEnd
-                }
-                if ($type === RouteType::Dynamic) {
-                    $this->dynamicRoutes[$plan['httpMethod']][] = $plan;
-                } else {
-                    $this->staticRoutes[$plan['httpMethod']][$plan['path']] = $plan;
-                }
-                return;
-            default:
-                throw new RuntimeException('addCompiledRoute() requires an explicit RouteType (Static, Dynamic, or Task).');
+        if ($type === RouteType::Task) {
+            if (!isset($plan['fullName'])) {
+                // @codeCoverageIgnoreStart
+                // RouteCompiler always sets it; this also narrows $plan to TaskPlan.
+                throw new RuntimeException("addCompiledRoute(): a Task plan requires a 'fullName' key.");
+                // @codeCoverageIgnoreEnd
+            }
+            $this->tasks[$plan['fullName']] = $plan;
+            return;
+        }
+        if (!isset($plan['httpMethod'])) {
+            // @codeCoverageIgnoreStart
+            // same narrowing trick, to RoutePlan.
+            throw new RuntimeException("addCompiledRoute(): a route plan requires an 'httpMethod' key.");
+            // @codeCoverageIgnoreEnd
+        }
+        if ($type === RouteType::Dynamic) {
+            $this->dynamicRoutes[$plan['httpMethod']][] = $plan;
+        } else {
+            $this->staticRoutes[$plan['httpMethod']][$plan['path']] = $plan;
         }
     }
 

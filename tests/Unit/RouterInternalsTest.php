@@ -7,7 +7,6 @@ use RuntimeException;
 use Waypoint\Waypoint;
 use Waypoint\Routing\PropertyInjector;
 use Waypoint\Http\View;
-use Waypoint\Enums\RouteType;
 use Waypoint\Tests\Fixtures\Managers\{MaintenanceManager, InjectionAwareManager};
 use Waypoint\Tests\Fixtures\Support\ViewWithUnresolvableInject;
 
@@ -26,16 +25,6 @@ final class RouterInternalsTest extends TestCase
     protected function tearDown(): void
     {
         Waypoint::reset();
-    }
-
-    public function testAddCompiledRouteRequiresAnExplicitRouteType(): void
-    {
-        $app = Waypoint::create();
-        $app->attach([]);
-        $router = $app->getRouter();
-
-        $this->expectException(RuntimeException::class);
-        $router->addCompiledRoute(['path' => '/x'], RouteType::Unset);
     }
 
     public function testFindRouteReturnsNullWhenNothingMatches(): void

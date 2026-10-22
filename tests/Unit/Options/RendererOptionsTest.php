@@ -32,7 +32,8 @@ final class RendererOptionsTest extends TestCase
 
     public function testRelativeDirectoryIsResolvedAgainstScriptDirectory(): void
     {
-        $opts = new RendererOptions(['directory' => 'templates']);
+        $opts = new RendererOptions();
+        $opts->directory = 'templates';
         $this->assertSame(dirname(realpath(__FILE__)) . '/templates', $opts->directory);
     }
 
@@ -45,18 +46,4 @@ final class RendererOptionsTest extends TestCase
         $this->assertSame(dirname(realpath(__FILE__)), $opts->directory);
     }
 
-    public function testCustomLayoutIsAssigned(): void
-    {
-        $opts = new RendererOptions(['layout' => 'MyLayout']);
-        $this->assertSame('MyLayout', $opts->layout);
-    }
-
-    public function testToArrayOmitsNothingWhenBothAreSet(): void
-    {
-        $opts = new RendererOptions(['directory' => 'views', 'layout' => 'Main']);
-        $arr = $opts->toArray();
-
-        $this->assertSame(dirname(realpath(__FILE__)) . '/views', $arr['directory']);
-        $this->assertSame('Main', $arr['layout']);
-    }
 }

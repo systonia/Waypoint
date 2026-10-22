@@ -3,6 +3,7 @@
 namespace Waypoint\Tests\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
+use Waypoint\Attributes\SimpleXmlFormatter;
 use Waypoint\Http\{Response, ResultRenderer};
 use Waypoint\Tests\Fixtures\DTO\{BadgeDTO, CityDTO, ProfileDTO};
 use Waypoint\Tests\Fixtures\Enums\OrderStatus;
@@ -65,7 +66,7 @@ final class ResultRendererTest extends TestCase
     private static function xml(mixed $result): string
     {
         $res = new Response();
-        (new ResultRenderer())->render($result, $res, ['type' => 'xml']);
+        (new ResultRenderer())->render($result, $res, ['type' => SimpleXmlFormatter::class]);
         unset($_SERVER['HTTP_ACCEPT_ENCODING']);
         ob_start();
         $res->send();

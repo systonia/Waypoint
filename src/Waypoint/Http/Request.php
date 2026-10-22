@@ -329,10 +329,4 @@ class Request
         preg_match_all('/\[([^\[\]]*)\]/', $match[2], $keys);
         return [$match[1], ...$keys[1]];
     }
-
-    /** Alias of body($key, $default). */
-    public function input(string $key, mixed $default = null): mixed
-    {
-        return $this->body($key, $default);
-    }
 }

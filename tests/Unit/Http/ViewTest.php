@@ -103,6 +103,18 @@ final class ViewTest extends TestCase
         );
     }
 
+    public function testEscapeEchoesWrapsEveryEchoOnItsOwnLines(): void
+    {
+        $escape = '<?=\\' . View::class . '::escape(';
+
+        $this->assertSame(
+            "<p>{$escape} \$a) ?></p>\n{$escape} \$b, \"\\n\")\n?>{$escape} __FILE__) ?>",
+            View::escapeEchoes("<p><?= \$a; ?></p>\n<?= \$b, \"\\n\"\n?><?= __FILE__ ?>")
+        );
+        // With the template's file, __FILE__ and __DIR__ name it
+        $this->assertSame("{$escape} '/views') ?>", View::escapeEchoes('<?= __DIR__ ?>', '/views/Home.php'));
+    }
+
     public function testEchoingAnArrayIsATypeError(): void
     {
         $this->configureRenderer();

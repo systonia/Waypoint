@@ -46,6 +46,19 @@ final class CheckTest extends TestCase
         $this->assertSame([['line' => 2, 'message' => "Unmatched ')'", 'severity' => 'error']], Check::inView("<p>\n{{ f()) }}"));
     }
 
+    public function testALineCommentInAnEchoIsAnErrorThatNamesTheFile(): void
+    {
+        $php = "<p>\n<?= \$a // note ?>";
+
+        $this->assertSame([[
+            'line' => 2,
+            'message' => 'A line comment inside <?= ?> also comments out what the view adds before ?>: use /* */',
+            'severity' => 'error',
+        ]], Check::comments($php));
+        $this->assertStringContainsString('what the template adds', Check::comments($php, 'template')[0]['message']);
+        $this->assertSame([], Check::comments('<?= $a /* note */ ?>'));
+    }
+
     public function testPhpstanReadsTheViewsWithThisAndTheModelAtTheirLines(): void
     {
         $this->assertSame([

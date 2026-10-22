@@ -9,7 +9,7 @@ use Attribute;
 class Tags
 {
     /** @param string[] $tags */
-    public function __construct(public array $tags = [], public ?string $name = null)
+    public function __construct(public array $tags = [])
     {
     }
 }

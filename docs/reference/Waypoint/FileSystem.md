@@ -83,16 +83,6 @@ The decoded routes.php (plans + 'services'), or null without a cache.
 
 **Returns** `array<string, mixed>|null`
 
-### loadCachedServices()
-
-```php
-public function loadCachedServices(): ?array
-```
-
-The class list compiled into routes.php, or null without a cache.
-
-**Returns** `string[]|null`
-
 ### isAvailable()
 
 ```php

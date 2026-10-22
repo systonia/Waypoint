@@ -34,7 +34,6 @@ final class OpenAPIEndpoint implements Endpoint
         if ($method !== 'GET' || !$options->enabled || !str_starts_with($path, $prefix)) {
             return false;
         }
-        $router = $this->router;
 
         $file = substr($path, strlen($prefix));
         if ($file === 'swagger.html') {
@@ -42,11 +41,11 @@ final class OpenAPIEndpoint implements Endpoint
             return true;
         }
         if ($file === 'spec.json') {
-            $this->writeJson($res, (new OpenAPIGenerator($router))->generate());
+            $this->writeJson($res, (new OpenAPIGenerator($this->router))->generate());
             return true;
         }
         if (preg_match('/^spec\.([^\/.]+)\.json$/', $file, $m) === 1) {
-            $generator = new OpenAPIGenerator($router);
+            $generator = new OpenAPIGenerator($this->router);
             if (!$generator->hasVersion($m[1])) {
                 throw new NotFoundException("OpenAPI spec for version '{$m[1]}' not found.");
             }

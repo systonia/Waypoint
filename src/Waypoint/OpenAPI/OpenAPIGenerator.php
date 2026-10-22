@@ -87,20 +87,11 @@ class OpenAPIGenerator
     public function hasVersion(string $version): bool
     {
         foreach ($this->router->getRoutes() as $route) {
-            if (self::routeField($route, 'version') === $version) {
+            if ($route->version === $version) {
                 return true;
             }
         }
         return false;
-    }
-
-    /** A route is a RouteSummary object in practice; a plain array is tolerated (see OpenAPIGeneratorRouteShapeTest). */
-    private static function routeField(mixed $route, string $field): mixed
-    {
-        if (is_object($route)) {
-            return $route->{$field} ?? null;
-        }
-        return is_array($route) ? ($route[$field] ?? null) : null;
     }
 
     /** @return array<string, mixed> */
@@ -117,12 +108,11 @@ class OpenAPIGenerator
         $this->ambiguousIds = array_keys(array_filter($ids, static fn (array $classes): bool => count($classes) > 1));
         foreach ($routes as $route) {
             $handlerSpec = $this->getHandlerSpec($route);
-            $method = self::routeField($route, 'method');
-            $rawPath = self::routeField($route, 'rawPath');
-            if ($handlerSpec === null || !is_string($method) || !is_string($rawPath) || $method === '' || $rawPath === '') {
+            if ($handlerSpec === null) {
                 continue;
             }
             [$controllerClass, $methodName] = $handlerSpec;
+            $rawPath = $route->rawPath;
 
             $classAttrs = self::attrList($this->classCacheEntry($controllerClass)['__class'] ?? null);
             $methodAttrs = self::attrList($this->methodCacheEntry($controllerClass, $methodName)['__method'] ?? null);
@@ -131,7 +121,7 @@ class OpenAPIGenerator
                 continue;
             }
 
-            $paths[$rawPath][strtolower($method)] = $this->buildOperation($controllerClass, $methodName, $methodAttrs, $classAttrs, $rawPath);
+            $paths[$rawPath][strtolower($route->method)] = $this->buildOperation($controllerClass, $methodName, $methodAttrs, $classAttrs, $rawPath);
         }
 
         ksort($paths);
@@ -143,29 +133,26 @@ class OpenAPIGenerator
     }
 
     /**
-     * @param array<int, mixed> $routes
-     * @return array<int, mixed> Exact-version filter when $version is given; otherwise every
+     * @param array<int, RouteSummary> $routes
+     * @return array<int, RouteSummary> Exact-version filter when $version is given; otherwise every
      *  unversioned route plus the newest version of each (method, unversionedPath) group.
      */
     protected function selectEligibleRoutes(array $routes, ?string $version): array
     {
         if ($version !== null) {
-            return array_values(array_filter($routes, fn ($route) => self::routeField($route, 'version') === $version));
+            return array_values(array_filter($routes, fn (object $route) => $route->version === $version));
         }
 
         $unversioned = [];
         $latestByGroup = [];
         foreach ($routes as $route) {
-            $routeVersion = self::routeField($route, 'version');
-            if (!is_string($routeVersion)) {
+            if ($route->version === null) {
                 $unversioned[] = $route;
                 continue;
             }
-            $method = self::routeField($route, 'method');
-            $groupPath = self::routeField($route, 'unversionedPath') ?? self::routeField($route, 'rawPath');
-            $key = (is_string($method) ? $method : '') . ' ' . (is_string($groupPath) ? $groupPath : '');
-            $incumbentVersion = isset($latestByGroup[$key]) ? self::routeField($latestByGroup[$key], 'version') : null;
-            if (!is_string($incumbentVersion) || $this->compareVersions($routeVersion, $incumbentVersion) > 0) {
+            $key = "{$route->method} {$route->unversionedPath}";
+            $incumbentVersion = isset($latestByGroup[$key]) ? $latestByGroup[$key]->version : null;
+            if ($incumbentVersion === null || $this->compareVersions($route->version, $incumbentVersion) > 0) {
                 $latestByGroup[$key] = $route;
             }
         }
@@ -194,21 +181,16 @@ class OpenAPIGenerator
     }
 
     /**
-     * [controllerClass, methodName] from a route's handlerSpec: a plain pair, or one nested under
-     * 'spec'. The class isn't verified to exist: a missing attribute-cache entry just means "no attributes".
+     * [controllerClass, methodName] from a route's handlerSpec, null for a controller object. The class isn't
+     * verified to exist: a missing attribute-cache entry just means "no attributes".
      *
+     * @param RouteSummary $route
      * @return array{0: string, 1: string}|null
      */
-    protected function getHandlerSpec(mixed $route): ?array
+    protected function getHandlerSpec(object $route): ?array
     {
-        $spec = self::routeField($route, 'handlerSpec');
-        if (is_array($spec) && isset($spec['spec'])) {
-            $spec = $spec['spec'];
-        }
-        if (!is_array($spec) || !isset($spec[0], $spec[1]) || !is_string($spec[0]) || !is_string($spec[1])) {
-            return null;
-        }
-        return [$spec[0], $spec[1]];
+        [$class, $method] = $route->handlerSpec;
+        return is_string($class) ? [$class, $method] : null;
     }
 
     /** @return array<string, mixed> */

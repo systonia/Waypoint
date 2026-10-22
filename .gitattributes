@@ -5,6 +5,7 @@
 
 /tests              export-ignore
 /ui                 export-ignore
+/composer.lock      export-ignore
 /phpunit.xml        export-ignore
 /phpunit.xml.dist   export-ignore
 /.phpunit.result.cache export-ignore

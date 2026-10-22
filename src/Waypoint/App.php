@@ -256,7 +256,8 @@ class App
     public function handle(Request $req): Response
     {
         TrustedProxies::apply($req, $this->container->get(ProxyOptions::class)->trusted);
-        $res = (new Response($this->container->get(CompressionOptions::class)))->forRequest($req)->withRequestId($req->id);
+        $res = (new Response($this->container->get(CompressionOptions::class)))->forRequest($req);
+        $res->withHeader('X-Request-ID', $req->id);
         $this->container->get(RequestContext::class)->setRequestId($req->id);
 
         try {

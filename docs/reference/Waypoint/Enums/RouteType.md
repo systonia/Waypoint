@@ -15,12 +15,6 @@ The kind of a compiled plan Router::addCompiledRoute() stores: a static path, a 
 
 ## Cases
 
-### Unset
-
-```php
-case Unset = '';
-```
-
 ### Static
 
 ```php

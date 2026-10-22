@@ -67,16 +67,6 @@ final class FileSystem
     }
 
     /**
-     * The class list compiled into routes.php, or null without a cache.
-     * @return string[]|null
-     */
-    public function loadCachedServices(): ?array
-    {
-        $services = $this->loadCachedRouteData()['services'] ?? null;
-        return is_array($services) ? Arr::stringList($services) : null;
-    }
-
-    /**
      * True if the cache exists and was built from exactly the current sources: every controller class
      * (by its file's mtime) plus $extraMeta (view .css/.js mtimes), no more and no fewer. A cache built
      * for a larger controller set must not keep serving a removed controller's routes.

@@ -12,52 +12,20 @@ class LoggerOptions
 ```
 
 The PSR-3 loggers Waypoint\Logger fans out to, each with the levels it
-accepts: `$opts->add($logger, [LogLevel::ERROR])`. An instance also serves
-as the small {levels, name} descriptor add() accepts as $options.
-
-## Properties
-
-### $levels
-
-```php
-public array $levels = [];
-```
-
-**Type** `string[]`
-
-Accepted levels when used as a descriptor; empty means all.
-
-### $name
-
-```php
-public ?string $name = null;
-```
-
-Channel name when used as a descriptor.
+accepts: `$opts->add($logger, [LogLevel::ERROR])`.
 
 ## Methods
-
-### __construct()
-
-```php
-public function __construct(array $levels = [], ?string $name = null)
-```
-
-**Parameters**
-
-- `$levels` `string[]`
-- `$name` `?string`
 
 ### add()
 
 ```php
-public function add(\Psr\Log\LoggerInterface|array $logger, $options = null): \Waypoint\Options\LoggerOptions
+public function add(\Psr\Log\LoggerInterface|array $logger, array|string|null $levels = null): \Waypoint\Options\LoggerOptions
 ```
 
 **Parameters**
 
 - `$logger` `LoggerInterface|array<int, mixed>`: One logger or a list (non-loggers are skipped).
-- `$options` [`LoggerOptions`](LoggerOptions.md)`|string|array<int|string, mixed>|null`: A descriptor, one level, a list of levels, or {levels, name}.
+- `$levels` `string|array<mixed>|null`: One level or a list of them; none for every level.
 
 **Returns** [`LoggerOptions`](LoggerOptions.md)
 
@@ -83,4 +51,4 @@ Adds a Monolog logger for $channel with $handler, if Monolog is installed.
 public function getLoggers(): array
 ```
 
-**Returns** `array<int, array{logger: LoggerInterface, levels: array<string, bool>, name: string|null}>`: When none were added: PHP's error_log for errors and worse, so an error never vanishes unseen; `add(new NullLogger())` silences it.
+**Returns** `array<int, array{logger: LoggerInterface, levels: array<string, bool>}>`: When none were added: PHP's error_log for errors and worse, so an error never vanishes unseen; `add(new NullLogger())` silences it.

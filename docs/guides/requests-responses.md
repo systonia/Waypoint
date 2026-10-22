@@ -78,7 +78,7 @@ The body is decoded only as what its `Content-Type` declares:
 - `application/x-www-form-urlencoded` and `multipart/form-data`: the form fields, nested like `$_POST` (`lines[3][quantity]`),
 - anything else: nothing; `body` stays empty.
 
-A `text/plain` body that looks like JSON is not read as JSON, so a form on another site can't pose as a JSON request. `$req->body('email')` returns one field (`$req->input()` is the same), `$req->body()` the whole array. For anything beyond a field or two, bind a DTO with `#[Body]` instead (see [Binding and validation](binding.md)).
+A `text/plain` body that looks like JSON is not read as JSON, so a form on another site can't pose as a JSON request. `$req->body('email')` returns one field, `$req->body()` the whole array. For anything beyond a field or two, bind a DTO with `#[Body]` instead (see [Binding and validation](binding.md)).
 
 ### Uploaded files
 

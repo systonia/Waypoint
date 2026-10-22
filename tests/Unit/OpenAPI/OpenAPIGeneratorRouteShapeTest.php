@@ -9,13 +9,7 @@ use Waypoint\{Waypoint, Router};
 use Waypoint\Logger;
 use Waypoint\OpenAPI\{OpenAPIGenerator, SchemaBuilder};
 
-/**
- * Router::getRoutes() only ever produces one route shape in practice (a
- * plain object with handlerSpec as a 2-element [class, method] array), but
- * OpenAPIGenerator::getHandlerSpec()/buildPaths() defensively tolerate a few
- * other shapes too. These exercise those alternate/defensive branches
- * directly via a stubbed Router, since the real one never produces them.
- */
+/** Branches of OpenAPIGenerator and SchemaBuilder a real app never reaches, exercised directly. */
 final class OpenAPIGeneratorRouteShapeTest extends TestCase
 {
     protected function setUp(): void
@@ -35,52 +29,6 @@ final class OpenAPIGeneratorRouteShapeTest extends TestCase
         $router->method('getRoutes')->willReturn($routes);
 
         return new OpenAPIGenerator($router);
-    }
-
-    public function testObjectRouteWithANestedSpecKeyIsAccepted(): void
-    {
-        $spec = $this->generatorWithRoutes([
-            (object) [
-                'method' => 'GET',
-                'rawPath' => '/nested-spec',
-                'handlerSpec' => ['spec' => ['Fake\\Controller', 'fakeMethod']],
-            ],
-        ])->generate();
-
-        $this->assertArrayHasKey('/nested-spec', $spec['paths']);
-        $this->assertSame('Controller_fakeMethod', $spec['paths']['/nested-spec']['get']['operationId']);
-    }
-
-    public function testArrayRouteWithANestedSpecKeyIsAccepted(): void
-    {
-        $spec = $this->generatorWithRoutes([
-            [
-                'method' => 'POST',
-                'rawPath' => '/array-shaped',
-                'handlerSpec' => ['spec' => ['Fake\\Controller', 'anotherMethod']],
-            ],
-        ])->generate();
-
-        $this->assertArrayHasKey('/array-shaped', $spec['paths']);
-        $this->assertSame('Controller_anotherMethod', $spec['paths']['/array-shaped']['post']['operationId']);
-    }
-
-    public function testRouteWithAnUnrecognizedHandlerSpecShapeIsSkipped(): void
-    {
-        $spec = $this->generatorWithRoutes([
-            (object) ['method' => 'GET', 'rawPath' => '/unrecognized', 'handlerSpec' => ['not' => 'a spec']],
-        ])->generate();
-
-        $this->assertArrayNotHasKey('/unrecognized', $spec['paths']);
-    }
-
-    public function testRouteMissingMethodOrPathIsSkipped(): void
-    {
-        $spec = $this->generatorWithRoutes([
-            (object) ['handlerSpec' => ['Fake\\Controller', 'noMethodOrPath']],
-        ])->generate();
-
-        $this->assertSame([], $spec['paths']);
     }
 
     public function testGenerateModelSchemaSkipsTheComputedValidationProperties(): void

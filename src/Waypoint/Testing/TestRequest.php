@@ -165,13 +165,11 @@ final class TestRequest
             $stray = (string) ob_get_clean();
         }
 
-        $lines = [];
-        foreach ($response->getHeaders() as $name => $value) {
-            $lines[] = "$name: $value";
-        }
-        foreach ($response->getCookies() as $cookie) {
-            $lines[] = "Set-Cookie: $cookie";
-        }
-        return new TestResponse($response->getStatus(), $lines, $stray . $response->getBody());
+        return new TestResponse(
+            $response->getStatus(),
+            $response->getHeaders(),
+            $response->getCookies(),
+            $stray . $response->getBody(),
+        );
     }
 }

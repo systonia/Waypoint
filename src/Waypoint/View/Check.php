@@ -367,8 +367,13 @@ final class Check
         return $problems;
     }
 
-    /** @return list<array{line: int, message: string, severity: 'error'}> */
-    private static function comments(string $php): array
+    /**
+     * A `//` or `#` comment inside an echo of compiled template code, which would also comment out what the
+     * compiler adds before `?>`. $noun is what the message calls the file.
+     *
+     * @return list<array{line: int, message: string, severity: 'error'}>
+     */
+    public static function comments(string $php, string $noun = 'view'): array
     {
         $problems = [];
         $echo = false;
@@ -382,7 +387,11 @@ final class Check
                 default => $echo,
             };
             if ($echo && $token[0] === T_COMMENT && !str_starts_with($token[1], '/*')) {
-                $problems[] = ['line' => $token[2], 'message' => 'A line comment inside <?= ?> also comments out what the view adds before ?>: use /* */', 'severity' => 'error'];
+                $problems[] = [
+                    'line' => $token[2],
+                    'message' => "A line comment inside <?= ?> also comments out what the $noun adds before ?>: use /* */",
+                    'severity' => 'error',
+                ];
             }
         }
         return $problems;

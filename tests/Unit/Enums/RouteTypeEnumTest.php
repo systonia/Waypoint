@@ -9,7 +9,6 @@ final class RouteTypeEnumTest extends TestCase
 {
     public function testCaseValues(): void
     {
-        $this->assertSame('', RouteType::Unset->value);
         $this->assertSame('static', RouteType::Static->value);
         $this->assertSame('dynamic', RouteType::Dynamic->value);
         $this->assertSame('task', RouteType::Task->value);
@@ -18,6 +17,6 @@ final class RouteTypeEnumTest extends TestCase
     public function testAllCasesArePresent(): void
     {
         $names = array_map(fn (RouteType $c) => $c->name, RouteType::cases());
-        $this->assertEqualsCanonicalizing(['Unset', 'Static', 'Dynamic', 'Task'], $names);
+        $this->assertEqualsCanonicalizing(['Static', 'Dynamic', 'Task'], $names);
     }
 }

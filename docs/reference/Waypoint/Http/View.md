@@ -429,6 +429,22 @@ threw it. The compiler keeps the lines, so they are the view's. For the develope
 
 **Returns** `array{string, int}|null`
 
+### escapeEchoes()
+
+```php
+public static function escapeEchoes(string $source, ?string $file = null): string
+```
+
+Every `<?= expr ?>` in compiled template code as `<?= View::escape(expr) ?>`, each line where it was. With
+$file, `__FILE__` and `__DIR__` name the template instead of the code that runs it.
+
+**Parameters**
+
+- `$source` `string`
+- `$file` `?string`
+
+**Returns** `string`
+
 ### escape()
 
 ```php

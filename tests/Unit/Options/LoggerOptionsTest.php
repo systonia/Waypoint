@@ -47,18 +47,6 @@ final class LoggerOptionsTest extends TestCase
         $this->assertEquals(LogLevel::DEBUG, $logger->logs[1][0]);
     }
 
-    public function testAddAcceptsAnAssociativeOptionsArray(): void
-    {
-        $logger = new DummyLogger();
-        $opts = (new LoggerOptions())->add($logger, ['levels' => [LogLevel::ALERT], 'name' => 'special']);
-
-        $this->dispatch($opts, LogLevel::ALERT, 'alert msg');
-        $this->dispatch($opts, LogLevel::INFO, 'should not log');
-
-        $this->assertCount(1, $logger->logs);
-        $this->assertEquals([LogLevel::ALERT, 'alert msg', []], $logger->logs[0]);
-    }
-
     public function testAddAcceptsAStringAsASingleLevel(): void
     {
         $logger = new DummyLogger();
@@ -69,18 +57,6 @@ final class LoggerOptionsTest extends TestCase
 
         $this->assertCount(1, $logger->logs);
         $this->assertSame(LogLevel::CRITICAL, $logger->logs[0][0]);
-    }
-
-    public function testAddAcceptsALoggerOptionsInstanceDirectly(): void
-    {
-        $logger = new DummyLogger();
-        $opts = (new LoggerOptions())->add($logger, new LoggerOptions([LogLevel::ERROR], 'errors'));
-
-        $this->dispatch($opts, LogLevel::ERROR, 'boom');
-        $this->dispatch($opts, LogLevel::INFO, 'ignored');
-
-        $this->assertCount(1, $logger->logs);
-        $this->assertSame(LogLevel::ERROR, $logger->logs[0][0]);
     }
 
     public function testAddMonoRegistersAMonologLoggerWithLevelFiltering(): void
@@ -136,13 +112,5 @@ final class LoggerOptionsTest extends TestCase
         $this->assertCount(1, $loggers);
         $this->assertInstanceOf(\Waypoint\Support\ErrorLogLogger::class, $loggers[0]['logger']);
         $this->assertSame([LogLevel::EMERGENCY, LogLevel::ALERT, LogLevel::CRITICAL, LogLevel::ERROR], array_keys($loggers[0]['levels']));
-    }
-
-    public function testAConstructedLoggerOptionsCarriesLevelsAndName(): void
-    {
-        $opts = new LoggerOptions([LogLevel::ERROR], 'errors');
-
-        $this->assertSame([LogLevel::ERROR], $opts->levels);
-        $this->assertSame('errors', $opts->name);
     }
 }

@@ -10,20 +10,13 @@ final class TestResponse
     /** @var array<string, string> lower-cased name => value (last one wins) */
     private array $headers = [];
 
-    /** @var list<string> Raw Set-Cookie values, in order. */
-    private array $cookies = [];
-
-    /** @param list<string> $rawHeaders "Name: value" lines as the SAPI sent them */
-    public function __construct(private int $status, array $rawHeaders, private string $body)
+    /**
+     * @param array<string, string> $headers Every header but Set-Cookie
+     * @param list<string> $cookies Raw Set-Cookie values, in order
+     */
+    public function __construct(private int $status, array $headers, private array $cookies, private string $body)
     {
-        foreach ($rawHeaders as $line) {
-            [$name, $value] = array_map('trim', explode(':', $line, 2) + [1 => '']);
-            if (strcasecmp($name, 'Set-Cookie') === 0) {
-                $this->cookies[] = $value;
-            } else {
-                $this->headers[strtolower($name)] = $value;
-            }
-        }
+        $this->headers = array_change_key_case($headers);
     }
 
     public function status(): int

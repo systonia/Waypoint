@@ -8,8 +8,7 @@ use Waypoint\Support\{Arr, ErrorLogLogger};
 
 /**
  * The PSR-3 loggers Waypoint\Logger fans out to, each with the levels it
- * accepts: `$opts->add($logger, [LogLevel::ERROR])`. An instance also serves
- * as the small {levels, name} descriptor add() accepts as $options.
+ * accepts: `$opts->add($logger, [LogLevel::ERROR])`.
  */
 class LoggerOptions
 {
@@ -18,40 +17,20 @@ class LoggerOptions
         LogLevel::WARNING, LogLevel::NOTICE, LogLevel::INFO, LogLevel::DEBUG,
     ];
 
-    /** @var array<int, array{logger: LoggerInterface, levels: array<string, bool>, name: string|null}> */
+    /** @var array<int, array{logger: LoggerInterface, levels: array<string, bool>}> */
     private array $loggers = [];
-
-    /** @var string[] Accepted levels when used as a descriptor; empty means all. */
-    public array $levels = [];
-
-    /** Channel name when used as a descriptor. */
-    public ?string $name = null;
-
-    /** @param string[] $levels */
-    public function __construct(array $levels = [], ?string $name = null)
-    {
-        $this->levels = $levels;
-        $this->name = $name;
-    }
 
     /**
      * @param LoggerInterface|array<int, mixed> $logger One logger or a list (non-loggers are skipped).
-     * @param LoggerOptions|string|array<int|string, mixed>|null $options A descriptor, one level, a list of levels, or {levels, name}.
+     * @param string|array<mixed>|null $levels One level or a list of them; none for every level.
      */
-    public function add(LoggerInterface|array $logger, $options = null): self
+    public function add(LoggerInterface|array $logger, string|array|null $levels = null): self
     {
-        $opts = match (true) {
-            $options instanceof self => $options,
-            is_string($options) => new self([$options]),
-            is_array($options) && array_is_list($options) => new self(Arr::stringList($options)),
-            is_array($options) => new self(Arr::stringList($options['levels'] ?? []), is_string($options['name'] ?? null) ? $options['name'] : null),
-            default => new self(),
-        };
-        $levelMap = array_fill_keys($opts->levels ?: self::ALL_LEVELS, true);
+        $levelMap = array_fill_keys(Arr::stringList((array) $levels) ?: self::ALL_LEVELS, true);
 
         foreach (is_array($logger) ? $logger : [$logger] as $lg) {
             if ($lg instanceof LoggerInterface) {
-                $this->loggers[] = ['logger' => $lg, 'levels' => $levelMap, 'name' => $opts->name];
+                $this->loggers[] = ['logger' => $lg, 'levels' => $levelMap];
             }
         }
         return $this;
@@ -68,13 +47,13 @@ class LoggerOptions
             if ($handler instanceof \Monolog\Handler\HandlerInterface) {
                 $logger->pushHandler($handler);
             }
-            $this->add($logger, new self($levels, $channel));
+            $this->add($logger, $levels);
         }
         return $this;
     }
 
     /**
-     * @return array<int, array{logger: LoggerInterface, levels: array<string, bool>, name: string|null}> When none were
+     * @return array<int, array{logger: LoggerInterface, levels: array<string, bool>}> When none were
      *  added: PHP's error_log for errors and worse, so an error never vanishes unseen; `add(new NullLogger())` silences it.
      */
     public function getLoggers(): array
@@ -82,7 +61,6 @@ class LoggerOptions
         return $this->loggers ?: [[
             'logger' => new ErrorLogLogger(),
             'levels' => array_fill_keys([LogLevel::EMERGENCY, LogLevel::ALERT, LogLevel::CRITICAL, LogLevel::ERROR], true),
-            'name' => null,
         ]];
     }
 }

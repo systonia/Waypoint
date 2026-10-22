@@ -324,20 +324,20 @@ final class FileSystemCacheTest extends IntegrationTestCase
         $this->assertTrue($fileSystem->hasCachedRoutes());
     }
 
-    public function testLoadCachedServicesReturnsNullBeforeAnythingIsStored(): void
+    public function testLoadCachedRouteDataReturnsNullBeforeAnythingIsStored(): void
     {
         [, $fileSystem] = $this->fileSystem();
-        $this->assertNull($fileSystem->loadCachedServices());
+        $this->assertNull($fileSystem->loadCachedRouteData());
     }
 
-    public function testLoadCachedServicesRoundTripsTheServiceClassList(): void
+    public function testCachedRouteDataRoundTripsTheServiceClassList(): void
     {
         [$options, $fileSystem] = $this->fileSystem();
         $services = [CustomersController::class, OrdersController::class];
 
         $this->router([CustomersController::class], $services, $options);
 
-        $this->assertSame($services, $fileSystem->loadCachedServices());
+        $this->assertSame($services, $fileSystem->loadCachedRouteData()['services'] ?? null);
     }
 
     public function testTrustModeSkipsValidationAndLoadsTheExistingCacheEvenIfStale(): void

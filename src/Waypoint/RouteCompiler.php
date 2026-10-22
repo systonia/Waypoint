@@ -96,9 +96,7 @@ final class RouteCompiler
             }
 
             $dynamic = str_contains($path, '{');
-            $role = self::inherited($rc, $method, Role::class)?->role;
-            $permissions = self::inherited($rc, $method, Permissions::class)?->permissions;
-            $permissions = $permissions !== null ? array_values(array_filter($permissions, 'is_string')) : null;
+            $access = self::access($rc, $method);
             $sunsetDate = self::inherited($rc, $method, Sunset::class)?->date;
             $layout = self::inherited($rc, $method, Layout::class);
 
@@ -123,10 +121,9 @@ final class RouteCompiler
                 'sunsetHeader' => $sunsetDate !== null ? $this->formatSunsetHeader($sunsetDate, $httpMethod, $path) : null,
                 // #[Layout]: false when none is set, null for #[Layout(null)], else the file
                 'layout' => $layout === null ? false : $layout->file,
-                // #[Role]/#[Permissions] imply #[Authenticated].
-                'authenticated' => self::hasEither($rc, $method, Authenticated::class) || $role !== null || $permissions !== null || self::requiresClaims($method),
-                'role' => $role,
-                'permissions' => $permissions,
+                'authenticated' => $access['authenticated'] || self::requiresClaims($method),
+                'role' => $access['role'],
+                'permissions' => $access['permissions'],
                 'throws' => [],
                 'plugins' => $this->compilePluginData($rc, $method),
             ];
@@ -216,15 +213,36 @@ final class RouteCompiler
     }
 
     /**
+     * #[Authenticated], #[Role] and #[Permissions] of a class (and its parents) and of one of its methods, as
+     * RouteGuard::check() reads them: the method's role and permissions win over the class's, and either one
+     * implies authenticated.
+     *
+     * @param ReflectionClass<object> $rc
+     * @return array{authenticated: bool, role: ?string, permissions: ?list<string>}
+     */
+    public static function access(ReflectionClass $rc, ?ReflectionMethod $method = null): array
+    {
+        $role = self::inherited($rc, $method, Role::class)?->role;
+        $permissions = self::inherited($rc, $method, Permissions::class)?->permissions;
+        $permissions = $permissions !== null ? array_values(array_filter($permissions, 'is_string')) : null;
+        $implied = $role !== null || $permissions !== null;
+        return [
+            'authenticated' => $implied || self::hasEither($rc, $method, Authenticated::class),
+            'role' => $role,
+            'permissions' => $permissions,
+        ];
+    }
+
+    /**
      * Method-level wins over class-level, else null: the shared precedence of #[Version]/#[Sunset]/#[Role]/#[Permissions].
      * @template T of object
      * @param ReflectionClass<object> $rc
      * @param class-string<T> $attribute
      * @return T|null
      */
-    private static function inherited(ReflectionClass $rc, ReflectionMethod $method, string $attribute): ?object
+    private static function inherited(ReflectionClass $rc, ?ReflectionMethod $method, string $attribute): ?object
     {
-        $attrs = $method->getAttributes($attribute);
+        $attrs = $method?->getAttributes($attribute) ?? [];
         if ($attrs === []) {
             $attrs = self::classAttributes($rc, $attribute);
         }
@@ -268,9 +286,9 @@ final class RouteCompiler
      * @param ReflectionClass<object> $rc
      * @param class-string $attribute
      */
-    private static function hasEither(ReflectionClass $rc, ReflectionMethod $method, string $attribute): bool
+    private static function hasEither(ReflectionClass $rc, ?ReflectionMethod $method, string $attribute): bool
     {
-        return $method->getAttributes($attribute) !== [] || self::classAttributes($rc, $attribute) !== [];
+        return ($method?->getAttributes($attribute) ?? []) !== [] || self::classAttributes($rc, $attribute) !== [];
     }
 
     /** The last formatter attribute on $method, if any. */

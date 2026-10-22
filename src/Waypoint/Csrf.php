@@ -51,9 +51,7 @@ class Csrf
             return;
         }
 
-        $token = self::generateToken(self::session($req));
-        $this->currentToken->set($token);
-        $res->withCookie($opts->cookieName, $token, maxAge: $opts->ttl, secure: $opts->cookieSecure, httpOnly: false, sameSite: $opts->cookieSameSite);
+        $this->issue(self::session($req), $res, $opts);
     }
 
     /**
@@ -72,9 +70,22 @@ class Csrf
         if ($session === null) {
             return;
         }
+        $this->issue($session, $res, $opts);
+    }
+
+    /** A fresh token for $session, for this request and as the cookie (not HttpOnly: JS must be able to read it). */
+    private function issue(string $session, Response $res, CsrfOptions $opts): void
+    {
         $token = self::generateToken($session);
         $this->currentToken->set($token);
-        $res->withCookie($opts->cookieName, $token, maxAge: $opts->ttl, secure: $opts->cookieSecure, httpOnly: false, sameSite: $opts->cookieSameSite);
+        $res->withCookie(
+            $opts->cookieName,
+            $token,
+            maxAge: $opts->ttl,
+            secure: $opts->cookieSecure,
+            httpOnly: false,
+            sameSite: $opts->cookieSameSite,
+        );
     }
 
     /** The current request's token, or '' if issueFor() never ran. */

@@ -41,6 +41,23 @@ public function compile(array $classes): array
 
 **Returns** `array{staticRoutes: array<string, array<string, RoutePlan>>, dynamicRoutes: array<string, array<int, RoutePlan>>, tasks: array<string, TaskPlan>}`
 
+### access()
+
+```php
+public static function access(\ReflectionClass $rc, ?\ReflectionMethod $method = null): array
+```
+
+#[Authenticated], #[Role] and #[Permissions] of a class (and its parents) and of one of its methods, as
+RouteGuard::check() reads them: the method's role and permissions win over the class's, and either one
+implies authenticated.
+
+**Parameters**
+
+- `$rc` [`ReflectionClass`](https://www.php.net/manual/en/class.reflectionclass.php)`<object>`
+- `$method` `?`[`ReflectionMethod`](https://www.php.net/manual/en/class.reflectionmethod.php)
+
+**Returns** `array{authenticated: bool, role: ?string, permissions: ?list<string>}`
+
 ### exportAllAttributes()
 
 ```php

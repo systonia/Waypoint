@@ -106,20 +106,6 @@ The HTTP status code set so far (200 by default).
 
 **Returns** `int`
 
-### withRequestId()
-
-```php
-public function withRequestId(string $id): \Waypoint\Http\Response
-```
-
-Echoes Request::$id back as X-Request-ID.
-
-**Parameters**
-
-- `$id` `string`
-
-**Returns** [`Response`](Response.md)
-
 ### withCookie()
 
 ```php

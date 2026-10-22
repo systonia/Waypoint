@@ -240,18 +240,3 @@ The uploaded file of a field, named as in the form: "avatar", "doc[a]", "photos[
 - `$name` `string`
 
 **Returns** `?`[`UploadedFile`](UploadedFile.md)
-
-### input()
-
-```php
-public function input(string $key, mixed $default = null): mixed
-```
-
-Alias of body($key, $default).
-
-**Parameters**
-
-- `$key` `string`
-- `$default` `mixed`
-
-**Returns** `mixed`

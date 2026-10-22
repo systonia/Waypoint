@@ -37,7 +37,8 @@ final class ArgumentResolver
                 'BodyCollection' => self::bodyCollection($arg, self::parsed($req)),
                 'BodyArray' => self::parsed($req)->body,
                 'Claims' => self::claims($arg, $req),
-                'Scalar' => self::scalar($arg, $name, $req, $params),
+                // Route placeholder first, then query string
+                'Scalar' => self::typed($arg, $name, $params[$name] ?? $req->query($name)),
                 'plugin' => $this->plugin($arg, $req, $res, $params),
                 default => null,
             };
@@ -156,16 +157,6 @@ final class ArgumentResolver
     {
         $traits = array_merge(class_uses($dto), ...array_map(class_uses(...), array_values(class_parents($dto))));
         return in_array(FromArray::class, $traits, true) && property_exists($dto, 'errors') && is_array($dto->errors) ? $dto->errors : $validator->validate($dto);
-    }
-
-    /**
-     * An unattributed scalar parameter: route placeholder first, then query string, cast to the declared type.
-     * @param array<string, mixed> $arg
-     * @param array<string, string> $params
-     */
-    private static function scalar(array $arg, string $name, Request $req, array $params): mixed
-    {
-        return self::typed($arg, $name, $params[$name] ?? $req->query($name));
     }
 
     /**

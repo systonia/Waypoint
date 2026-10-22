@@ -74,10 +74,10 @@ protected function selectEligibleRoutes(array $routes, ?string $version): array
 
 **Parameters**
 
-- `$routes` `array<int, mixed>`
+- `$routes` `array<int, RouteSummary>`
 - `$version` `?string`
 
-**Returns** `array<int, mixed>`: Exact-version filter when $version is given; otherwise every unversioned route plus the newest version of each (method, unversionedPath) group.
+**Returns** `array<int, RouteSummary>`: Exact-version filter when $version is given; otherwise every unversioned route plus the newest version of each (method, unversionedPath) group.
 
 ### compareVersions()
 
@@ -109,15 +109,15 @@ protected function versionSortKey(string $version): array
 ### getHandlerSpec()
 
 ```php
-protected function getHandlerSpec(mixed $route): ?array
+protected function getHandlerSpec(object $route): ?array
 ```
 
-[controllerClass, methodName] from a route's handlerSpec: a plain pair, or one nested under
-'spec'. The class isn't verified to exist: a missing attribute-cache entry just means "no attributes".
+[controllerClass, methodName] from a route's handlerSpec, null for a controller object. The class isn't
+verified to exist: a missing attribute-cache entry just means "no attributes".
 
 **Parameters**
 
-- `$route` `mixed`
+- `$route` `RouteSummary`
 
 **Returns** `array{0: string, 1: string}|null`
 

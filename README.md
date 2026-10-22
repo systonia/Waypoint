@@ -1842,13 +1842,8 @@ Configuration mainly happens through `load(?string $dir = null)`, not a plain pr
 
 ### [LoggerOptions](#logging)
 
-| Setting | Default | Description |
-|---|---|---|
-| `levels` | `[]` (→ all levels) | PSR-3 levels this logger accepts, e.g. `['error', 'critical']`. |
-| `name` | `null` | Optional channel/name for this logger. |
-
-Loggers are registered through `add($logger, $options)` / `addMono($channel, $handler, $levels)`, not
-plain properties; see [Logging](#logging).
+Loggers are registered through `add($logger, $levels)` / `addMono($channel, $handler, $levels)`, not
+plain properties; `$levels` is one PSR-3 level or a list of them, all levels without. See [Logging](#logging).
 
 ### [OpenAPIOptions](#openapi)
 

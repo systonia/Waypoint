@@ -23,21 +23,14 @@ public array $tags = [];
 
 **Type** `string[]`
 
-### $name
-
-```php
-public ?string $name = null;
-```
-
 ## Methods
 
 ### __construct()
 
 ```php
-public function __construct(public array $tags = [], public ?string $name = null)
+public function __construct(public array $tags = [])
 ```
 
 **Parameters**
 
 - `$tags` `string[]`
-- `$name` `?string`

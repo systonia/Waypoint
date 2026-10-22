@@ -115,3 +115,19 @@ The view files of the project at $root: below its views directories (directories
 - `$root` `string`
 
 **Returns** `list<string>`
+
+### comments()
+
+```php
+public static function comments(string $php, string $noun = 'view'): array
+```
+
+A `//` or `#` comment inside an echo of compiled template code, which would also comment out what the
+compiler adds before `?>`. $noun is what the message calls the file.
+
+**Parameters**
+
+- `$php` `string`
+- `$noun` `string`
+
+**Returns** `list<array{line: int, message: string, severity: 'error'}>`

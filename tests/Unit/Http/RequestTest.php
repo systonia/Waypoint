@@ -118,15 +118,6 @@ final class RequestTest extends TestCase
         $this->assertSame('n/a', $req->body('missing', 'n/a'));
     }
 
-    public function testInputIsAnAliasForBody(): void
-    {
-        $_POST = ['email' => 'a@b.com'];
-
-        $req = Request::capture();
-
-        $this->assertSame($req->body('email'), $req->input('email'));
-    }
-
     public function testCaptureGeneratesAUuidV4IdWhenNoRequestIdHeaderIsSent(): void
     {
         $req = Request::capture();

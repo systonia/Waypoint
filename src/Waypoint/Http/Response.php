@@ -78,12 +78,7 @@ class Response
     /** Case-insensitive. Lets an after() middleware fill in a header only if the controller didn't set it. */
     public function hasHeader(string $name): bool
     {
-        foreach ($this->headers as $existing => $value) {
-            if (strcasecmp($existing, $name) === 0) {
-                return true;
-            }
-        }
-        return false;
+        return $this->getHeader($name) !== null;
     }
 
     /** The value queued for $name (case-insensitive), or null. For an after() middleware or Plugin\ResponseHook that must inspect what the controller produced. */
@@ -101,12 +96,6 @@ class Response
     public function getStatus(): int
     {
         return $this->status;
-    }
-
-    /** Echoes Request::$id back as X-Request-ID. */
-    public function withRequestId(string $id): self
-    {
-        return $this->withHeader('X-Request-ID', $id);
     }
 
     /**

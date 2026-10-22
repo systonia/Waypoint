@@ -18,13 +18,19 @@ What one TestRequest produced: status, headers, cookies, body, plus fluent asser
 ### __construct()
 
 ```php
-public function __construct(private int $status, array $rawHeaders, private string $body)
+public function __construct(
+    private int $status,
+    array $headers,
+    private array $cookies,
+    private string $body,
+)
 ```
 
 **Parameters**
 
 - `$status` `int`
-- `$rawHeaders` `list<string>`: "Name: value" lines as the SAPI sent them
+- `$headers` `array<string, string>`: Every header but Set-Cookie
+- `$cookies` `list<string>`: Raw Set-Cookie values, in order
 - `$body` `string`
 
 ### status()

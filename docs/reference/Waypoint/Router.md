@@ -91,10 +91,7 @@ from the cache's attributes.php when there is a cache, else exported live.
 ### addCompiledRoute()
 
 ```php
-public function addCompiledRoute(
-    array $plan,
-    \Waypoint\Enums\RouteType $type = \Waypoint\Enums\RouteType::Unset,
-): void
+public function addCompiledRoute(array $plan, \Waypoint\Enums\RouteType $type): void
 ```
 
 **Parameters**

@@ -16,9 +16,9 @@ final class ResultRenderer
     public function render(mixed $result, Response $res, array $formatter): void
     {
         $type = $formatter['type'] ?? 'json';
-        if ($type === FileFormatter::class || $type === 'file') {
+        if ($type === FileFormatter::class) {
             $this->renderFile($result, $res, $formatter['options'] ?? []);
-        } elseif ($type === SimpleXmlFormatter::class || $type === 'xml') {
+        } elseif ($type === SimpleXmlFormatter::class) {
             $this->renderXml($result, $res);
         } else {
             $res->withHeader('Content-Type', 'application/json')->write(self::json($result));

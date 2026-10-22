@@ -479,8 +479,11 @@ class View
         return $imports;
     }
 
-    /** Every `<?= expr ?>` as `<?= View::escape(expr) ?>`, `__FILE__` and `__DIR__` as the template's. */
-    private static function escapeEchoes(string $source, string $file): string
+    /**
+     * Every `<?= expr ?>` in compiled template code as `<?= View::escape(expr) ?>`, each line where it was. With
+     * $file, `__FILE__` and `__DIR__` name the template instead of the code that runs it.
+     */
+    public static function escapeEchoes(string $source, ?string $file = null): string
     {
         $code = '';
         $open = false;
@@ -493,9 +496,9 @@ class View
             } elseif ($open && $id === T_CLOSE_TAG) {
                 $code = self::closeEscape($code) . $text;
                 $open = false;
-            } elseif ($id === T_FILE) {
+            } elseif ($file !== null && $id === T_FILE) {
                 $code .= var_export($file, true);
-            } elseif ($id === T_DIR) {
+            } elseif ($file !== null && $id === T_DIR) {
                 $code .= var_export(dirname($file), true);
             } else {
                 $code .= $text;
