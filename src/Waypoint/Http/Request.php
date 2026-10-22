@@ -65,6 +65,9 @@ class Request
     /** Correlation id: the incoming X-Request-Id (or X-Correlation-Id), else a fresh UUID v4. Echoed back as X-Request-ID and stamped onto log lines. */
     public string $id;
 
+    /** @var array<string, string> Header names as sent => normalized, so a long-running process normalizes each name once. */
+    private static array $headerNames = [];
+
     private function __construct()
     {
     }
@@ -104,12 +107,14 @@ class Request
         $req->path = $decoded ?? $path;
         $req->pathEncoded = $decoded === null;
         foreach ($headers as $name => $value) {
-            $req->headers[self::normalizeHeaderName($name)] = $value;
+            $req->headers[self::$headerNames[$name] ?? self::normalizeHeaderName($name)] = $value;
         }
         $req->id = self::resolveRequestId($req->headers);
         $queryString = strstr($target, '?');
-        parse_str($queryString === false ? '' : substr($queryString, 1), $query);
-        $req->query = Arr::stringKeyed($query);
+        if ($queryString !== false) {
+            parse_str(substr($queryString, 1), $query);
+            $req->query = Arr::stringKeyed($query);
+        }
         $req->cookies = $cookies;
         $req->https = $https;
         $req->files = $files;
@@ -118,6 +123,9 @@ class Request
         // JSON only when the client says so: a cross-site <form> can send a JSON-looking text/plain body
         // without a preflight, and that must not be read as a JSON request.
         $contentType = $req->headers['Content-Type'] ?? '';
+        if ($contentType === '' && $form === null) {
+            return $req;
+        }
         if (self::isJson($contentType)) {
             if ($body !== '') {
                 $data = json_decode($body, true);
@@ -240,6 +248,9 @@ class Request
     /** See $path; null where it stays encoded. */
     private static function decodedPath(string $path): ?string
     {
+        if (!str_contains($path, '%')) {
+            return $path;
+        }
         $segments = array_map('rawurldecode', explode('/', $path));
         foreach ($segments as $segment) {
             if (str_contains($segment, '/') || str_contains($segment, "\0")) {
@@ -255,7 +266,12 @@ class Request
      */
     private static function normalizeHeaderName(string $name): string
     {
-        return str_replace(' ', '-', ucwords(strtolower(str_replace('-', ' ', $name))));
+        $normalized = str_replace(' ', '-', ucwords(strtolower(str_replace('-', ' ', $name))));
+        // Names come from clients: the cache stops growing at a size no real set of headers reaches
+        if (count(self::$headerNames) < 256) {
+            self::$headerNames[$name] = $normalized;
+        }
+        return $normalized;
     }
 
     /** application/json or any application/*+json, parameters (charset) allowed. */
@@ -269,7 +285,7 @@ class Request
     {
         foreach (['X-Request-Id', 'X-Correlation-Id'] as $name) {
             // Comes from anyone: only a short id of plain characters goes into logs and the response header
-            if (preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $headers[$name] ?? '') === 1) {
+            if (isset($headers[$name]) && preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $headers[$name]) === 1) {
                 return $headers[$name];
             }
         }

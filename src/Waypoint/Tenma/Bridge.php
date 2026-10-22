@@ -35,8 +35,11 @@ final class Bridge
 
     public static function toWaypoint(TenmaRequest $request): Request
     {
-        $type = $request->header('content-type') ?? '';
-        $cookies = array_filter($request->cookies(), fn (mixed $value): bool => is_string($value));
+        $multipart = stripos($request->headers['content-type'] ?? '', 'multipart/form-data') === 0;
+        // Most requests carry no cookie: parsing and filtering an empty header is work for nothing
+        $cookies = isset($request->headers['cookie'])
+            ? array_filter($request->cookies(), fn (mixed $value): bool => is_string($value))
+            : [];
         return Request::fromParts(
             $request->method,
             $request->uri,
@@ -46,8 +49,8 @@ final class Bridge
             // Tenma speaks plain HTTP; TLS ends at a proxy, whose X-Forwarded-Proto App::handle() applies if ProxyOptions trusts it
             false,
             // multipart is parsed by Tenma, a urlencoded or JSON body by fromParts() itself
-            stripos($type, 'multipart/form-data') === 0 ? $request->form() : null,
-            self::files($request->files()),
+            $multipart ? $request->form() : null,
+            $multipart ? self::files($request->files()) : [],
             $request->remoteAddress,
         );
     }

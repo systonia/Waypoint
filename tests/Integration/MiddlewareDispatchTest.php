@@ -55,6 +55,19 @@ final class MiddlewareDispatchTest extends IntegrationTestCase
         $this->assertContains('injecting:' . ExampleService::class, CallTracker::$calls);
     }
 
+    public function testMiddlewareAddedAfterARequestRunsOnTheNextOne(): void
+    {
+        $this->dispatch('GET', '/class-middleware/plain');
+        Waypoint::create()->use(function ($req, $res, callable $next): mixed {
+            CallTracker::$calls[] = 'added-late';
+            return $next($req, $res);
+        });
+
+        $this->dispatch('GET', '/class-middleware/plain');
+
+        $this->assertContains('added-late', CallTracker::$calls);
+    }
+
     public function testMiddlewareBaseRunsBeforeThenNextThenAfterInOrder(): void
     {
         $output = $this->dispatch('GET', '/middleware/before-after');

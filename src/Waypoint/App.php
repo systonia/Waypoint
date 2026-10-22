@@ -32,6 +32,9 @@ class App
     /** @var callable[] */
     private array $middlewares = [];
 
+    /** The middlewares wrapped around dispatch(), built on the first request and again after use() adds one. */
+    private ?\Closure $pipeline = null;
+
     /** @var array<class-string, callable(Throwable, Request, Response): void> */
     private array $exceptionHandlers = [];
 
@@ -117,6 +120,7 @@ class App
             $this->injector->injectReflected($middleware);
         }
         $this->middlewares[] = $middleware;
+        $this->pipeline = null;
     }
 
     /** Attaches the configured CorsOptions headers to every response and answers an OPTIONS preflight with a bare 204. */
@@ -256,9 +260,9 @@ class App
         $this->container->get(RequestContext::class)->setRequestId($req->id);
 
         try {
-            $handler = array_reduce(
+            $handler = $this->pipeline ??= array_reduce(
                 array_reverse($this->middlewares),
-                fn (callable $next, callable $mw): callable => fn (Request $req, Response $res): mixed => $mw($req, $res, $next),
+                fn (\Closure $next, callable $mw): \Closure => fn (Request $req, Response $res): mixed => $mw($req, $res, $next),
                 fn (Request $req, Response $res): Response => $this->dispatch($req, $res)
             );
             try {
